@@ -121,6 +121,24 @@ bot.command('wird', async (ctx) => {
   await ctx.reply(COPY.wirdUpdated(size));
 });
 
+// /page: jump to a specific Mushaf page (1..604). With no argument, show the
+// current page and how to change it. "/page N" sets the next wird to start at
+// page N (a direct go-to, unlike the admin "last page read" which is N+1).
+bot.command('page', async (ctx) => {
+  const sub = await userSubscriber(ctx);
+  if (!sub) return;
+  const arg = commandArg(ctx, 'page');
+  if (!arg) {
+    const currentJuz = (await getJuzForPage(sub.currentPage)) ?? undefined;
+    return void ctx.reply(COPY.pagePrompt(sub.currentPage, currentJuz));
+  }
+  const page = parsePageNumber(arg);
+  if (page === null) return void ctx.reply(COPY.pageInvalid);
+  await setCurrentPage(sub.id, page);
+  const juz = (await getJuzForPage(page)) ?? undefined;
+  await ctx.reply(COPY.pageUpdated(page, juz));
+});
+
 // /time: with an argument set the time directly; with none, offer buttons.
 bot.command('time', async (ctx) => {
   const sub = await userSubscriber(ctx);
@@ -372,6 +390,7 @@ async function setBotCommands() {
   await bot.api.setMyCommands([
     { command: 'today', description: 'قراءة ورد اليوم' },
     { command: 'wird', description: 'حجم الورد اليومي' },
+    { command: 'page', description: 'الانتقال إلى صفحة معيّنة' },
     { command: 'time', description: 'ضبط وقت الإرسال' },
     { command: 'days', description: 'اختيار أيام الإرسال' },
     { command: 'timezone', description: 'ضبط المنطقة الزمنية' },

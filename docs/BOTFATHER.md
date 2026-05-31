@@ -44,6 +44,7 @@ user commands; do not list the admin commands.
 
 today - قراءة ورد اليوم
 wird - حجم الورد اليومي
+page - الانتقال إلى صفحة معيّنة
 time - ضبط وقت الإرسال
 days - اختيار أيام الإرسال
 timezone - ضبط المنطقة الزمنية

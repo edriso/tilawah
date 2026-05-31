@@ -7,6 +7,7 @@ import {
   pagePositionAr,
   settingsSummary,
   ltr,
+  COPY,
 } from './copy';
 
 describe('formatTimeAr', () => {
@@ -24,6 +25,25 @@ describe('wirdSizeSummaryAr (Arabic number-noun agreement)', () => {
     expect(wirdSizeSummaryAr(10)).toBe('١٠ صفحات');
     expect(wirdSizeSummaryAr(15)).toBe('١٥ صفحة');
     expect(wirdSizeSummaryAr(20)).toBe('٢٠ صفحة');
+  });
+});
+
+describe('page copy (the /page command)', () => {
+  it('prompt shows the current position and how to change it', () => {
+    const msg = COPY.pagePrompt(2, 1);
+    expect(msg).toContain('صفحة ٢ (الجزء ١)');
+    expect(msg).toContain('١ إلى ٦٠٤');
+    expect(msg).toContain('/page 100');
+  });
+
+  it('updated message confirms the new position and points at /today', () => {
+    const msg = COPY.pageUpdated(100, 5);
+    expect(msg).toContain('صفحة ١٠٠ (الجزء ٥)');
+    expect(msg).toContain('/today');
+  });
+
+  it('invalid message states the allowed range', () => {
+    expect(COPY.pageInvalid).toContain('١ إلى ٦٠٤');
   });
 });
 

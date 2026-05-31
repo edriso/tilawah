@@ -131,6 +131,7 @@ export const COPY = {
     'الأوامر:',
     '/today: قراءة ورد اليوم الآن (بدون تغيير موضعك)',
     `/wird: حجم الورد اليومي (١ إلى ٢٠ صفحة)، مثل ${ltr('/wird 5')}`,
+    `/page: الانتقال إلى صفحة معيّنة (١ إلى ٦٠٤)، مثل ${ltr('/page 100')}`,
     '/time: ضبط وقت الإرسال',
     '/days: اختيار أيام الإرسال',
     '/timezone: ضبط المنطقة الزمنية',
@@ -154,6 +155,16 @@ export const COPY = {
   wirdInvalid: `الرجاء كتابة رقم صحيح من ١ إلى ٢٠، مثل ${ltr('/wird 5')}`,
   wirdUpdated: (pages: number) =>
     `تم ضبط الورد على ${wirdSizeSummaryAr(pages)} في اليوم ✅\nبهذه السرعة تختم القرآن في نحو ${toArabicDigits(khatmaDays(pages))} يومًا بإذن الله.`,
+
+  // ── Current page (go to a page) ───────────────────────────────────
+  pagePrompt: (current: number, juz?: number) =>
+    [
+      `موضعك الحالي: ${pagePositionAr(current, juz)}.`,
+      `للانتقال إلى صفحة أخرى اكتب رقمها من ١ إلى ٦٠٤، مثل ${ltr('/page 100')}`,
+    ].join('\n'),
+  pageInvalid: `رقم الصفحة غير صحيح. اكتب رقمًا من ١ إلى ٦٠٤، مثل ${ltr('/page 100')}`,
+  pageUpdated: (page: number, juz?: number) =>
+    `تم ضبط موضعك على ${pagePositionAr(page, juz)} ✅\nسيبدأ وردك القادم من هنا. لرؤيته الآن اضغط /today`,
 
   // ── Pause / resume (single toggle) ────────────────────────────────
   paused: 'تم إيقاف الإرسال مؤقتًا، وسيبقى موضعك محفوظًا 🌿\nوعندما تريد العودة اكتب /pause',
