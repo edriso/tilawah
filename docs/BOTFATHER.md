@@ -19,7 +19,8 @@ you also want them set by hand. The admin commands are never listed publicly.
 
 (BotFather "Edit About", about 120 characters.)
 
-وردك اليومي من القرآن 🌿 صفحة كل يوم، أو أكثر حتى جزء كامل، في الوقت والأيام التي تختارها. اضغط Start للبدء.
+وردك اليومي من القرآن 🌿 صفحة كل يوم، أو أكثر حتى جزء كامل، في الوقت والأيام التي تختارها. للبدء اضغط
+Start
 
 ## Description
 
@@ -30,7 +31,8 @@ you also want them set by hand. The admin commands are never listed publicly.
 • يصلك كل يوم وردك من المصحف، صفحة واحدة افتراضيًا، ويمكنك زيادتها حتى ٢٠ صفحة.
 • تختار وقت الإرسال والأيام التي تناسبك.
 • يمكنك أخذ راحة وقتما تشاء، وتعود من حيث توقفت.
-اضغط Start للبدء بإذن الله.
+للبدء اضغط
+Start
 
 ---
 
