@@ -35,11 +35,12 @@ const bot = new Bot<Context>(config.botToken);
  * chat from a real user.
  */
 async function userSubscriber(ctx: Context): Promise<Subscriber | null> {
+  // Personal commands are a private-chat thing; ignore them anywhere else.
+  if (!ctx.from || ctx.chat?.type !== 'private') return null;
   if (!config.userWirdEnabled) {
     await ctx.reply(COPY.userBotDisabled);
     return null;
   }
-  if (!ctx.from || ctx.chat?.type !== 'private') return null;
   return ensureUser(BigInt(ctx.from.id), config.defaultTimezone);
 }
 
