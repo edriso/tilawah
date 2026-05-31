@@ -29,10 +29,10 @@ describe('clampWirdSize', () => {
     expect(clampWirdSize(1000)).toBe(20);
   });
 
-  it('truncates fractions and falls back on non-finite input', () => {
+  it('truncates fractions and falls back to the default on non-finite input', () => {
     expect(clampWirdSize(3.9)).toBe(3);
     expect(clampWirdSize(NaN)).toBe(DEFAULT_WIRD_PAGES);
-    expect(clampWirdSize(Infinity)).toBe(MAX_WIRD_PAGES);
+    expect(clampWirdSize(Infinity)).toBe(DEFAULT_WIRD_PAGES);
   });
 });
 

@@ -2,9 +2,7 @@ import { prisma } from '../client';
 
 // The fields the send loop reads off a subscriber. Everything it needs lives
 // on the row (timezone, schedule, wird size, current page), so no joins.
-export type DeliverableSubscriber = Awaited<
-  ReturnType<typeof listDeliverableSubscribers>
->[number];
+export type DeliverableSubscriber = Awaited<ReturnType<typeof listDeliverableSubscribers>>[number];
 
 /**
  * Every subscriber the bot may send to right now: active (not on a break) and

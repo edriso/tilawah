@@ -20,7 +20,7 @@ export const JUZ_COUNT = 30;
 export const PAGE_ANCHORS = [
   { page: 1, surah: 1, ayah: 1 }, // Al-Fatihah opens page 1
   { page: 2, surah: 2, ayah: 1 }, // Al-Baqarah opens page 2
-  { page: 604, surah: 114, ayah: 6 }, // An-Nas, the last ayah, is on page 604
+  { page: 604, surah: 112, ayah: 1 }, // the last page opens with Al-Ikhlas (112-114 sit on it)
 ] as const;
 
 export const JUZ_ANCHORS = [

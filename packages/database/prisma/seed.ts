@@ -121,7 +121,9 @@ function verify(data: QuranData): void {
     throw new Error(`Data file totals ${total} ayat, expected ${TOTAL_AYAT}. Re-run data:fetch.`);
   }
   if (pages.size !== PAGE_COUNT) {
-    throw new Error(`Data file covers ${pages.size} pages, expected ${PAGE_COUNT}. Re-run data:fetch.`);
+    throw new Error(
+      `Data file covers ${pages.size} pages, expected ${PAGE_COUNT}. Re-run data:fetch.`,
+    );
   }
   if (juz.size !== JUZ_COUNT) {
     throw new Error(`Data file covers ${juz.size} juz, expected ${JUZ_COUNT}. Re-run data:fetch.`);

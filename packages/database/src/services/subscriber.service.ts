@@ -14,6 +14,11 @@ export function getByChatId(chatId: bigint, platform = PLATFORM_TELEGRAM) {
   });
 }
 
+/** The single channel subscriber row, or null if no channel exists yet. */
+export function getChannelSubscriber(platform = PLATFORM_TELEGRAM) {
+  return prisma.subscriber.findFirst({ where: { kind: KIND_CHANNEL, platform } });
+}
+
 /**
  * Make sure a subscriber row exists for this chat, creating it with defaults
  * on first contact. For a USER, any interaction also clears blockedAt (the

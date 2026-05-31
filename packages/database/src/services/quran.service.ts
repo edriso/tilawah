@@ -81,9 +81,18 @@ export async function getPageContents(pageNumbers: number[]): Promise<PageConten
     });
   }
 
-  return pageNumbers
-    .map((p) => byPage.get(p))
-    .filter((p): p is PageContent => p !== undefined);
+  return pageNumbers.map((p) => byPage.get(p)).filter((p): p is PageContent => p !== undefined);
+}
+
+/** The juz a page belongs to (the juz of its first ayah), or null if the page
+ *  is unknown. A light query for the status display. */
+export async function getJuzForPage(page: number): Promise<number | null> {
+  const row = await prisma.ayah.findFirst({
+    where: { page },
+    orderBy: [{ surahNumber: 'asc' }, { numberInSurah: 'asc' }],
+    select: { juz: true },
+  });
+  return row?.juz ?? null;
 }
 
 /**

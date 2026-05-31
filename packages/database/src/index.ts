@@ -4,13 +4,7 @@
 export { prisma } from './client';
 
 // Generated model types, re-exported so the app imports them from one place.
-export type {
-  Surah,
-  Ayah,
-  Subscriber,
-  DeliveryLog,
-  CronRun,
-} from './generated/prisma/client';
+export type { Surah, Ayah, Subscriber, DeliveryLog, CronRun } from './generated/prisma/client';
 
 // Services
 export * from './services/quran.service';

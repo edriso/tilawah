@@ -49,7 +49,7 @@ describe('Madani Mushaf page/juz constants', () => {
   it('keeps the standard layout anchors', () => {
     expect(PAGE_ANCHORS).toContainEqual({ page: 1, surah: 1, ayah: 1 });
     expect(PAGE_ANCHORS).toContainEqual({ page: 2, surah: 2, ayah: 1 });
-    expect(PAGE_ANCHORS).toContainEqual({ page: 604, surah: 114, ayah: 6 });
+    expect(PAGE_ANCHORS).toContainEqual({ page: 604, surah: 112, ayah: 1 });
     expect(JUZ_ANCHORS).toContainEqual({ juz: 1, surah: 1, ayah: 1 });
     expect(JUZ_ANCHORS).toContainEqual({ juz: 30, surah: 78, ayah: 1 });
   });

@@ -143,8 +143,9 @@ async function downloadMeta(url: string): Promise<{ pages: BoundaryRef[]; juzs: 
   } catch (err) {
     throw new Error(`Meta response was not valid JSON.\n  ${String(err)}`);
   }
-  const data = (json as { data?: { pages?: { references?: unknown }; juzs?: { references?: unknown } } })
-    .data;
+  const data = (
+    json as { data?: { pages?: { references?: unknown }; juzs?: { references?: unknown } } }
+  ).data;
   const pages = data?.pages?.references;
   const juzs = data?.juzs?.references;
   if (!Array.isArray(pages) || !Array.isArray(juzs)) {
@@ -254,7 +255,10 @@ function assignPagesAndJuz(ayat: ParsedAyah[], pages: BoundaryRef[], juzs: Bound
   let juzIdx = 0;
   for (const a of sorted) {
     const k = key(a.surah, a.ayah);
-    while (pageIdx + 1 < pages.length && key(pages[pageIdx + 1].surah, pages[pageIdx + 1].ayah) <= k) {
+    while (
+      pageIdx + 1 < pages.length &&
+      key(pages[pageIdx + 1].surah, pages[pageIdx + 1].ayah) <= k
+    ) {
       pageIdx++;
     }
     while (juzIdx + 1 < juzs.length && key(juzs[juzIdx + 1].surah, juzs[juzIdx + 1].ayah) <= k) {
@@ -270,12 +274,15 @@ function verifyAssignment(ayat: ParsedAyah[]): void {
   let maxPage = 0;
   let maxJuz = 0;
   for (const a of ayat) {
-    if (a.page < 1 || a.page > PAGE_COUNT) throw new Error(`Ayah ${a.surah}:${a.ayah} got page ${a.page}.`);
-    if (a.juz < 1 || a.juz > JUZ_COUNT) throw new Error(`Ayah ${a.surah}:${a.ayah} got juz ${a.juz}.`);
+    if (a.page < 1 || a.page > PAGE_COUNT)
+      throw new Error(`Ayah ${a.surah}:${a.ayah} got page ${a.page}.`);
+    if (a.juz < 1 || a.juz > JUZ_COUNT)
+      throw new Error(`Ayah ${a.surah}:${a.ayah} got juz ${a.juz}.`);
     maxPage = Math.max(maxPage, a.page);
     maxJuz = Math.max(maxJuz, a.juz);
   }
-  if (maxPage !== PAGE_COUNT) throw new Error(`Highest page is ${maxPage}, expected ${PAGE_COUNT}.`);
+  if (maxPage !== PAGE_COUNT)
+    throw new Error(`Highest page is ${maxPage}, expected ${PAGE_COUNT}.`);
   if (maxJuz !== JUZ_COUNT) throw new Error(`Highest juz is ${maxJuz}, expected ${JUZ_COUNT}.`);
 
   // Anchor: the last ayah of the Quran (An-Nas 114:6) must be on page 604.
@@ -311,7 +318,8 @@ function normalizeBasmala(ayat: ParsedAyah[]): string {
       console.warn(`Note: surah ${a.surah} ayah 1 had no merged basmala (already clean).`);
       continue;
     }
-    if (cleaned === '') throw new Error(`Surah ${a.surah} ayah 1 became empty after removing basmala.`);
+    if (cleaned === '')
+      throw new Error(`Surah ${a.surah} ayah 1 became empty after removing basmala.`);
     a.text = cleaned;
   }
   return basmala;
