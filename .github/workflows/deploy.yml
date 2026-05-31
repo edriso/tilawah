@@ -1,0 +1,43 @@
+# Push-to-deploy: on every push to main, SSH into the VPS, pull the latest
+# code, run the DB migrations + seed, then rebuild this bot's container.
+#
+# Tilawah needs a database (the shared MariaDB), like the ayah bot. The
+# `tilawah-migrate` one-off compose service runs `pnpm db:deploy && pnpm
+# db:seed`. Both are idempotent: db:deploy applies only pending migrations,
+# and the seed stops immediately if the Quran text is already loaded. So
+# running them on every push is safe.
+#
+# Required GitHub secrets (repo -> Settings -> Secrets and variables ->
+# Actions -> New repository secret):
+#   SERVER_IP  the VPS IP address
+#   SSH_KEY    a private SSH key whose public half is in the server's
+#              /root/.ssh/authorized_keys
+#
+# These are the SAME two values every bot repo uses. A PRIVATE repo needs NO
+# extra GitHub secret; the only private-repo requirement is server-side: the
+# server must hold its own GitHub SSH key so `git pull` works (one-time setup,
+# already in place if another private bot deploys from the same server).
+#
+# Until both secrets are set, this workflow fails at the connect step. That is
+# expected; add the secrets to activate it.
+name: deploy
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy over SSH
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.SERVER_IP }}
+          username: root
+          key: ${{ secrets.SSH_KEY }}
+          script: |
+            cd /opt/bots/telegram/tilawah && git pull
+            cd /opt/bots && docker compose run --rm --build tilawah-migrate
+            docker compose up -d --build tilawah
+            docker image prune -f

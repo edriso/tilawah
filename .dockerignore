@@ -1,0 +1,37 @@
+# Files the Docker daemon should NOT receive when building the image.
+# Smaller context means faster builds and no secrets baked into layers.
+
+node_modules
+.git
+.gitignore
+
+# Secrets. Env is injected on the host via the bot's .env (env_file), not
+# copied into the image.
+.env
+.env.*
+!.env.example
+
+# Prisma generated client: recreated inside the image by the postinstall
+# `prisma generate`, so never ship the host's copy (it may target a different
+# platform or Prisma version).
+**/generated
+
+# Build / editor / OS junk
+dist
+coverage
+*.log
+*.tsbuildinfo
+.vscode
+.idea
+.DS_Store
+.claude
+
+# Tests: not imported at runtime (the bot runs from source).
+src/**/*.test.ts
+
+# Docs the build does not need
+README.md
+CLAUDE.md
+NOTICE
+LICENSE
+docs
