@@ -6,8 +6,8 @@ the channel name, its description, and a pinned welcome post, plus how an admin
 controls it. The channel is optional; set `CHANNEL_CHAT_ID` to turn it on (see
 `docs/DEPLOY.md`).
 
-The user-facing text is Arabic. Copy each block as is, then replace
-`@YourBotUsername` with your bot's real username.
+The user-facing text is Arabic. Copy each block as is; it already points to the
+bot at `@TilawahDailyBot`.
 
 ---
 
@@ -34,7 +34,7 @@ The user-facing text is Arabic. Copy each block as is, then replace
 
 (Telegram: channel Info, Edit, Description. Up to about 255 characters.)
 
-صفحة واحدة من القرآن الكريم كل يوم بإذن الله 🌿 بترتيب المصحف المدني، من أول القرآن إلى آخره ثم نبدأ من جديد. وللحصول على وردٍ خاص بك (صفحة أو أكثر، في الوقت والأيام التي تختارها) ابدأ مع البوت: @YourBotUsername
+صفحة واحدة من القرآن الكريم كل يوم بإذن الله 🌿 بترتيب المصحف المدني، من أول القرآن إلى آخره ثم نبدأ من جديد. وللحصول على وردٍ خاص بك (صفحة أو أكثر، في الوقت والأيام التي تختارها) ابدأ مع البوت: @TilawahDailyBot
 
 ---
 
@@ -51,7 +51,7 @@ The user-facing text is Arabic. Copy each block as is, then replace
 • النص هو النص العثماني المدقّق من مشروع تنزيل، بترقيم صفحات المصحف المدني (٦٠٤ صفحات).
 
 هل تريد وردًا خاصًا بك؟ يمكنك أن تأخذ صفحة أو أكثر في اليوم (حتى جزء كامل)، وتختار وقت الإرسال والأيام التي تناسبك، وتأخذ راحة وتعود من حيث توقفت.
-ابدأ الآن مع البوت: @YourBotUsername
+ابدأ الآن مع البوت: @TilawahDailyBot
 
 نسأل الله أن يرزقنا تلاوته آناء الليل وأطراف النهار، وأن يجعله حجّةً لنا لا علينا.
 
