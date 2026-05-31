@@ -2,6 +2,7 @@ import cron, { type ScheduledTask } from 'node-cron';
 import type { Bot, Context } from 'grammy';
 import { pruneCronRuns, withCronRun } from './database';
 import { deliverDueSubscribers, type DeliveryStats } from './lib/deliver';
+import { sweepPending } from './lib/pending';
 import { logger } from './lib/logger';
 
 const tasks: ScheduledTask[] = [];
@@ -45,6 +46,8 @@ export async function runDeliveryOnce(
  *     timezone, so one global minute-tick serves every timezone correctly.
  *     The (subscriber, local date) record keeps it to one wird per day.
  *   - Cron-run cleanup, once a day, so the observability table stays small.
+ *   - Pending-input sweep, every few minutes, so abandoned /page and /wird
+ *     prompts never leak memory.
  *
  * Errors inside a job are caught so a single bad run never kills the loop.
  */
@@ -63,7 +66,11 @@ export function startScheduler(bot: Bot<Context>): void {
       .catch((err) => logger.error('Cron-run cleanup failed', { error: String(err) }));
   });
 
-  tasks.push(tick, cleanup);
+  // Drop abandoned /page and /wird prompts so the pending-input map never
+  // grows unbounded over a long-running process.
+  const pendingSweep = cron.schedule('*/5 * * * *', () => sweepPending());
+
+  tasks.push(tick, cleanup, pendingSweep);
   logger.info('Scheduler started', { jobs: tasks.length });
 }
 

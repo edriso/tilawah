@@ -42,6 +42,11 @@ RUN pnpm install --frozen-lockfile
 # just created by the postinstall above, so this copy leaves it intact.
 COPY . .
 
+# Regenerate the Prisma client against the final source tree. The install step
+# already generates it, but regenerating here makes the image independent of
+# COPY ordering and guarantees it matches the committed schema.
+RUN pnpm db:generate
+
 # This image is the production artifact, so default to production for runtime.
 ENV NODE_ENV=production
 

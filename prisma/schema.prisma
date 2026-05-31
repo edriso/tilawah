@@ -106,7 +106,10 @@ model Subscriber {
   deliveries DeliveryLog[]
 
   @@unique([platform, chatId], map: "subscribers_platform_chat_key")
-  @@index([pausedAt, blockedAt]) // the "who is due" scan filters on these
+  // The "who is due" scan filters kind IN (...) AND pausedAt IS NULL AND
+  // blockedAt IS NULL. kind leads (an equality/IN predicate) so the index
+  // serves the scan directly; it also covers the channel lookup by kind.
+  @@index([kind, pausedAt, blockedAt])
   @@map("subscribers")
 }
 

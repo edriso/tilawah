@@ -145,12 +145,16 @@ export const COPY = {
 
   notReady: 'تعذّر تجهيز وردك الآن، حاول لاحقًا بإذن الله.',
 
+  // Shown for a stray text message that is not a command and not an expected
+  // number reply (after /page or /wird).
+  unknownText: 'لم أفهم رسالتك 🤔\nاكتب /help لرؤية الأوامر، أو /page لتغيير صفحتك.',
+
   // ── Wird size ─────────────────────────────────────────────────────
   wirdPrompt: (current: number) =>
     [
       `حجم وردك الحالي: ${wirdSizeSummaryAr(current)}.`,
-      'اختر عدد الصفحات في اليوم من الأزرار،',
-      `أو اكتب رقمًا من ١ إلى ٢٠، مثل ${ltr('/wird 5')}`,
+      'اختر عدد الصفحات من الأزرار، أو أرسل رقمًا من ١ إلى ٢٠،',
+      `أو اكتبه مع الأمر مباشرة، مثل ${ltr('/wird 5')}`,
     ].join('\n'),
   wirdInvalid: `الرجاء كتابة رقم صحيح من ١ إلى ٢٠، مثل ${ltr('/wird 5')}`,
   wirdUpdated: (pages: number) =>
@@ -160,7 +164,8 @@ export const COPY = {
   pagePrompt: (current: number, juz?: number) =>
     [
       `موضعك الحالي: ${pagePositionAr(current, juz)}.`,
-      `للانتقال إلى صفحة أخرى اكتب رقمها من ١ إلى ٦٠٤، مثل ${ltr('/page 100')}`,
+      'أرسل رقم الصفحة التي تريد الانتقال إليها (من ١ إلى ٦٠٤)،',
+      `أو اكتبه مع الأمر مباشرة، مثل ${ltr('/page 100')}`,
     ].join('\n'),
   pageInvalid: `رقم الصفحة غير صحيح. اكتب رقمًا من ١ إلى ٦٠٤، مثل ${ltr('/page 100')}`,
   pageUpdated: (page: number, juz?: number) =>

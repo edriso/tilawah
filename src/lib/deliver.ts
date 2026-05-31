@@ -1,5 +1,5 @@
 import type { Bot, Context } from 'grammy';
-import { dueLocalDate, pagesForWird, advanceStartPage, formatWird } from '../core';
+import { dueLocalDate, advanceStartPage, formatWird } from '../core';
 import {
   listDeliverableSubscribers,
   hasDeliveryFor,
@@ -66,8 +66,15 @@ export async function deliverDueSubscribers(
         continue;
       }
 
-      const pages = pagesForWird(sub.currentPage, sub.wirdSize);
       const content = await getWird(sub.currentPage, sub.wirdSize);
+      if (content.length === 0) {
+        // No pages resolved (a data fault, which assertQuranSeeded should
+        // prevent). Never "succeed" on an empty send: that would advance the
+        // position without sending anything. Log and skip; retried next tick.
+        stats.failed++;
+        logger.error('No wird content to send', { id: sub.id, startPage: sub.currentPage });
+        continue;
+      }
       const lead = sub.kind === KIND_CHANNEL ? COPY.channelLead : COPY.wirdLead;
       const result = await sendMessages(bot, sub.chatId, formatWird(content, basmala, lead));
 
@@ -95,7 +102,7 @@ export async function deliverDueSubscribers(
         subscriberId: sub.id,
         scheduledFor,
         startPage: sub.currentPage,
-        pageCount: pages.length,
+        pageCount: content.length,
         nextPage: advanceStartPage(sub.currentPage, sub.wirdSize),
         startedAt: sub.startedAt,
         now,

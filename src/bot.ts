@@ -23,8 +23,21 @@ import { buildTimeKeyboard, TIME_PICK_PREFIX } from './lib/time-keyboard';
 import { buildTimezoneKeyboard, TZ_PICK_PREFIX, COMMON_TIMEZONES } from './lib/timezone-keyboard';
 import { buildWirdKeyboard, WIRD_PICK_PREFIX } from './lib/wird-keyboard';
 import { parseTime, isValidTimezone, parseWirdSize, parsePageNumber } from './lib/parse';
+import { setPending, takePending, clearPending } from './lib/pending';
 
 const bot = new Bot<Context>(config.botToken);
+
+// Any explicit command or button tap means the user is no longer answering a
+// previous /page or /wird prompt with a bare number, so drop any stale pending
+// input first. A plain-text number is left untouched here for the message
+// handler below to consume. (/page and /wird set pending in their own handlers,
+// which run after this, so it still sticks for them.)
+bot.use(async (ctx, next) => {
+  if (ctx.from && (ctx.callbackQuery || ctx.message?.text?.startsWith('/'))) {
+    clearPending(ctx.from.id);
+  }
+  await next();
+});
 
 // ─── Shared helpers ─────────────────────────────────────────────────
 
@@ -113,6 +126,7 @@ bot.command('wird', async (ctx) => {
   if (!sub) return;
   const arg = commandArg(ctx, 'wird');
   if (!arg) {
+    setPending(ctx.from!.id, 'wird');
     return void ctx.reply(COPY.wirdPrompt(sub.wirdSize), { reply_markup: buildWirdKeyboard() });
   }
   const size = parseWirdSize(arg);
@@ -129,6 +143,7 @@ bot.command('page', async (ctx) => {
   if (!sub) return;
   const arg = commandArg(ctx, 'page');
   if (!arg) {
+    setPending(ctx.from!.id, 'page');
     const currentJuz = (await getJuzForPage(sub.currentPage)) ?? undefined;
     return void ctx.reply(COPY.pagePrompt(sub.currentPage, currentJuz));
   }
@@ -361,7 +376,10 @@ bot.command('admin_send', async (ctx) => {
 });
 
 bot.command('admin_health', async (ctx) => {
-  if (!isAdmin(ctx)) return;
+  if (!isAdmin(ctx)) {
+    if (ctx.chat?.type === 'private') await ctx.reply(COPY.adminOnly);
+    return;
+  }
   const uptime = Math.floor(process.uptime());
   const days = Math.floor(uptime / 86400);
   const hours = Math.floor((uptime % 86400) / 3600);
@@ -374,6 +392,42 @@ bot.command('admin_health', async (ctx) => {
       `Now: ${new Date().toISOString()}`,
     ].join('\n'),
   );
+});
+
+// ─── Plain-text replies ─────────────────────────────────────────────
+//
+// Registered AFTER every command, so commands always win. This only catches
+// non-command text in a private chat: a number answering a /page or /wird
+// prompt, or otherwise a gentle nudge toward /help.
+bot.on('message:text', async (ctx) => {
+  if (!ctx.from || ctx.chat?.type !== 'private') return;
+  if (!config.userWirdEnabled) return void ctx.reply(COPY.userBotDisabled);
+
+  const text = ctx.message.text.trim();
+  // A command that reached here is unknown (real ones are handled above).
+  const kind = text.startsWith('/') ? null : takePending(ctx.from.id);
+  if (!kind) return void ctx.reply(COPY.unknownText);
+
+  const sub = await ensureUser(BigInt(ctx.from.id), config.defaultTimezone);
+  if (kind === 'wird') {
+    const size = parseWirdSize(text);
+    if (size === null) {
+      setPending(ctx.from.id, 'wird'); // keep them in the flow to retry
+      return void ctx.reply(COPY.wirdInvalid);
+    }
+    await setWirdSize(sub.id, size);
+    return void ctx.reply(COPY.wirdUpdated(size));
+  }
+
+  // kind === 'page'
+  const page = parsePageNumber(text);
+  if (page === null) {
+    setPending(ctx.from.id, 'page');
+    return void ctx.reply(COPY.pageInvalid);
+  }
+  await setCurrentPage(sub.id, page);
+  const juz = (await getJuzForPage(page)) ?? undefined;
+  return void ctx.reply(COPY.pageUpdated(page, juz));
 });
 
 bot.catch((err) => {

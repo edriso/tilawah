@@ -41,47 +41,59 @@ export async function getBasmala(): Promise<string> {
   return basmalaCache;
 }
 
+// Page content never changes after seeding (the ayat tables are read-only, and
+// assertQuranSeeded guards them at boot), so we cache each page the first time
+// it is read. The daily delivery loop sends the same handful of pages to many
+// subscribers every tick; without this it would re-query the database once per
+// subscriber. Consumers only READ the returned PageContent, so sharing the
+// cached object is safe. At most 604 small entries.
+const pageCache = new Map<number, PageContent>();
+
 /**
  * Load the content of the given pages, grouped per page in the SAME order the
  * pages were asked for (so a wrapping wird like [603, 604, 1] comes back in
  * that order). Each page's juz is the juz of its first ayah, which is what a
- * Mushaf prints in the page header.
+ * Mushaf prints in the page header. Cached, since pages are immutable.
  */
 export async function getPageContents(pageNumbers: number[]): Promise<PageContent[]> {
   const distinct = [...new Set(pageNumbers)];
   if (distinct.length === 0) return [];
 
-  const rows = await prisma.ayah.findMany({
-    where: { page: { in: distinct } },
-    orderBy: [{ page: 'asc' }, { surahNumber: 'asc' }, { numberInSurah: 'asc' }],
-    select: {
-      page: true,
-      juz: true,
-      surahNumber: true,
-      numberInSurah: true,
-      text: true,
-      surah: { select: { nameAr: true } },
-    },
-  });
-
-  const byPage = new Map<number, PageContent>();
-  for (const r of rows) {
-    let page = byPage.get(r.page);
-    if (!page) {
-      // The first row for a page is its first ayah (rows are ordered), so its
-      // juz is the page's juz.
-      page = { pageNumber: r.page, juz: r.juz, ayat: [] };
-      byPage.set(r.page, page);
-    }
-    page.ayat.push({
-      surahNumber: r.surahNumber,
-      surahNameAr: r.surah.nameAr,
-      numberInSurah: r.numberInSurah,
-      text: r.text,
+  const missing = distinct.filter((p) => !pageCache.has(p));
+  if (missing.length > 0) {
+    const rows = await prisma.ayah.findMany({
+      where: { page: { in: missing } },
+      orderBy: [{ page: 'asc' }, { surahNumber: 'asc' }, { numberInSurah: 'asc' }],
+      select: {
+        page: true,
+        juz: true,
+        surahNumber: true,
+        numberInSurah: true,
+        text: true,
+        surah: { select: { nameAr: true } },
+      },
     });
+
+    const built = new Map<number, PageContent>();
+    for (const r of rows) {
+      let page = built.get(r.page);
+      if (!page) {
+        // The first row for a page is its first ayah (rows are ordered), so
+        // its juz is the page's juz.
+        page = { pageNumber: r.page, juz: r.juz, ayat: [] };
+        built.set(r.page, page);
+      }
+      page.ayat.push({
+        surahNumber: r.surahNumber,
+        surahNameAr: r.surah.nameAr,
+        numberInSurah: r.numberInSurah,
+        text: r.text,
+      });
+    }
+    for (const [num, content] of built) pageCache.set(num, content);
   }
 
-  return pageNumbers.map((p) => byPage.get(p)).filter((p): p is PageContent => p !== undefined);
+  return pageNumbers.map((p) => pageCache.get(p)).filter((p): p is PageContent => p !== undefined);
 }
 
 /** The juz a page belongs to (the juz of its first ayah), or null if the page
