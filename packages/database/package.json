@@ -17,7 +17,7 @@
     "db:migrate": "prisma migrate dev",
     "db:deploy": "prisma migrate deploy",
     "db:studio": "prisma studio",
-    "db:schema:sql": "mkdir -p ../../docs && prisma migrate diff --from-empty --to-schema-datamodel prisma/schema.prisma --script > ../../docs/schema.sql",
+    "db:schema:sql": "mkdir -p ../../docs && prisma migrate diff --from-empty --to-schema prisma/schema.prisma --script > ../../docs/schema.sql",
     "data:fetch": "tsx scripts/fetch-quran.ts",
     "db:seed": "tsx prisma/seed.ts",
     "db:reset": "prisma db push --force-reset && tsx prisma/seed.ts",

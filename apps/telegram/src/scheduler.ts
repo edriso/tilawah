@@ -43,7 +43,7 @@ export async function runDeliveryOnce(
  * Start the recurring jobs:
  *   - Delivery tick, every minute. Each subscriber is judged in their own
  *     timezone, so one global minute-tick serves every timezone correctly.
- *     The (subscriber, local date) record keeps it to one ayah per day.
+ *     The (subscriber, local date) record keeps it to one wird per day.
  *   - Cron-run cleanup, once a day, so the observability table stays small.
  *
  * Errors inside a job are caught so a single bad run never kills the loop.
