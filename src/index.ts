@@ -59,7 +59,7 @@ async function ensureChannelSubscriber(): Promise<void> {
 }
 
 async function main() {
-  logger.info('Tilawa bot starting', {
+  logger.info('Tilawah bot starting', {
     isDev: config.isDev,
     defaultTz: config.defaultTimezone,
     userWird: config.userWirdEnabled,

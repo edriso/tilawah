@@ -1,11 +1,11 @@
-Tilawa bot, third-party content notice
+Tilawah bot, third-party content notice
 ======================================
 
 The Quran text used by this project is the Uthmani text from the Tanzil
 project (https://tanzil.net). It was downloaded with `pnpm data:fetch`
 and is stored, unchanged, at:
 
-    packages/database/prisma/data/quran-uthmani.json
+    prisma/data/quran-uthmani.json
 
 The page numbers (the standard Madani Mushaf of 604 pages) and the juz
 numbers come from the page and juz boundaries published by the Al Quran

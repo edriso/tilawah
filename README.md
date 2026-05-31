@@ -1,6 +1,6 @@
-# Tilawa
+# Tilawah
 
-Tilawa is a Telegram bot that sends a daily Quran reading portion (a "wird"),
+Tilawah is a Telegram bot that sends a daily Quran reading portion (a "wird"),
 measured in pages of the standard Madani Mushaf. It can post to a public
 channel, serve individual users in private chat, or do both. The user facing
 text is in Arabic.

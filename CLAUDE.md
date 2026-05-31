@@ -5,7 +5,7 @@ no em dashes, so a junior developer can read this and be productive.
 
 ## What this is
 
-Tilawa is a Telegram bot that sends a daily Quran "wird" (a daily reading
+Tilawah is a Telegram bot that sends a daily Quran "wird" (a daily reading
 portion) measured in Mushaf pages. It serves two kinds of reader from one
 engine:
 

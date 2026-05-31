@@ -8,7 +8,7 @@ describe('buildWirdKeyboard', () => {
     Number((b as { callback_data?: string }).callback_data?.slice(WIRD_PICK_PREFIX.length)),
   );
 
-  it('offers several presets, all callback data tilawa:wird:<n>', () => {
+  it('offers several presets, all callback data tilawah:wird:<n>', () => {
     expect(buttons.length).toBeGreaterThan(0);
     for (const b of buttons) {
       const data = (b as { callback_data?: string }).callback_data ?? '';

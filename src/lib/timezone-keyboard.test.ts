@@ -9,7 +9,7 @@ describe('common timezones', () => {
     }
   });
 
-  it('builds one button per zone with callback data tilawa:tz:<index>', () => {
+  it('builds one button per zone with callback data tilawah:tz:<index>', () => {
     const buttons = buildTimezoneKeyboard().inline_keyboard.flat();
     expect(buttons).toHaveLength(COMMON_TIMEZONES.length);
     buttons.forEach((btn, i) => {

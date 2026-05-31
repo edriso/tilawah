@@ -4,8 +4,8 @@ import { dayNameAr, WEEKDAY_DISPLAY_ORDER } from './copy';
 
 // Callback data prefixes. Keep them short and namespaced so they never
 // clash with anything else the bot might add later.
-export const DAY_TOGGLE_PREFIX = 'tilawa:day:';
-export const DAYS_DONE = 'tilawa:days:done';
+export const DAY_TOGGLE_PREFIX = 'tilawah:day:';
+export const DAYS_DONE = 'tilawah:days:done';
 
 /**
  * Build the day-picker keyboard. Each day shows a check when it is on. Days

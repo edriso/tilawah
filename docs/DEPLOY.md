@@ -1,6 +1,6 @@
 # Deploy
 
-Tilawa is a single long running Node process plus a MySQL/MariaDB database. It
+Tilawah is a single long running Node process plus a MySQL/MariaDB database. It
 uses Telegram long polling, so it does not need a public URL. There is a small
 `/health` endpoint for uptime checks.
 

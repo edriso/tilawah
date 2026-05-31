@@ -1,8 +1,8 @@
 import { InlineKeyboard } from 'grammy';
 import { toArabicDigits } from '../core';
 
-// Callback data prefix for the wird-size picker, e.g. "tilawa:wird:5".
-export const WIRD_PICK_PREFIX = 'tilawa:wird:';
+// Callback data prefix for the wird-size picker, e.g. "tilawah:wird:5".
+export const WIRD_PICK_PREFIX = 'tilawah:wird:';
 
 // A few common wird sizes. Typing a number stays available via "/wird N", but
 // most people tap one of these. The values span the gentle start (1 page),

@@ -1,8 +1,8 @@
 import { InlineKeyboard } from 'grammy';
 
-// Callback data prefix for the timezone picker, e.g. "tilawa:tz:0" (the index
+// Callback data prefix for the timezone picker, e.g. "tilawah:tz:0" (the index
 // into COMMON_TIMEZONES). An index keeps the callback data short and stable.
-export const TZ_PICK_PREFIX = 'tilawa:tz:';
+export const TZ_PICK_PREFIX = 'tilawah:tz:';
 
 // Common timezones for the bot's Arabic-speaking audience, labelled by city in
 // Arabic and mapped to their IANA name. A non-technical user does not know

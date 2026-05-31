@@ -108,7 +108,7 @@ async function main() {
 async function download(url: string): Promise<string> {
   let res: Response;
   try {
-    res = await fetch(url, { headers: { 'User-Agent': 'tilawa-bot/1.0 (+quran data fetch)' } });
+    res = await fetch(url, { headers: { 'User-Agent': 'tilawah-bot/1.0 (+quran data fetch)' } });
   } catch (err) {
     throw new Error(`Could not reach ${url}. Check your connection.\n  ${String(err)}`);
   }

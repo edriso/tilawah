@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { buildTimeKeyboard, TIME_PICK_PREFIX } from './time-keyboard';
 
 describe('time presets', () => {
-  it('every button has callback data tilawa:time:HHMM with a valid hour and minute', () => {
+  it('every button has callback data tilawah:time:HHMM with a valid hour and minute', () => {
     const buttons = buildTimeKeyboard().inline_keyboard.flat();
     expect(buttons.length).toBeGreaterThan(0);
     for (const btn of buttons) {

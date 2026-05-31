@@ -1,8 +1,8 @@
 import { InlineKeyboard } from 'grammy';
 import { formatTimeAr } from './copy';
 
-// Callback data prefix for the time picker, e.g. "tilawa:time:0700".
-export const TIME_PICK_PREFIX = 'tilawa:time:';
+// Callback data prefix for the time picker, e.g. "tilawah:time:0700".
+export const TIME_PICK_PREFIX = 'tilawah:time:';
 
 // A few common send times. Typing a 24-hour time is error-prone for the
 // audience, so most users just tap one of these; the free-text "/time HH:MM"
