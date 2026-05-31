@@ -79,11 +79,11 @@ model Subscriber {
   deliveryHour   Int @default(6) @map("delivery_hour") @db.TinyInt
   deliveryMinute Int @default(0) @map("delivery_minute") @db.TinyInt
   // 7-bit mask of the weekdays the subscriber wants the wird on. Bit 0 is
-  // Monday ... bit 6 is Sunday. 127 = every day. See packages/core/days.ts.
+  // Monday ... bit 6 is Sunday. 127 = every day. See src/core/days.ts.
   activeDays     Int @default(127) @map("active_days")
 
   // How many Mushaf pages to send per day (1..20, default 1). Validated in
-  // the app (MAX_WIRD_PAGES in packages/core).
+  // the app (MAX_WIRD_PAGES in src/core).
   wirdSize    Int @default(1) @map("wird_size")
   // The NEXT page to send (1..604). Advances by wirdSize after each send and
   // loops past 604 back to 1. A brand-new subscriber starts at page 1.
