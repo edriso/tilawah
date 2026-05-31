@@ -55,8 +55,10 @@ help - المساعدة
 
 - Group privacy: this is a one to one bot for users and a poster for the
   channel, so you can leave group privacy ON (the default).
-- For the channel: add the bot to your channel as an admin that can post
-  messages, then set `CHANNEL_CHAT_ID` and `ADMIN_TELEGRAM_IDS` in `.env`.
+- For the channel (name, description, pinned welcome post, and admin control):
+  see `docs/CHANNEL.md`. In short, add the bot to your channel as an admin that
+  can post messages, then set `CHANNEL_CHAT_ID` and `ADMIN_TELEGRAM_IDS` in
+  `.env`.
 - Privacy Policy: optional. The bot stores only what it needs to deliver the
   wird (the chat id, timezone, send time, days, wird size, current page, and a
   per day delivery record).

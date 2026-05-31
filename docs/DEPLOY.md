@@ -54,6 +54,9 @@ Set these env vars on the host (see the single root `.env.example`):
 4. Start the bot. In a private chat with the bot, send `/admin_setpage N` with
    the last page that was already read; the channel will post page N+1 next.
 
+See `docs/CHANNEL.md` for the full admin command list and the paste-ready
+channel name, description, and pinned welcome post.
+
 ## Health check
 
 Point your host's health check at `GET /health` on the port from `PORT`

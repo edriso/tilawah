@@ -28,8 +28,9 @@ It is one small TypeScript project, with everything under `src/`:
   daily scheduler. `prisma/` holds the schema, migrations, and seed; `scripts/`
   holds the data fetch.
 
-Read `docs/DEPLOY.md` to run it, and `docs/BOTFATHER.md` to set up the bot in
-@BotFather.
+Read `docs/DEPLOY.md` to run it, `docs/BOTFATHER.md` to set up the bot in
+@BotFather, and `docs/CHANNEL.md` for the channel (name, description, and the
+paste-ready pinned welcome post).
 
 ## Golden rules
 

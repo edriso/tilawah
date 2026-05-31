@@ -30,7 +30,9 @@ One small TypeScript project, everything under `src/`:
 
 A channel is just a subscriber with `kind = "channel"`, so the send engine is
 written once and serves both the channel and users. See `CLAUDE.md` for the
-design notes and `docs/` for deploy and BotFather setup.
+design notes, `docs/DEPLOY.md` to run it, `docs/BOTFATHER.md` for the bot's
+name, about, description, and commands, and `docs/CHANNEL.md` for the channel
+name, description, and pinned welcome post.
 
 ## The Quran data
 
