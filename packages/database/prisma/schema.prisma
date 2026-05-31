@@ -1,0 +1,155 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "mysql"
+}
+
+// Naming: TS model names are PascalCase singular and TS fields are camelCase
+// (idiomatic TypeScript). The @map / @@map directives expose snake_case
+// plural tables and snake_case columns in MySQL (the usual SQL convention).
+// We do NOT use Prisma enums; short string fields with a comment listing the
+// allowed values keep migrations simpler.
+
+// ─── Quran text (read-only reference data) ──────────────────────────
+//
+// Surah and Ayah are seeded once from the verified Tanzil Uthmani text plus
+// the Madani Mushaf page and juz boundaries, and are never written again by
+// the running bot. A startup check guards the counts (6236 ayat, 114 surahs,
+// 604 pages, 30 juz) so a corrupt or half-seeded database can never reach a
+// reader.
+
+model Surah {
+  // The surah number (1-114) is its natural, stable primary key.
+  number     Int    @id
+  nameAr     String @db.VarChar(64) // Arabic name, e.g. "البقرة"
+  nameEn     String @db.VarChar(64) // Latin transliteration, e.g. "Al-Baqarah"
+  revelation String @db.VarChar(16) // "meccan" | "medinan"
+  // Number of ayat in this surah. Filled during seeding from the actual ayah
+  // rows, so it can never drift from the text.
+  ayahCount  Int    @map("ayah_count")
+
+  ayat Ayah[]
+
+  @@map("surahs")
+}
+
+model Ayah {
+  id            Int    @id @default(autoincrement())
+  surahNumber   Int    @map("surah_number")
+  numberInSurah Int    @map("number_in_surah")
+  text          String @db.Text // Uthmani text, exactly as Tanzil shipped it
+  // Madani Mushaf page (1-604) and juz (1-30) this ayah sits on. These drive
+  // the whole wird engine: "the next N pages" is just a query on page.
+  page          Int
+  juz           Int
+
+  surah Surah @relation(fields: [surahNumber], references: [number])
+
+  @@unique([surahNumber, numberInSurah], map: "ayat_surah_number_in_surah_key")
+  @@index([page]) // fetching one page's ayat is the hot path
+  @@map("ayat")
+}
+
+// ─── Subscribers ────────────────────────────────────────────────────
+//
+// One row per delivery target. A normal user is a subscriber; the public
+// channel is a subscriber too. They differ only by `kind`, which is the whole
+// point: the sending engine is written once and serves both.
+
+model Subscriber {
+  id Int @id @default(autoincrement())
+
+  // "user" = a person in a private chat. "channel" = the public channel an
+  // admin controls. There is at most one channel row per chat.
+  kind     String @default("user") @db.VarChar(16)
+  // Reserved for a future Discord adapter; "telegram" for now.
+  platform String @default("telegram") @db.VarChar(16)
+  // The Telegram chat id we send to. Positive for a user, negative for a
+  // channel (e.g. -1001234567890). Unique together with the platform.
+  chatId   BigInt @map("chat_id")
+
+  // IANA timezone, e.g. "Africa/Cairo". Drives the local send time and the
+  // local day boundary used for idempotency.
+  timezone String @default("Africa/Cairo") @db.VarChar(64)
+
+  // Daily send time in the subscriber's own local time.
+  deliveryHour   Int @default(6) @map("delivery_hour") @db.TinyInt
+  deliveryMinute Int @default(0) @map("delivery_minute") @db.TinyInt
+  // 7-bit mask of the weekdays the subscriber wants the wird on. Bit 0 is
+  // Monday ... bit 6 is Sunday. 127 = every day. See packages/core/days.ts.
+  activeDays     Int @default(127) @map("active_days")
+
+  // How many Mushaf pages to send per day (1..20, default 1). Validated in
+  // the app (MAX_WIRD_PAGES in packages/core).
+  wirdSize    Int @default(1) @map("wird_size")
+  // The NEXT page to send (1..604). Advances by wirdSize after each send and
+  // loops past 604 back to 1. A brand-new subscriber starts at page 1.
+  currentPage Int @default(1) @map("current_page")
+
+  // Break: null means active. When set, the bot sends nothing and the page
+  // does not advance, so resuming continues exactly where they left off.
+  pausedAt  DateTime? @map("paused_at")
+  // Reachability: null means reachable. Set when Telegram tells us the user
+  // blocked the bot (or a send fails with 403); cleared when they message the
+  // bot again. Send loops filter `blockedAt IS NULL`. (Channels are never
+  // marked blocked.)
+  blockedAt DateTime? @map("blocked_at")
+  // When the very first wird was delivered (for stats / "member since").
+  startedAt DateTime? @map("started_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  deliveries DeliveryLog[]
+
+  @@unique([platform, chatId], map: "subscribers_platform_chat_key")
+  @@index([pausedAt, blockedAt]) // the "who is due" scan filters on these
+  @@map("subscribers")
+}
+
+// ─── Delivery history + idempotency ─────────────────────────────────
+
+model DeliveryLog {
+  id           Int    @id @default(autoincrement())
+  subscriberId Int    @map("subscriber_id")
+  // The subscriber's LOCAL date the send was meant for ("YYYY-MM-DD"). The
+  // unique index below is the idempotency lock: a subscriber gets at most one
+  // wird per local day, even if the cron double-fires or catches up after a
+  // restart.
+  scheduledFor String @map("scheduled_for") @db.VarChar(10)
+  // What was sent, for audit: the first page and how many pages.
+  startPage    Int    @map("start_page")
+  pageCount    Int    @map("page_count")
+  status       String @default("sent") @db.VarChar(16) // "sent" | "failed" | "skipped"
+
+  sentAt    DateTime? @map("sent_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  subscriber Subscriber @relation(fields: [subscriberId], references: [id], onDelete: Cascade)
+
+  @@unique([subscriberId, scheduledFor], map: "delivery_logs_subscriber_date_key")
+  @@index([subscriberId, createdAt])
+  @@map("delivery_logs")
+}
+
+// ─── Cron observability ─────────────────────────────────────────────
+
+/// One row per run of a scheduled job, so we can answer "did the send run
+/// today?" without grepping logs. Old rows are pruned by a cleanup job.
+model CronRun {
+  id           Int       @id @default(autoincrement())
+  name         String    @db.VarChar(64)
+  startedAt    DateTime  @default(now()) @map("started_at")
+  finishedAt   DateTime? @map("finished_at")
+  success      Boolean   @default(false)
+  durationMs   Int?      @map("duration_ms")
+  statsJson    String?   @map("stats_json") @db.Text
+  errorMessage String?   @map("error_message") @db.Text
+
+  @@index([name, startedAt(sort: Desc)])
+  @@index([startedAt])
+  @@map("cron_runs")
+}
