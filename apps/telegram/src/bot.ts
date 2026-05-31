@@ -213,6 +213,9 @@ bot.callbackQuery(new RegExp(`^${TIME_PICK_PREFIX}(\\d{2})(\\d{2})$`), async (ct
   if (!sub) return void ctx.answerCallbackQuery();
   const hour = Number(ctx.match![1]);
   const minute = Number(ctx.match![2]);
+  // The buttons we send are always valid, but callback data is client-supplied,
+  // so re-check the range before storing it.
+  if (hour > 23 || minute > 59) return void ctx.answerCallbackQuery();
   await setDeliveryTime(sub.id, hour, minute);
   await ctx.editMessageReplyMarkup(); // remove the keyboard
   await ctx.reply(COPY.timeUpdated(formatTimeAr(hour, minute), sub.timezone));

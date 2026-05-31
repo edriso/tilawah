@@ -1,6 +1,6 @@
 import cron, { type ScheduledTask } from 'node-cron';
 import type { Bot, Context } from 'grammy';
-import { pruneCronRuns } from '@tilawa/database';
+import { pruneCronRuns, withCronRun } from '@tilawa/database';
 import { deliverDueSubscribers, type DeliveryStats } from './lib/deliver';
 import { logger } from './lib/logger';
 
@@ -29,7 +29,11 @@ export async function runDeliveryOnce(
   }
   deliveryRunning = true;
   try {
-    return await deliverDueSubscribers(bot, now);
+    // Record each real batch in cron_runs (with its stats) so we can answer
+    // "did the send run, and what did it do?" without grepping logs. Skipped
+    // (locked) triggers return above and are not recorded, keeping it to one
+    // row per actual run.
+    return await withCronRun('delivery', () => deliverDueSubscribers(bot, now), now);
   } finally {
     deliveryRunning = false;
   }

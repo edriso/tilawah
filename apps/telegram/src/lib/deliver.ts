@@ -72,7 +72,17 @@ export async function deliverDueSubscribers(
       const result = await sendMessages(bot, sub.chatId, formatWird(content, basmala, lead));
 
       if (result === 'blocked') {
-        await markBlocked(sub.id);
+        // A user blocking us is permanent until they message again, so we mark
+        // them and stop trying. A channel can also 403 (the bot lost posting
+        // rights), but it never messages the bot to clear a block, so we treat
+        // that as transient: log it and retry next tick once rights return.
+        if (sub.kind === KIND_CHANNEL) {
+          logger.error('Channel send was rejected (403); is the bot still a channel admin?', {
+            id: sub.id,
+          });
+        } else {
+          await markBlocked(sub.id);
+        }
         stats.failed++;
         continue;
       }
