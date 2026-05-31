@@ -20,7 +20,7 @@ pnpm install --prod=false
 pnpm data:fetch          # writes the frozen Quran data file (skip if cloned, it is committed)
 pnpm db:deploy           # applies the migrations (creates the tables)
 pnpm db:seed             # fills the Quran tables (surahs and ayat with page/juz)
-pnpm start               # runs apps/telegram
+pnpm start               # runs the bot (src/index.ts)
 ```
 
 `db:deploy` and `db:seed` are setup steps. Run them once per environment when

@@ -20,11 +20,13 @@ The key idea: a channel is just a special subscriber (a row with
 `kind = "channel"`). The send engine is written once and both the channel and
 the users flow through it. We never write the schedule logic twice.
 
-It is a pnpm workspace:
+It is one small TypeScript project, with everything under `src/`:
 
-- `packages/core` pure logic, no database, no network. Fully unit tested.
-- `packages/database` Prisma schema, the client, and services.
-- `apps/telegram` the grammY bot: commands and the daily scheduler.
+- `src/core` pure logic, no database, no network. Fully unit tested.
+- `src/database` the Prisma client and the database services.
+- `src/` (bot.ts, scheduler.ts, lib/, ...) the grammY bot: commands and the
+  daily scheduler. `prisma/` holds the schema, migrations, and seed; `scripts/`
+  holds the data fetch.
 
 Read `docs/DEPLOY.md` to run it, and `docs/BOTFATHER.md` to set up the bot in
 @BotFather.
@@ -38,7 +40,7 @@ Read `docs/DEPLOY.md` to run it, and `docs/BOTFATHER.md` to set up the bot in
 2. Keep `core` pure. No database or network imports there. That is what keeps
    it easy to test.
 3. The bot sends plain text, never Markdown or HTML parse_mode. Quran text
-   would make a parsed message fail with a 400. See `apps/telegram/src/lib/send.ts`.
+   would make a parsed message fail with a 400. See `src/lib/send.ts`.
 4. Advance a subscriber's page ONLY after a real send. A failed send must
    retry the same pages, never skip them.
 5. One wird per subscriber per local day. The `unique(subscriberId,
@@ -51,7 +53,7 @@ Read `docs/DEPLOY.md` to run it, and `docs/BOTFATHER.md` to set up the bot in
   one page is a simple query on `page`.
 - A wird of N pages starting at page P is pages P, P+1, ... wrapping from 604
   back to 1. See `pagesForWird` and `advanceStartPage` in
-  `packages/core/src/wird.ts`.
+  `src/core/wird.ts`.
 - Default wird is 1 page a day. The max a user can pick is 20 pages
   (`MAX_WIRD_PAGES`), which is about a juz a day and finishes the Quran in
   about a month. We cap there on purpose: scholars caution against finishing
@@ -59,7 +61,7 @@ Read `docs/DEPLOY.md` to run it, and `docs/BOTFATHER.md` to set up the bot in
 
 ## How the daily send works
 
-`deliverDueSubscribers` (in `apps/telegram/src/lib/deliver.ts`) runs every
+`deliverDueSubscribers` (in `src/lib/deliver.ts`) runs every
 minute. For each active, non-blocked subscriber of an allowed kind:
 
 1. `dueLocalDate` checks their own timezone, send time, and active days.
@@ -95,7 +97,7 @@ Quran data is not fully seeded.
   `kind` is "user" or "channel").
 - Comments explain WHY, not what. Match the density already in the files.
 - Tests use vitest. Add tests for new logic, including edge cases.
-- Arabic text lives in `apps/telegram/src/lib/copy.ts`. It is right to left;
+- Arabic text lives in `src/lib/copy.ts`. It is right to left;
   wrap any left to right run (a command, a time, a timezone) with the `ltr()`
   helper so the punctuation around it does not reorder.
 
@@ -114,7 +116,7 @@ pnpm db:studio      # browse the database
 
 ### Changing the schema
 
-Edit `packages/database/prisma/schema.prisma`, then make a migration:
+Edit `prisma/schema.prisma`, then make a migration:
 
 ```bash
 pnpm db:migrate     # prisma migrate dev: creates a new migration and applies it
@@ -125,20 +127,20 @@ Commit the new folder under `prisma/migrations/`. Production applies it with
 
 ## Gotchas
 
-- There is ONE `.env`, at the repo root. Every package and script loads it
-  through `loadEnv()` in `packages/core/src/env.ts`, which finds the root (the
-  folder with `pnpm-workspace.yaml`) no matter where the command runs.
-  `prisma.config.ts` has the same loader inline.
+- There is ONE `.env`, at the repo root. Code and scripts load it through
+  `loadEnv()` in `src/core/env.ts`, which finds the root (the folder with
+  `package.json`) no matter where the command runs. `prisma.config.ts` has the
+  same loader inline.
 - `NODE_ENV` defaults to `production`. `pnpm dev` sets `NODE_ENV=development`
   itself, so local work always runs in development mode no matter what `.env`
   says.
 - Prisma 7 does not read `.env` on its own and does not take the URL in the
   schema. The CLI gets the URL from `prisma.config.ts`; the running bot builds
-  its own client in `src/client.ts`.
-- The generated Prisma client lives in `packages/database/src/generated`. It
+  its own client in `src/database/client.ts`.
+- The generated Prisma client lives in `src/database/generated`. It
   is git ignored. Run `pnpm db:generate` if imports from it fail.
 - `activeDays` is a 7-bit mask (bit 0 = Monday). Use the helpers in
-  `packages/core/src/days.ts`, do not do bit math by hand elsewhere. The day
+  `src/core/days.ts`, do not do bit math by hand elsewhere. The day
   picker shows days Saturday first (the order Arabic readers expect), but the
   stored mask is still ISO (Monday = 1). Only the display order differs; see
   `WEEKDAY_DISPLAY_ORDER` in copy.ts.
@@ -150,10 +152,10 @@ Commit the new folder under `prisma/migrations/`. Production applies it with
 
 ## Where things live
 
-- Page and wird math: `packages/core/src/wird.ts`
-- Message building (one message per page): `packages/core/src/format.ts`
-- Surah names and revelation: `packages/database/src/reference/surahs.ts`
-- Ayah count oracle: `packages/database/src/reference/ayah-counts.ts`
-- Page and juz constants and anchors: `packages/database/src/reference/pages.ts`
-- Message wording (Arabic): `apps/telegram/src/lib/copy.ts`
-- The send engine: `apps/telegram/src/lib/deliver.ts`
+- Page and wird math: `src/core/wird.ts`
+- Message building (one message per page): `src/core/format.ts`
+- Surah names and revelation: `src/database/reference/surahs.ts`
+- Ayah count oracle: `src/database/reference/ayah-counts.ts`
+- Page and juz constants and anchors: `src/database/reference/pages.ts`
+- Message wording (Arabic): `src/lib/copy.ts`
+- The send engine: `src/lib/deliver.ts`

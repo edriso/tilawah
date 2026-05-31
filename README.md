@@ -19,12 +19,14 @@ extend the project.
 
 ## How it is built
 
-A pnpm workspace with three parts:
+One small TypeScript project, everything under `src/`:
 
-- `packages/core` pure logic with no database or network: the page and wird
+- `src/core` pure logic with no database or network: the page and wird
   math, the schedule math, and the message building. Fully unit tested.
-- `packages/database` the Prisma schema, the client, and the services.
-- `apps/telegram` the grammY bot and the once a minute scheduler.
+- `src/database` the Prisma client and the database services.
+- `src/` (bot.ts, scheduler.ts, lib/, ...) the grammY bot and the once a
+  minute scheduler. `prisma/` holds the schema, migrations, and seed;
+  `scripts/` holds the data fetch.
 
 A channel is just a subscriber with `kind = "channel"`, so the send engine is
 written once and serves both the channel and users. See `CLAUDE.md` for the

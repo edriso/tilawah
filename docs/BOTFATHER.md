@@ -5,7 +5,7 @@ Edit Bot menu). The bot UI is Arabic, so the public texts are Arabic too. Copy
 each block as is.
 
 Note: the bot sets its own command list on every start (via `setMyCommands` in
-`apps/telegram/src/bot.ts`), and it lists the personal commands only when
+`src/bot.ts`), and it lists the personal commands only when
 `USER_WIRD_ENABLED` is true. You only need to paste commands into BotFather if
 you also want them set by hand. The admin commands are never listed publicly.
 
