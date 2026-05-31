@@ -52,3 +52,29 @@ export function parsePageNumber(raw: string): number | null {
   const n = Number(normalized);
   return isValidPage(n) ? n : null;
 }
+
+/**
+ * Parse the argument of the admin "/admin_preview" command: a Mushaf page to
+ * render, plus an optional page count, for testing what the bot would send.
+ *
+ *   "10"     -> { page: 10, pages: 1 }
+ *   "10 3"   -> { page: 10, pages: 3 }
+ *
+ * The page must be 1..604 and the count a valid wird size (1..20). Returns
+ * null on anything malformed. Arabic-Indic digits are accepted.
+ */
+export function parsePagePreview(raw: string): { page: number; pages: number } | null {
+  const parts = toAsciiDigits(raw.trim()).split(/\s+/).filter(Boolean);
+  if (parts.length < 1 || parts.length > 2) return null;
+
+  const page = parsePageNumber(parts[0]!);
+  if (page === null) return null;
+
+  let pages = 1;
+  if (parts.length === 2) {
+    const size = parseWirdSize(parts[1]!);
+    if (size === null) return null;
+    pages = size;
+  }
+  return { page, pages };
+}

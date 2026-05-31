@@ -73,6 +73,10 @@ in a private chat with the bot. They act on the channel.
   paused nothing is posted and the page does not move.
 - `/admin_status` show the channel's current settings and page position.
 - `/admin_send` send the due batch right now (handy for a smoke test).
+- `/admin_preview N [pages]` render exactly what the bot would send for page
+  `N` (or a run of `pages`, default 1), into your private chat, without
+  changing the channel position or posting to the channel. A manual test for
+  any page. Example: `/admin_preview 10 2` shows pages 10 and 11.
 
 Every admin command validates its input and changes nothing on bad input, with
 a clear Arabic reply. A non-admin who tries one is politely refused.

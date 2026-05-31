@@ -22,7 +22,13 @@ import { buildDaysKeyboard, DAY_TOGGLE_PREFIX, DAYS_DONE } from './lib/days-keyb
 import { buildTimeKeyboard, TIME_PICK_PREFIX } from './lib/time-keyboard';
 import { buildTimezoneKeyboard, TZ_PICK_PREFIX, COMMON_TIMEZONES } from './lib/timezone-keyboard';
 import { buildWirdKeyboard, WIRD_PICK_PREFIX } from './lib/wird-keyboard';
-import { parseTime, isValidTimezone, parseWirdSize, parsePageNumber } from './lib/parse';
+import {
+  parseTime,
+  isValidTimezone,
+  parseWirdSize,
+  parsePageNumber,
+  parsePagePreview,
+} from './lib/parse';
 import { setPending, takePending, clearPending } from './lib/pending';
 
 const bot = new Bot<Context>(config.botToken);
@@ -356,6 +362,33 @@ bot.command('admin_status', async (ctx) => {
   const channel = await adminChannel(ctx);
   if (!channel) return;
   await ctx.reply(await statusText(channel, true));
+});
+
+// /admin_preview <page> [pages]: render exactly what the bot would send for a
+// given Mushaf page (or a run of pages), into the admin's DM, without changing
+// the channel position or posting anywhere. A manual end-to-end test (database
+// read + format) for any page. The page count defaults to 1.
+bot.command('admin_preview', async (ctx) => {
+  if (!isAdmin(ctx)) {
+    if (ctx.chat?.type === 'private') await ctx.reply(COPY.adminOnly);
+    return;
+  }
+  const arg = commandArg(ctx, 'admin_preview');
+  if (!arg) {
+    await ctx.reply('Usage: /admin_preview <page> [pages]\nExample: /admin_preview 10 2');
+    return;
+  }
+  const parsed = parsePagePreview(arg);
+  if (!parsed) {
+    await ctx.reply('Bad input. Page 1..604, pages 1..20.');
+    return;
+  }
+  const messages = await previewWird({ currentPage: parsed.page, wirdSize: parsed.pages });
+  if (messages.length === 0) {
+    await ctx.reply('No content for that page. Run "pnpm db:seed".');
+    return;
+  }
+  for (const message of messages) await ctx.reply(message);
 });
 
 // /admin_send: fire the delivery batch by hand, the exact path the cron uses.

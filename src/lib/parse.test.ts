@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { parseTime, isValidTimezone, parseWirdSize, parsePageNumber } from './parse';
+import {
+  parseTime,
+  isValidTimezone,
+  parseWirdSize,
+  parsePageNumber,
+  parsePagePreview,
+} from './parse';
 
 describe('parseTime', () => {
   it('parses normal and single-digit-hour times', () => {
@@ -59,5 +65,26 @@ describe('parsePageNumber', () => {
     expect(parsePageNumber('9999')).toBeNull();
     expect(parsePageNumber('12a')).toBeNull();
     expect(parsePageNumber('')).toBeNull();
+  });
+});
+
+describe('parsePagePreview', () => {
+  it('takes a page on its own (defaults to one page)', () => {
+    expect(parsePagePreview('10')).toEqual({ page: 10, pages: 1 });
+    expect(parsePagePreview('٦٠٤')).toEqual({ page: 604, pages: 1 }); // Arabic-Indic
+  });
+
+  it('takes a page and a page count', () => {
+    expect(parsePagePreview('10 3')).toEqual({ page: 10, pages: 3 });
+    expect(parsePagePreview('1 20')).toEqual({ page: 1, pages: 20 });
+  });
+
+  it('rejects a bad page, a bad count, junk, or too many parts', () => {
+    expect(parsePagePreview('605')).toBeNull();
+    expect(parsePagePreview('10 0')).toBeNull();
+    expect(parsePagePreview('10 21')).toBeNull();
+    expect(parsePagePreview('10 x')).toBeNull();
+    expect(parsePagePreview('10 2 3')).toBeNull();
+    expect(parsePagePreview('')).toBeNull();
   });
 });
