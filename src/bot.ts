@@ -11,12 +11,13 @@ import {
   setTimezone,
   pauseSubscriber,
   resumeSubscriber,
+  commitDelivery,
   type Subscriber,
 } from './database';
 import { config } from './config';
 import { logger } from './lib/logger';
 import { COPY, settingsSummary, formatTimeAr, daysSummaryAr } from './lib/copy';
-import { previewWird } from './lib/deliver';
+import { previewWird, buildTodayView } from './lib/deliver';
 import { runDeliveryOnce } from './scheduler';
 import { buildDaysKeyboard, DAY_TOGGLE_PREFIX, DAYS_DONE } from './lib/days-keyboard';
 import { buildTimeKeyboard, TIME_PICK_PREFIX } from './lib/time-keyboard';
@@ -112,18 +113,36 @@ bot.command('status', async (ctx) => {
   await ctx.reply(await statusText(sub));
 });
 
-// /today: read the current wird now, without sending the daily push or moving
-// the position forward. A pure peek. May be several messages (one per page).
+// /today: read today's wird now. Pulling it before the scheduled send COUNTS
+// as today's delivery (we record it and move forward), so the bot does not
+// send the same wird again at the user's send time. Pulling it again the same
+// day just re-shows it. On an off day or while paused it stays a pure peek.
 bot.command('today', async (ctx) => {
   const sub = await userSubscriber(ctx);
   if (!sub) return;
-  const messages = await previewWird(sub);
-  if (messages.length === 0) {
-    logger.warn('previewWird returned no messages', { subscriberId: sub.id });
+  const now = new Date();
+  const view = await buildTodayView(sub, now);
+  if (view.messages.length === 0) {
+    logger.warn('buildTodayView returned no messages', { subscriberId: sub.id });
     await ctx.reply(COPY.notReady);
     return;
   }
-  for (const message of messages) await ctx.reply(message);
+  if (view.alreadyDelivered) await ctx.reply(COPY.todayAlready);
+  for (const message of view.messages) await ctx.reply(message);
+  // Record it as today's delivery only AFTER the wird was actually shown, so a
+  // failed reply does not mark the day done. The unique (subscriber, date)
+  // index makes this safe even if the scheduler races at the same minute.
+  if (view.claim) {
+    await commitDelivery({
+      subscriberId: sub.id,
+      scheduledFor: view.claim.scheduledFor,
+      startPage: view.claim.startPage,
+      pageCount: view.claim.pageCount,
+      nextPage: view.claim.nextPage,
+      startedAt: sub.startedAt,
+      now,
+    });
+  }
   if (sub.pausedAt) await ctx.reply(COPY.pausedHint);
 });
 

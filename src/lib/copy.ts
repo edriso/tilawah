@@ -129,7 +129,7 @@ export const COPY = {
     'بوت "تلاوة" يرسل لك وردًا يوميًا من القرآن الكريم.',
     '',
     'الأوامر:',
-    '/today: قراءة ورد اليوم الآن (بدون تغيير موضعك)',
+    '/today: قراءة ورد اليوم الآن (يُحتسب وردك لهذا اليوم)',
     `/wird: حجم الورد اليومي (١ إلى ٢٠ صفحة)، مثل ${ltr('/wird 5')}`,
     `/page: الانتقال إلى صفحة معيّنة (١ إلى ٦٠٤)، مثل ${ltr('/page 100')}`,
     '/time: ضبط وقت الإرسال',
@@ -144,6 +144,9 @@ export const COPY = {
     'هذا البوت يخدم قناة "تلاوة" فقط، والورد الشخصي غير مفعّل هنا. تابع القناة لتصلك الصفحة اليومية بإذن الله 🌿',
 
   notReady: 'تعذّر تجهيز وردك الآن، حاول لاحقًا بإذن الله.',
+
+  // Shown above the wird when /today re-shows a wird already delivered today.
+  todayAlready: 'لقد وصلك ورد اليوم بالفعل، وهذا هو 🌿',
 
   // Shown for a stray text message that is not a command and not an expected
   // number reply (after /page or /wird).

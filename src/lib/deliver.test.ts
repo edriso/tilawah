@@ -6,6 +6,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 const h = vi.hoisted(() => ({
   listDeliverableSubscribers: vi.fn(),
   hasDeliveryFor: vi.fn(),
+  getDeliveryFor: vi.fn(),
   getWird: vi.fn(),
   getBasmala: vi.fn(),
   commitDelivery: vi.fn(),
@@ -16,6 +17,7 @@ const h = vi.hoisted(() => ({
 vi.mock('../database', () => ({
   listDeliverableSubscribers: h.listDeliverableSubscribers,
   hasDeliveryFor: h.hasDeliveryFor,
+  getDeliveryFor: h.getDeliveryFor,
   getWird: h.getWird,
   getBasmala: h.getBasmala,
   commitDelivery: h.commitDelivery,
@@ -29,7 +31,8 @@ vi.mock('./logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
-import { deliverDueSubscribers } from './deliver';
+import { deliverDueSubscribers, buildTodayView } from './deliver';
+import { advanceStartPage } from '../core';
 
 const NOW = new Date('2026-06-01T12:00:00Z');
 const fakeBot = {} as never;
@@ -80,8 +83,64 @@ beforeEach(() => {
   h.getBasmala.mockResolvedValue('بسم الله');
   h.getWird.mockResolvedValue(CONTENT);
   h.hasDeliveryFor.mockResolvedValue(false);
+  h.getDeliveryFor.mockResolvedValue(null);
   h.commitDelivery.mockResolvedValue('sent');
   h.sendMessages.mockResolvedValue('ok');
+});
+
+// NOW (2026-06-01, UTC) is a Monday, ISO weekday 1.
+describe('buildTodayView (/today claims today)', () => {
+  const todaySub = (over: Record<string, unknown> = {}) => ({
+    id: 1,
+    timezone: 'UTC',
+    activeDays: 127,
+    pausedAt: null,
+    currentPage: 5,
+    wirdSize: 1,
+    ...over,
+  });
+
+  it('claims today on an active, unpaused, not-yet-delivered day', async () => {
+    const view = await buildTodayView(todaySub(), NOW);
+    expect(view.alreadyDelivered).toBe(false);
+    expect(view.messages.length).toBeGreaterThan(0);
+    expect(view.claim).toEqual({
+      scheduledFor: '2026-06-01',
+      startPage: 5,
+      pageCount: 1, // mocked getWird returns one page
+      nextPage: advanceStartPage(5, 1),
+    });
+  });
+
+  it('re-shows the delivered wird and does NOT claim again', async () => {
+    h.getDeliveryFor.mockResolvedValue({ startPage: 10, pageCount: 2 });
+    const view = await buildTodayView(todaySub(), NOW);
+    expect(view.alreadyDelivered).toBe(true);
+    expect(view.claim).toBeNull();
+    // Re-shows exactly the delivered pages (from the log), not currentPage.
+    expect(h.getWird).toHaveBeenCalledWith(10, 2);
+  });
+
+  it('is a pure peek on an off day (no claim)', async () => {
+    // activeDays = 2 is Tuesday only, so Monday (NOW) is off.
+    const view = await buildTodayView(todaySub({ activeDays: 2 }), NOW);
+    expect(view.messages.length).toBeGreaterThan(0);
+    expect(view.claim).toBeNull();
+    expect(view.alreadyDelivered).toBe(false);
+  });
+
+  it('is a pure peek while paused (no claim)', async () => {
+    const view = await buildTodayView(todaySub({ pausedAt: new Date() }), NOW);
+    expect(view.messages.length).toBeGreaterThan(0);
+    expect(view.claim).toBeNull();
+  });
+
+  it('returns no messages (and no claim) when content cannot be built', async () => {
+    h.getWird.mockResolvedValue([]);
+    const view = await buildTodayView(todaySub(), NOW);
+    expect(view.messages).toEqual([]);
+    expect(view.claim).toBeNull();
+  });
 });
 
 describe('deliverDueSubscribers', () => {

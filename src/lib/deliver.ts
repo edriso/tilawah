@@ -1,8 +1,9 @@
 import type { Bot, Context } from 'grammy';
-import { dueLocalDate, advanceStartPage, formatWird } from '../core';
+import { dueLocalDate, advanceStartPage, formatWird, getLocalContext, isDayActive } from '../core';
 import {
   listDeliverableSubscribers,
   hasDeliveryFor,
+  getDeliveryFor,
   getWird,
   getBasmala,
   commitDelivery,
@@ -159,6 +160,78 @@ export async function previewWird(sub: {
   ]);
   if (content.length === 0) return [];
   return formatWird(content, basmala, COPY.wirdLead);
+}
+
+/** What /today should send the user, and whether to record it as the day's
+ *  delivery so the scheduler does not send the same wird again. */
+export interface TodayView {
+  /** The messages to reply (the wird), or empty when nothing can be prepared. */
+  messages: string[];
+  /**
+   * Set when this view should be COMMITTED as today's delivery (the user pulled
+   * their wird before the scheduled send). The caller records it after the
+   * messages are actually shown, so the scheduler skips the day. Null on an off
+   * day or while paused (nothing is scheduled to dedupe against), and null when
+   * today was already delivered (re-show only).
+   */
+  claim: { scheduledFor: string; startPage: number; pageCount: number; nextPage: number } | null;
+  /** True when today's wird was already delivered and this is a re-show. */
+  alreadyDelivered: boolean;
+}
+
+/** Fields buildTodayView needs off a subscriber row. */
+export interface TodaySubscriber {
+  id: number;
+  timezone: string;
+  activeDays: number;
+  pausedAt: Date | null;
+  currentPage: number;
+  wirdSize: number;
+}
+
+/**
+ * Decide what /today shows and whether it counts as today's delivery.
+ *
+ * /today is "give me today's wird now". If the user pulls it on an active day
+ * before the scheduled send, that pull IS today's delivery: we show the wird
+ * and the caller records it (so the 06:00 scheduler does not send it again).
+ * If today was already delivered (by an earlier /today or the scheduler), we
+ * re-show exactly what was delivered without advancing. On an off day or while
+ * paused there is no scheduled send to dedupe against, so /today stays a pure
+ * peek that never advances.
+ */
+export async function buildTodayView(sub: TodaySubscriber, now: Date): Promise<TodayView> {
+  const basmala = await getBasmala();
+  const local = getLocalContext(sub.timezone, now);
+  const scheduledFor = local.date;
+
+  // Already delivered today: re-show exactly those pages, never claim/advance.
+  const delivered = await getDeliveryFor(sub.id, scheduledFor);
+  if (delivered) {
+    const content = await getWird(delivered.startPage, delivered.pageCount);
+    return {
+      messages: formatWird(content, basmala, COPY.wirdLead),
+      claim: null,
+      alreadyDelivered: true,
+    };
+  }
+
+  // Not delivered yet: show the current wird.
+  const content = await getWird(sub.currentPage, sub.wirdSize);
+  if (content.length === 0) return { messages: [], claim: null, alreadyDelivered: false };
+  const messages = formatWird(content, basmala, COPY.wirdLead);
+
+  // Claim it as today's delivery, unless paused or it is not an active day.
+  const claimable = sub.pausedAt === null && isDayActive(sub.activeDays, local.isoWeekday);
+  const claim = claimable
+    ? {
+        scheduledFor,
+        startPage: sub.currentPage,
+        pageCount: content.length,
+        nextPage: advanceStartPage(sub.currentPage, content.length),
+      }
+    : null;
+  return { messages, claim, alreadyDelivered: false };
 }
 
 /** Pull the scheduling fields the core math needs out of a subscriber row. */

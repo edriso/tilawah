@@ -25,6 +25,18 @@ export async function hasDeliveryFor(subscriberId: number, scheduledFor: string)
   return found !== null;
 }
 
+/**
+ * The delivery already recorded for this subscriber's local date, or null.
+ * Used by /today to re-show exactly what was delivered (its start page and how
+ * many pages) without advancing again.
+ */
+export function getDeliveryFor(subscriberId: number, scheduledFor: string) {
+  return prisma.deliveryLog.findUnique({
+    where: { subscriberId_scheduledFor: { subscriberId, scheduledFor } },
+    select: { startPage: true, pageCount: true },
+  });
+}
+
 export type CommitResult = 'sent' | 'duplicate';
 
 /**
