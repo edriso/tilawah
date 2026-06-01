@@ -41,6 +41,20 @@ const CONTENT = [
   },
 ];
 
+// A two-page wird, for the partial-send cases.
+const TWO_PAGES = [
+  {
+    pageNumber: 1,
+    juz: 1,
+    ayat: [{ surahNumber: 1, surahNameAr: 'الفاتحة', numberInSurah: 1, text: 'نص' }],
+  },
+  {
+    pageNumber: 2,
+    juz: 1,
+    ayat: [{ surahNumber: 2, surahNameAr: 'البقرة', numberInSurah: 1, text: 'نص' }],
+  },
+];
+
 // A subscriber that is due at NOW (UTC, every day, sends at 00:00).
 function sub(over: Record<string, unknown> = {}) {
   return {
@@ -129,6 +143,30 @@ describe('deliverDueSubscribers', () => {
     expect(h.sendMessages).not.toHaveBeenCalled();
     expect(h.commitDelivery).not.toHaveBeenCalled();
     expect(stats.failed).toBe(1);
+  });
+
+  it('on a partial multi-page wird, advances only by the pages actually sent', async () => {
+    h.listDeliverableSubscribers.mockResolvedValue([sub({ wirdSize: 2 })]);
+    h.getWird.mockResolvedValue(TWO_PAGES);
+    h.sendMessages.mockResolvedValueOnce('ok').mockResolvedValueOnce('failed'); // page 2 fails
+    const stats = await deliverDueSubscribers(fakeBot, NOW);
+    expect(h.sendMessages).toHaveBeenCalledTimes(2);
+    // Records one page and moves the position forward by one (page 1 -> 2), so
+    // page 2 is retried next run with no duplicate of page 1.
+    expect(h.commitDelivery).toHaveBeenCalledOnce();
+    expect(h.commitDelivery.mock.calls[0][0]).toMatchObject({ pageCount: 1, nextPage: 2 });
+    expect(stats).toMatchObject({ due: 1, sent: 1, failed: 0 });
+  });
+
+  it('marks a user blocked mid-wird but still commits the pages that went out', async () => {
+    h.listDeliverableSubscribers.mockResolvedValue([sub({ wirdSize: 2 })]);
+    h.getWird.mockResolvedValue(TWO_PAGES);
+    h.sendMessages.mockResolvedValueOnce('ok').mockResolvedValueOnce('blocked'); // blocked on page 2
+    const stats = await deliverDueSubscribers(fakeBot, NOW);
+    expect(h.commitDelivery).toHaveBeenCalledOnce();
+    expect(h.commitDelivery.mock.calls[0][0]).toMatchObject({ pageCount: 1, nextPage: 2 });
+    expect(h.markBlocked).toHaveBeenCalledWith(1);
+    expect(stats).toMatchObject({ due: 1, sent: 1 });
   });
 
   it('keeps going when one subscriber throws', async () => {

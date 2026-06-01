@@ -12,7 +12,7 @@ import {
   type DeliverableSubscriber,
 } from '../database';
 import { config, channelEnabled } from '../config';
-import { sendMessages } from './send';
+import { sendMessages, type SendResult } from './send';
 import { COPY } from './copy';
 import { logger } from './logger';
 
@@ -39,8 +39,9 @@ export function allowedKinds(): string[] {
  *   - a (subscriber, local date) record makes it send at most once per local
  *     day, even on a restart catch-up or a double cron fire.
  *   - one subscriber failing is caught and never stops the rest.
- *   - the page only advances AFTER a successful send, so a failed send
- *     re-sends the same pages next time instead of skipping them.
+ *   - the page advances only by the pages that were actually sent (the wird
+ *     goes out one page at a time), so a partial failure neither skips pages
+ *     nor re-sends pages that already arrived; the rest roll to the next run.
  *
  * The channel is just another subscriber, so it flows through this same loop.
  */
@@ -75,40 +76,66 @@ export async function deliverDueSubscribers(
         logger.error('No wird content to send', { id: sub.id, startPage: sub.currentPage });
         continue;
       }
+      // Send the wird one page at a time. Tracking how many pages actually went
+      // out lets a partial failure advance by exactly that many: the rest roll
+      // into the next run from the new position, so we never skip a page and
+      // never re-send (and so duplicate) a page that already arrived.
       const lead = sub.kind === KIND_CHANNEL ? COPY.channelLead : COPY.wirdLead;
-      const result = await sendMessages(bot, sub.chatId, formatWird(content, basmala, lead));
+      let pagesSent = 0;
+      let result: SendResult = 'ok';
+      for (let i = 0; i < content.length; i++) {
+        const pageMessages = formatWird([content[i]], basmala, i === 0 ? lead : undefined);
+        result = await sendMessages(bot, sub.chatId, pageMessages);
+        if (result !== 'ok') break;
+        pagesSent++;
+      }
 
-      if (result === 'blocked') {
-        // A user blocking us is permanent until they message again, so we mark
-        // them and stop trying. A channel can also 403 (the bot lost posting
-        // rights), but it never messages the bot to clear a block, so we treat
-        // that as transient: log it and retry next tick once rights return.
-        if (sub.kind === KIND_CHANNEL) {
-          logger.error('Channel send was rejected (403); is the bot still a channel admin?', {
-            id: sub.id,
-          });
-        } else {
-          await markBlocked(sub.id);
+      if (pagesSent === 0) {
+        // Nothing got through, so there is nothing to record and the position
+        // does not move. A user that blocked us is marked so we stop trying; a
+        // channel 403 is treated as transient (a channel never messages the bot
+        // to clear a block) and simply retried next tick.
+        if (result === 'blocked') {
+          if (sub.kind === KIND_CHANNEL) {
+            logger.error('Channel send was rejected (403); is the bot still a channel admin?', {
+              id: sub.id,
+            });
+          } else {
+            await markBlocked(sub.id);
+          }
         }
         stats.failed++;
         continue;
       }
-      if (result === 'failed') {
-        stats.failed++;
-        continue; // do NOT advance; retried next tick
-      }
 
+      // At least one page went out: record exactly how many and advance by that
+      // many, in one transaction.
       const committed = await commitDelivery({
         subscriberId: sub.id,
         scheduledFor,
         startPage: sub.currentPage,
-        pageCount: content.length,
-        nextPage: advanceStartPage(sub.currentPage, sub.wirdSize),
+        pageCount: pagesSent,
+        nextPage: advanceStartPage(sub.currentPage, pagesSent),
         startedAt: sub.startedAt,
         now,
       });
-      if (committed === 'sent') stats.sent++;
-      else stats.skipped++; // a race delivered the same day first
+      if (committed !== 'sent') {
+        stats.skipped++; // a race delivered the same day first
+        continue;
+      }
+      stats.sent++;
+
+      if (pagesSent < content.length) {
+        // A partial wird: the unsent pages go out on the next run from the
+        // advanced position. If a USER blocked us mid-wird, stop future sends.
+        logger.warn('Partial wird sent; remaining pages roll to the next run', {
+          id: sub.id,
+          sent: pagesSent,
+          requested: content.length,
+          lastResult: result,
+        });
+        if (result === 'blocked' && sub.kind === KIND_USER) await markBlocked(sub.id);
+      }
     } catch (err) {
       stats.failed++;
       logger.error('Delivery failed for subscriber', { id: sub.id, error: String(err) });

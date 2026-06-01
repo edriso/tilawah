@@ -46,8 +46,15 @@ export interface PageAyah {
 export interface PageContent {
   /** Madani Mushaf page number (1-604). */
   pageNumber: number;
-  /** Juz the page belongs to (1-30). */
+  /** Juz the page STARTS in (the juz of its first ayah, 1-30). */
   juz: number;
+  /**
+   * Juz the page ENDS in. Equal to `juz` for almost every page; greater only
+   * for the few pages that straddle a juz boundary (e.g. page 62 spans juz
+   * 3-4). Optional so callers that don't track it (tests, previews) can omit
+   * it, in which case the page is treated as sitting in a single juz.
+   */
+  juzEnd?: number;
   /** The ayat on this page, in reading order. */
   ayat: PageAyah[];
 }

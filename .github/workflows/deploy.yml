@@ -1,5 +1,6 @@
-# Push-to-deploy: on every push to main, SSH into the VPS, pull the latest
-# code, run the DB migrations + seed, then rebuild this bot's container.
+# Push-to-deploy: on every push to main, first run the checks (typecheck, lint,
+# tests); only if they pass do we SSH into the VPS, pull the latest code, run
+# the DB migrations + seed, then rebuild this bot's container.
 #
 # Tilawah needs a database (the shared MariaDB), like the ayah bot. The
 # `tilawah-migrate` one-off compose service runs `pnpm db:deploy && pnpm
@@ -27,7 +28,30 @@ on:
     branches: [main]
 
 jobs:
+  # Gate: typecheck + lint + tests must pass before we touch production. A push
+  # that breaks the build never reaches the server (it would otherwise fail to
+  # boot or misbehave with no warning).
+  test:
+    runs-on: ubuntu-latest
+    # Dummy values so `prisma generate` (postinstall) and any config import do
+    # not fail; the tests mock the database and never actually connect.
+    env:
+      DATABASE_URL: mysql://ci:ci@127.0.0.1:3306/ci
+      BOT_TOKEN: ci-placeholder
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm check
+
   deploy:
+    needs: test
     runs-on: ubuntu-latest
     steps:
       - name: Deploy over SSH

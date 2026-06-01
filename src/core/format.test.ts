@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { ayahMarker, formatPage, formatWird } from './format';
+import { ayahMarker, formatPage, formatWird, TELEGRAM_MAX } from './format';
 import type { PageContent } from './types';
 
 const BASMALA = 'بِسْمِ ٱللَّهِ';
@@ -70,6 +70,43 @@ describe('formatPage', () => {
 
   it('returns a single message for a normal-length page', () => {
     expect(formatPage(midSurahPage, BASMALA)).toHaveLength(1);
+  });
+
+  it('names both juz for a page that straddles a juz boundary', () => {
+    const straddle: PageContent = { ...midSurahPage, juz: 3, juzEnd: 4 };
+    expect(formatPage(straddle, BASMALA)[0]).toContain('الجزءان ٣ و٤');
+  });
+
+  it('shows a single juz when juzEnd equals juz (or is absent)', () => {
+    expect(formatPage(midSurahPage, BASMALA)[0]).toContain('الجزء ١');
+    expect(formatPage(midSurahPage, BASMALA)[0]).not.toContain('الجزءان');
+  });
+
+  it('splits an oversized page at ayah boundaries without truncating', () => {
+    // A synthetic page far longer than Telegram allows: 60 long ayat of one
+    // surah. Real Mushaf pages never get here, but the holy text must never be
+    // cut off, so the split must keep every message within the limit and every
+    // ayah intact.
+    const bigPage: PageContent = {
+      pageNumber: 50,
+      juz: 1,
+      ayat: Array.from({ length: 60 }, (_, i) => ({
+        surahNumber: 2,
+        surahNameAr: 'البقرة',
+        numberInSurah: i + 1,
+        text: 'كلمة '.repeat(40).trim(),
+      })),
+    };
+    const messages = formatPage(bigPage, BASMALA);
+    expect(messages.length).toBeGreaterThan(1);
+    for (const m of messages) expect(m.length).toBeLessThanOrEqual(TELEGRAM_MAX);
+    // Every ayah is present exactly once across the messages.
+    const all = messages.join('\n');
+    for (let i = 1; i <= 60; i++) {
+      expect(all.split(ayahMarker(i)).length - 1).toBe(1);
+    }
+    // Continuation messages are marked.
+    expect(messages.slice(1).every((m) => m.includes('(تابع)'))).toBe(true);
   });
 });
 

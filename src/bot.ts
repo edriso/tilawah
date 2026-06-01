@@ -1,12 +1,12 @@
 import { Bot, type Context } from 'grammy';
-import { toggleDay, activeDaysList, nextPageAfter } from './core';
+import { activeDaysList, nextPageAfter } from './core';
 import {
   ensureUser,
   getChannelSubscriber,
   getJuzForPage,
   setWirdSize,
   setCurrentPage,
-  setActiveDays,
+  toggleActiveDay,
   setDeliveryTime,
   setTimezone,
   pauseSubscriber,
@@ -120,7 +120,8 @@ bot.command('today', async (ctx) => {
   const messages = await previewWird(sub);
   if (messages.length === 0) {
     logger.warn('previewWird returned no messages', { subscriberId: sub.id });
-    return void ctx.reply(COPY.notReady);
+    await ctx.reply(COPY.notReady);
+    return;
   }
   for (const message of messages) await ctx.reply(message);
   if (sub.pausedAt) await ctx.reply(COPY.pausedHint);
@@ -133,10 +134,14 @@ bot.command('wird', async (ctx) => {
   const arg = commandArg(ctx, 'wird');
   if (!arg) {
     setPending(ctx.from!.id, 'wird');
-    return void ctx.reply(COPY.wirdPrompt(sub.wirdSize), { reply_markup: buildWirdKeyboard() });
+    await ctx.reply(COPY.wirdPrompt(sub.wirdSize), { reply_markup: buildWirdKeyboard() });
+    return;
   }
   const size = parseWirdSize(arg);
-  if (size === null) return void ctx.reply(COPY.wirdInvalid);
+  if (size === null) {
+    await ctx.reply(COPY.wirdInvalid);
+    return;
+  }
   await setWirdSize(sub.id, size);
   await ctx.reply(COPY.wirdUpdated(size));
 });
@@ -151,10 +156,14 @@ bot.command('page', async (ctx) => {
   if (!arg) {
     setPending(ctx.from!.id, 'page');
     const currentJuz = (await getJuzForPage(sub.currentPage)) ?? undefined;
-    return void ctx.reply(COPY.pagePrompt(sub.currentPage, currentJuz));
+    await ctx.reply(COPY.pagePrompt(sub.currentPage, currentJuz));
+    return;
   }
   const page = parsePageNumber(arg);
-  if (page === null) return void ctx.reply(COPY.pageInvalid);
+  if (page === null) {
+    await ctx.reply(COPY.pageInvalid);
+    return;
+  }
   await setCurrentPage(sub.id, page);
   const juz = (await getJuzForPage(page)) ?? undefined;
   await ctx.reply(COPY.pageUpdated(page, juz));
@@ -165,9 +174,15 @@ bot.command('time', async (ctx) => {
   const sub = await userSubscriber(ctx);
   if (!sub) return;
   const arg = commandArg(ctx, 'time');
-  if (!arg) return void ctx.reply(COPY.timePrompt, { reply_markup: buildTimeKeyboard() });
+  if (!arg) {
+    await ctx.reply(COPY.timePrompt, { reply_markup: buildTimeKeyboard() });
+    return;
+  }
   const parsed = parseTime(arg);
-  if (!parsed) return void ctx.reply(COPY.timeInvalid);
+  if (!parsed) {
+    await ctx.reply(COPY.timeInvalid);
+    return;
+  }
   await setDeliveryTime(sub.id, parsed.hour, parsed.minute);
   await ctx.reply(COPY.timeUpdated(formatTimeAr(parsed.hour, parsed.minute), sub.timezone));
 });
@@ -177,8 +192,14 @@ bot.command('timezone', async (ctx) => {
   const sub = await userSubscriber(ctx);
   if (!sub) return;
   const arg = commandArg(ctx, 'timezone');
-  if (!arg) return void ctx.reply(COPY.tzPrompt, { reply_markup: buildTimezoneKeyboard() });
-  if (!isValidTimezone(arg)) return void ctx.reply(COPY.tzInvalid);
+  if (!arg) {
+    await ctx.reply(COPY.tzPrompt, { reply_markup: buildTimezoneKeyboard() });
+    return;
+  }
+  if (!isValidTimezone(arg)) {
+    await ctx.reply(COPY.tzInvalid);
+    return;
+  }
   await setTimezone(sub.id, arg);
   await ctx.reply(COPY.tzUpdated(arg));
 });
@@ -213,9 +234,15 @@ async function togglePause(ctx: Context, sub: Subscriber): Promise<void> {
 
 bot.callbackQuery(new RegExp(`^${WIRD_PICK_PREFIX}(\\d+)$`), async (ctx) => {
   const sub = await userFromCallback(ctx);
-  if (!sub) return void ctx.answerCallbackQuery();
+  if (!sub) {
+    await ctx.answerCallbackQuery();
+    return;
+  }
   const size = parseWirdSize(ctx.match![1]);
-  if (size === null) return void ctx.answerCallbackQuery();
+  if (size === null) {
+    await ctx.answerCallbackQuery();
+    return;
+  }
   await setWirdSize(sub.id, size);
   await ctx.editMessageReplyMarkup(); // remove the keyboard
   await ctx.reply(COPY.wirdUpdated(size));
@@ -226,20 +253,28 @@ bot.callbackQuery(new RegExp(`^${WIRD_PICK_PREFIX}(\\d+)$`), async (ctx) => {
 
 bot.callbackQuery(new RegExp(`^${DAY_TOGGLE_PREFIX}([1-7])$`), async (ctx) => {
   const sub = await userFromCallback(ctx);
-  if (!sub) return void ctx.answerCallbackQuery();
+  if (!sub) {
+    await ctx.answerCallbackQuery();
+    return;
+  }
   const iso = Number(ctx.match![1]);
-  const newMask = toggleDay(sub.activeDays, iso);
-  await setActiveDays(sub.id, newMask);
+  // Toggle atomically at the database and use the returned mask to redraw, so
+  // two fast taps can never read the same stale mask and cancel each other.
+  const newMask = await toggleActiveDay(sub.id, iso);
   await ctx.editMessageReplyMarkup({ reply_markup: buildDaysKeyboard(newMask) });
   await ctx.answerCallbackQuery();
 });
 
 bot.callbackQuery(DAYS_DONE, async (ctx) => {
   const sub = await userFromCallback(ctx);
-  if (!sub) return void ctx.answerCallbackQuery();
+  if (!sub) {
+    await ctx.answerCallbackQuery();
+    return;
+  }
   if (activeDaysList(sub.activeDays).length === 0) {
     await ctx.reply(COPY.daysNone);
-    return void ctx.answerCallbackQuery();
+    await ctx.answerCallbackQuery();
+    return;
   }
   await ctx.editMessageReplyMarkup(); // remove the keyboard
   await ctx.reply(COPY.daysUpdated(daysSummaryAr(sub.activeDays)));
@@ -250,12 +285,18 @@ bot.callbackQuery(DAYS_DONE, async (ctx) => {
 
 bot.callbackQuery(new RegExp(`^${TIME_PICK_PREFIX}(\\d{2})(\\d{2})$`), async (ctx) => {
   const sub = await userFromCallback(ctx);
-  if (!sub) return void ctx.answerCallbackQuery();
+  if (!sub) {
+    await ctx.answerCallbackQuery();
+    return;
+  }
   const hour = Number(ctx.match![1]);
   const minute = Number(ctx.match![2]);
   // The buttons we send are always valid, but callback data is client-supplied,
   // so re-check the range before storing it.
-  if (hour > 23 || minute > 59) return void ctx.answerCallbackQuery();
+  if (hour > 23 || minute > 59) {
+    await ctx.answerCallbackQuery();
+    return;
+  }
   await setDeliveryTime(sub.id, hour, minute);
   await ctx.editMessageReplyMarkup(); // remove the keyboard
   await ctx.reply(COPY.timeUpdated(formatTimeAr(hour, minute), sub.timezone));
@@ -266,9 +307,15 @@ bot.callbackQuery(new RegExp(`^${TIME_PICK_PREFIX}(\\d{2})(\\d{2})$`), async (ct
 
 bot.callbackQuery(new RegExp(`^${TZ_PICK_PREFIX}(\\d+)$`), async (ctx) => {
   const sub = await userFromCallback(ctx);
-  if (!sub) return void ctx.answerCallbackQuery();
+  if (!sub) {
+    await ctx.answerCallbackQuery();
+    return;
+  }
   const tz = COMMON_TIMEZONES[Number(ctx.match![1])]?.iana;
-  if (!tz) return void ctx.answerCallbackQuery();
+  if (!tz) {
+    await ctx.answerCallbackQuery();
+    return;
+  }
   await setTimezone(sub.id, tz);
   await ctx.editMessageReplyMarkup(); // remove the keyboard
   await ctx.reply(COPY.tzUpdated(tz));
@@ -301,9 +348,15 @@ bot.command('admin_setpage', async (ctx) => {
   const channel = await adminChannel(ctx);
   if (!channel) return;
   const arg = commandArg(ctx, 'admin_setpage');
-  if (!arg) return void ctx.reply(COPY.setPageUsage);
+  if (!arg) {
+    await ctx.reply(COPY.setPageUsage);
+    return;
+  }
   const lastRead = parsePageNumber(arg);
-  if (lastRead === null) return void ctx.reply(COPY.setPageInvalid);
+  if (lastRead === null) {
+    await ctx.reply(COPY.setPageInvalid);
+    return;
+  }
   const next = nextPageAfter(lastRead);
   await setCurrentPage(channel.id, next);
   await ctx.reply(COPY.setPageDone(lastRead, next));
@@ -314,9 +367,15 @@ bot.command('admin_wird', async (ctx) => {
   const channel = await adminChannel(ctx);
   if (!channel) return;
   const arg = commandArg(ctx, 'admin_wird');
-  if (!arg) return void ctx.reply(COPY.adminWirdUsage);
+  if (!arg) {
+    await ctx.reply(COPY.adminWirdUsage);
+    return;
+  }
   const size = parseWirdSize(arg);
-  if (size === null) return void ctx.reply(COPY.adminWirdInvalid);
+  if (size === null) {
+    await ctx.reply(COPY.adminWirdInvalid);
+    return;
+  }
   await setWirdSize(channel.id, size);
   await ctx.reply(COPY.adminWirdDone(size));
 });
@@ -326,9 +385,15 @@ bot.command('admin_time', async (ctx) => {
   const channel = await adminChannel(ctx);
   if (!channel) return;
   const arg = commandArg(ctx, 'admin_time');
-  if (!arg) return void ctx.reply(COPY.adminTimeUsage);
+  if (!arg) {
+    await ctx.reply(COPY.adminTimeUsage);
+    return;
+  }
   const parsed = parseTime(arg);
-  if (!parsed) return void ctx.reply(COPY.timeInvalid);
+  if (!parsed) {
+    await ctx.reply(COPY.timeInvalid);
+    return;
+  }
   await setDeliveryTime(channel.id, parsed.hour, parsed.minute);
   await ctx.reply(COPY.timeUpdated(formatTimeAr(parsed.hour, parsed.minute), channel.timezone));
 });
@@ -338,8 +403,14 @@ bot.command('admin_tz', async (ctx) => {
   const channel = await adminChannel(ctx);
   if (!channel) return;
   const arg = commandArg(ctx, 'admin_tz');
-  if (!arg) return void ctx.reply(COPY.adminTzUsage);
-  if (!isValidTimezone(arg)) return void ctx.reply(COPY.tzInvalid);
+  if (!arg) {
+    await ctx.reply(COPY.adminTzUsage);
+    return;
+  }
+  if (!isValidTimezone(arg)) {
+    await ctx.reply(COPY.tzInvalid);
+    return;
+  }
   await setTimezone(channel.id, arg);
   await ctx.reply(COPY.tzUpdated(arg));
 });
@@ -434,33 +505,42 @@ bot.command('admin_health', async (ctx) => {
 // prompt, or otherwise a gentle nudge toward /help.
 bot.on('message:text', async (ctx) => {
   if (!ctx.from || ctx.chat?.type !== 'private') return;
-  if (!config.userWirdEnabled) return void ctx.reply(COPY.userBotDisabled);
+  if (!config.userWirdEnabled) {
+    await ctx.reply(COPY.userBotDisabled);
+    return;
+  }
 
   const text = ctx.message.text.trim();
   // A command that reached here is unknown (real ones are handled above).
   const kind = text.startsWith('/') ? null : takePending(ctx.from.id);
-  if (!kind) return void ctx.reply(COPY.unknownText);
+  if (!kind) {
+    await ctx.reply(COPY.unknownText);
+    return;
+  }
 
   const sub = await ensureUser(BigInt(ctx.from.id), config.defaultTimezone);
   if (kind === 'wird') {
     const size = parseWirdSize(text);
     if (size === null) {
       setPending(ctx.from.id, 'wird'); // keep them in the flow to retry
-      return void ctx.reply(COPY.wirdInvalid);
+      await ctx.reply(COPY.wirdInvalid);
+      return;
     }
     await setWirdSize(sub.id, size);
-    return void ctx.reply(COPY.wirdUpdated(size));
+    await ctx.reply(COPY.wirdUpdated(size));
+    return;
   }
 
   // kind === 'page'
   const page = parsePageNumber(text);
   if (page === null) {
     setPending(ctx.from.id, 'page');
-    return void ctx.reply(COPY.pageInvalid);
+    await ctx.reply(COPY.pageInvalid);
+    return;
   }
   await setCurrentPage(sub.id, page);
   const juz = (await getJuzForPage(page)) ?? undefined;
-  return void ctx.reply(COPY.pageUpdated(page, juz));
+  await ctx.reply(COPY.pageUpdated(page, juz));
 });
 
 bot.catch((err) => {

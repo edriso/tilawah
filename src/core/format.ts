@@ -31,9 +31,18 @@ export function formatAyahLine(ayah: PageAyah): string {
   return `${ayah.text} ${ayahMarker(ayah.numberInSurah)}`;
 }
 
-/** The page banner, e.g. "📖 صفحة ٢٥ • الجزء ٢". */
+/**
+ * The page banner, e.g. "📖 صفحة ٢٥ • الجزء ٢". A page that straddles a juz
+ * boundary (only a handful do, e.g. page 62) names both, e.g. "الجزءان ٣ و٤",
+ * so the label is never wrong for the part of the page in the next juz.
+ */
 function pageHeader(page: PageContent): string {
-  return `📖 صفحة ${toArabicDigits(page.pageNumber)} • الجزء ${toArabicDigits(page.juz)}`;
+  const juzEnd = page.juzEnd ?? page.juz;
+  const juzLabel =
+    juzEnd > page.juz
+      ? `الجزءان ${toArabicDigits(page.juz)} و${toArabicDigits(juzEnd)}`
+      : `الجزء ${toArabicDigits(page.juz)}`;
+  return `📖 صفحة ${toArabicDigits(page.pageNumber)} • ${juzLabel}`;
 }
 
 // A run of consecutive ayat on a page that belong to the same surah.
@@ -80,31 +89,58 @@ function renderSection(section: SurahSection, basmala: string): string {
 }
 
 /**
- * Render a single page into one message, or several messages if it somehow
- * exceeds the size limit (it never does for a real Mushaf page, but we split
- * at surah boundaries as a safety net so a message is never truncated).
+ * Render a single page into one message, or several if it somehow exceeds the
+ * size limit. A real Madani Mushaf page never gets close (the longest is well
+ * under half the limit), but we never truncate the holy text, so the fallback
+ * splits at AYAH boundaries and guarantees every message fits.
  */
 export function formatPage(page: PageContent, basmala: string): string[] {
   const header = pageHeader(page);
-  const blocks = sectionsOf(page).map((s) => renderSection(s, basmala));
-
-  const whole = [header, ...blocks].join('\n\n');
+  const whole = [header, ...sectionsOf(page).map((s) => renderSection(s, basmala))].join('\n\n');
   if (whole.length <= SAFE_LIMIT) return [whole];
+  return chunkPage(page, basmala, header);
+}
 
-  // Safety net: pack the surah blocks into as few messages as fit, repeating
-  // a short continued header. A single block always fits on its own.
+/**
+ * Split an oversized page into messages, each within the limit, breaking only
+ * at ayah boundaries so an ayah is never cut in half. Every unit emitted (the
+ * header, a "سورة X" line, the basmala, a single ayah) is far shorter than the
+ * limit, so a unit always fits; when a surah's ayat spill into the next message
+ * its name is repeated. The common single-message path above never reaches
+ * here, so this only governs the (currently hypothetical) giant page.
+ */
+function chunkPage(page: PageContent, basmala: string, header: string): string[] {
   const messages: string[] = [];
-  let current = header;
-  for (const block of blocks) {
-    const trial = `${current}\n\n${block}`;
-    if (trial.length > SAFE_LIMIT && current !== header && current !== `${header} (تابع)`) {
-      messages.push(current);
-      current = `${header} (تابع)\n\n${block}`;
-    } else {
-      current = trial;
+  let head = header;
+  let lines: string[] = [];
+
+  const lengthWith = (line: string): number => `${head}\n\n${[...lines, line].join('\n')}`.length;
+  const flush = () => {
+    messages.push(`${head}\n\n${lines.join('\n')}`);
+    head = `${header} (تابع)`;
+    lines = [];
+  };
+  // Add a line, starting a new message first if it would not otherwise fit.
+  const add = (line: string) => {
+    if (lines.length > 0 && lengthWith(line) > SAFE_LIMIT) flush();
+    lines.push(line);
+  };
+
+  for (const section of sectionsOf(page)) {
+    const title = `سورة ${section.surahNameAr}`;
+    add(title);
+    if (section.startsAtSurah && surahUsesBasmala(section.surahNumber)) add(basmala);
+    for (const ayah of section.ayat) {
+      const line = formatAyahLine(ayah);
+      // If this ayah forces a new message, repeat the surah name there first.
+      if (lines.length > 0 && lengthWith(line) > SAFE_LIMIT) {
+        flush();
+        lines.push(`${title} (تابع)`);
+      }
+      lines.push(line);
     }
   }
-  messages.push(current);
+  flush();
   return messages;
 }
 

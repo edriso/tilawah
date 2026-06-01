@@ -1,0 +1,36 @@
+# Example Docker Compose fragment for Tilawah.
+#
+# The real deploy uses ONE shared Compose project on the server (at /opt/bots)
+# that runs several bots against a single shared MariaDB. This file is NOT that
+# project; it documents just the two services Tilawah adds, so you can copy them
+# into the shared file. The deploy workflow (.github/workflows/deploy.yml) runs,
+# from /opt/bots:
+#
+#   docker compose run --rm --build tilawah-migrate   # apply migrations + seed
+#   docker compose up -d --build tilawah              # (re)start the long-running bot
+#
+# Secrets are read from an env file you create on the server and never commit:
+#
+#   /opt/bots/telegram/tilawah/.env   (BOT_TOKEN, DATABASE_URL, CHANNEL_CHAT_ID,
+#                                      ADMIN_TELEGRAM_IDS, USER_WIRD_ENABLED, ...)
+#
+# The build context and env_file paths below are relative to /opt/bots, matching
+# where the deploy workflow checks the repo out (/opt/bots/telegram/tilawah).
+# The shared MariaDB service and network live in the rest of the /opt/bots
+# Compose file; point DATABASE_URL in the .env at that database.
+
+services:
+  # One-off: apply any pending migrations and seed the Quran data, then exit.
+  # Both steps are idempotent, so running this on every deploy is safe.
+  tilawah-migrate:
+    build: ./telegram/tilawah
+    env_file: ./telegram/tilawah/.env
+    command: sh -c "pnpm db:deploy && pnpm db:seed"
+    restart: 'no'
+
+  # The long-running bot. The image already defines a HEALTHCHECK against
+  # /health on $PORT, so `docker ps` / the orchestrator can see its real state.
+  tilawah:
+    build: ./telegram/tilawah
+    env_file: ./telegram/tilawah/.env
+    restart: unless-stopped

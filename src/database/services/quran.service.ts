@@ -79,10 +79,14 @@ export async function getPageContents(pageNumbers: number[]): Promise<PageConten
       let page = built.get(r.page);
       if (!page) {
         // The first row for a page is its first ayah (rows are ordered), so
-        // its juz is the page's juz.
-        page = { pageNumber: r.page, juz: r.juz, ayat: [] };
+        // its juz is the page's starting juz.
+        page = { pageNumber: r.page, juz: r.juz, juzEnd: r.juz, ayat: [] };
         built.set(r.page, page);
       }
+      // Rows are in reading order and juz never decreases within a page, so the
+      // last row's juz is the page's ending juz (greater only when the page
+      // straddles a juz boundary).
+      page.juzEnd = r.juz;
       page.ayat.push({
         surahNumber: r.surahNumber,
         surahNameAr: r.surah.nameAr,

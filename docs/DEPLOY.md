@@ -57,10 +57,25 @@ Set these env vars on the host (see the single root `.env.example`):
 See `docs/CHANNEL.md` for the full admin command list and the paste-ready
 channel name, description, and pinned welcome post.
 
+## Running with Docker
+
+The repo ships a `Dockerfile` (runs from TypeScript with tsx, no compile step)
+and a `docs/compose.example.yml` fragment. The server uses one shared Compose
+project (at `/opt/bots`) that runs several bots against a shared MariaDB; copy
+the two services from `compose.example.yml` (`tilawah` and the one-off
+`tilawah-migrate`) into that shared file. Secrets come from an env file on the
+server (`/opt/bots/telegram/tilawah/.env`), never committed.
+
+Pushes are gated: the `deploy` workflow runs `pnpm check` (typecheck + lint +
+tests) first and only deploys if it passes, so a broken build never reaches
+production.
+
 ## Health check
 
 Point your host's health check at `GET /health` on the port from `PORT`
 (default 8080). It returns 200 with a small JSON body while the bot is alive.
+The Docker image also defines a `HEALTHCHECK` against the same endpoint, so
+`docker ps` and the orchestrator can tell a wedged bot from a healthy one.
 
 ## Restarts are safe
 
