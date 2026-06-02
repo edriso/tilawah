@@ -6,8 +6,13 @@ each block as is.
 
 Note: the bot sets its own command list on every start (via `setMyCommands` in
 `src/bot.ts`), and it lists the personal commands only when
-`USER_WIRD_ENABLED` is true. You only need to paste commands into BotFather if
-you also want them set by hand. The admin commands are never listed publicly.
+`USER_WIRD_ENABLED` is true. It also sets its **About** (short description) and
+**Description** automatically on every start (via `setMyShortDescription` /
+`setMyDescription`, from `botAbout` / `botDescription` in `src/lib/copy.ts`), so
+those stay in sync with the text below. You only need to paste the commands,
+About, or Description into BotFather if you also want them set by hand. The
+admin commands are never listed publicly. (Name, profile photo, and description
+picture cannot be set via the Bot API; those stay in @BotFather.)
 
 ---
 

@@ -606,21 +606,28 @@ bot.catch((err) => {
 /** Set the public command menu. Personal-wird commands are listed only when
  *  the user bot is enabled; admin commands are never listed publicly. */
 async function setBotCommands() {
-  if (!config.userWirdEnabled) {
+  if (config.userWirdEnabled) {
+    await bot.api.setMyCommands([
+      { command: 'today', description: 'قراءة ورد اليوم' },
+      { command: 'wird', description: 'حجم الورد اليومي' },
+      { command: 'page', description: 'الانتقال إلى صفحة معيّنة' },
+      { command: 'time', description: 'ضبط وقت الإرسال' },
+      { command: 'days', description: 'اختيار أيام الإرسال' },
+      { command: 'timezone', description: 'ضبط المنطقة الزمنية' },
+      { command: 'pause', description: 'أخذ راحة أو العودة منها' },
+      { command: 'status', description: 'عرض إعداداتك' },
+      { command: 'help', description: 'المساعدة' },
+    ]);
+  } else {
     await bot.api.setMyCommands([{ command: 'help', description: 'حول هذا البوت' }]);
-    return;
   }
-  await bot.api.setMyCommands([
-    { command: 'today', description: 'قراءة ورد اليوم' },
-    { command: 'wird', description: 'حجم الورد اليومي' },
-    { command: 'page', description: 'الانتقال إلى صفحة معيّنة' },
-    { command: 'time', description: 'ضبط وقت الإرسال' },
-    { command: 'days', description: 'اختيار أيام الإرسال' },
-    { command: 'timezone', description: 'ضبط المنطقة الزمنية' },
-    { command: 'pause', description: 'أخذ راحة أو العودة منها' },
-    { command: 'status', description: 'عرض إعداداتك' },
-    { command: 'help', description: 'المساعدة' },
-  ]);
+  // Set the About (short description) and Description the same way as the
+  // commands, so the bot is self-describing on deploy — no manual @BotFather
+  // step. Run on every start regardless of the wird flag. (The name, profile
+  // photo, and description picture cannot be set via the Bot API; those stay
+  // in @BotFather.)
+  await bot.api.setMyShortDescription(COPY.botAbout);
+  await bot.api.setMyDescription(COPY.botDescription);
 }
 
 export { bot, setBotCommands };

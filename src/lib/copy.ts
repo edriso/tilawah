@@ -110,6 +110,22 @@ export function settingsSummary(s: SettingsView, opts: { isChannel?: boolean } =
 }
 
 export const COPY = {
+  // ── Bot profile (set on startup via the Bot API, like the commands) ─
+  // About = the short blurb on the bot's profile card (Telegram limit 120).
+  // Ends with "للبدء اضغط\nStart" — the line break before Start is intentional.
+  botAbout:
+    'وردك اليومي من القرآن 🌿 صفحة كل يوم، أو أكثر حتى جزء كامل، في الوقت والأيام التي تختارها. للبدء اضغط\nStart',
+  // Description = the text on the empty chat, shown before /start (limit 512).
+  botDescription: [
+    'السلام عليكم ورحمة الله 🌿',
+    'بوت "تلاوة" يعينك على قراءة وردك اليومي من القرآن الكريم:',
+    '• يصلك كل يوم وردك من المصحف، صفحة واحدة افتراضيًا، ويمكنك زيادتها حتى ٢٠ صفحة.',
+    '• تختار وقت الإرسال والأيام التي تناسبك.',
+    '• يمكنك أخذ راحة وقتما تشاء، وتعود من حيث توقفت.',
+    'للبدء اضغط',
+    'Start',
+  ].join('\n'),
+
   // ── User onboarding and help ──────────────────────────────────────
   welcome: (settings: string) =>
     [
