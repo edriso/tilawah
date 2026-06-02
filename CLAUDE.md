@@ -38,9 +38,8 @@ working while the code lives (and is tested) once, in the kernel. To change that
 code: edit the kernel, `pnpm check`, tag a new version, and merge the Renovate
 bump PR it opens here. The ayah bot consumes the same kernel.
 
-Read `docs/DEPLOY.md` to run it, `docs/BOTFATHER.md` to set up the bot in
-@BotFather, and `docs/CHANNEL.md` for the channel (name, description, and the
-paste-ready pinned welcome post).
+Read `docs/DEPLOY.md` to run it and `docs/CHANNEL.md` for the channel (name,
+description, and the paste-ready pinned welcome post).
 
 ## Golden rules
 
