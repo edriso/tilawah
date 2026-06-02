@@ -17,7 +17,7 @@ import {
 import { config } from './config';
 import { logger } from './lib/logger';
 import { COPY, settingsSummary, formatTimeAr, daysSummaryAr } from './lib/copy';
-import { previewWird, buildTodayView } from './lib/deliver';
+import { previewWird, buildTodayView, type TodayView } from './lib/deliver';
 import { runDeliveryOnce } from './scheduler';
 import { buildDaysKeyboard, DAY_TOGGLE_PREFIX, DAYS_DONE } from './lib/days-keyboard';
 import { buildTimeKeyboard, TIME_PICK_PREFIX } from './lib/time-keyboard';
@@ -113,6 +113,61 @@ bot.command('status', async (ctx) => {
   await ctx.reply(await statusText(sub));
 });
 
+/**
+ * Reply a TodayView's wird and, if it carries a claim, record it as today's
+ * delivery so the scheduler does not send the same wird again. Shared by /today
+ * and the reposition flow (/page). The claim is committed only AFTER the
+ * messages are shown, so a failed reply leaves the day unclaimed; the unique
+ * (subscriber, date) index makes it safe even if the scheduler races at the
+ * same minute (see scheduler.ts).
+ */
+async function sendTodayView(
+  ctx: Context,
+  sub: Subscriber,
+  view: TodayView,
+  now: Date,
+): Promise<void> {
+  for (const message of view.messages) await ctx.reply(message);
+  if (view.claim) {
+    await commitDelivery({
+      subscriberId: sub.id,
+      scheduledFor: view.claim.scheduledFor,
+      startPage: view.claim.startPage,
+      pageCount: view.claim.pageCount,
+      nextPage: view.claim.nextPage,
+      startedAt: sub.startedAt,
+      now,
+    });
+  }
+}
+
+/**
+ * Move a subscriber to `page`, then auto-send the wird at the new page (like
+ * /today): when today is still free it counts as today's delivery (so the
+ * scheduler does not also send it) and the position advances past this page;
+ * otherwise (already delivered today, an off day, or paused) it is shown as a
+ * preview and the position stays here, to arrive at the next scheduled time.
+ * Shared by `/page N` and the bare-number reply to a /page prompt.
+ */
+export async function repositionToPage(ctx: Context, sub: Subscriber, page: number): Promise<void> {
+  await setCurrentPage(sub.id, page);
+  const now = new Date();
+  const view = await buildTodayView({ ...sub, currentPage: page }, now, { reposition: true });
+  if (view.messages.length === 0) {
+    logger.warn('reposition produced no wird', { subscriberId: sub.id, page });
+    await ctx.reply(COPY.notReady);
+    return;
+  }
+  const juz = (await getJuzForPage(page)) ?? undefined;
+  await ctx.reply(
+    view.claim
+      ? COPY.pageSetClaimed(page, view.claim.nextPage, juz)
+      : COPY.pageSetPreview(page, juz),
+  );
+  await sendTodayView(ctx, sub, view, now);
+  if (sub.pausedAt) await ctx.reply(COPY.pausedHint);
+}
+
 // /today: read today's wird now. Pulling it before the scheduled send COUNTS
 // as today's delivery (we record it and move forward), so the bot does not
 // send the same wird again at the user's send time. Pulling it again the same
@@ -128,21 +183,7 @@ bot.command('today', async (ctx) => {
     return;
   }
   if (view.alreadyDelivered) await ctx.reply(COPY.todayAlready);
-  for (const message of view.messages) await ctx.reply(message);
-  // Record it as today's delivery only AFTER the wird was actually shown, so a
-  // failed reply does not mark the day done. The unique (subscriber, date)
-  // index makes this safe even if the scheduler races at the same minute.
-  if (view.claim) {
-    await commitDelivery({
-      subscriberId: sub.id,
-      scheduledFor: view.claim.scheduledFor,
-      startPage: view.claim.startPage,
-      pageCount: view.claim.pageCount,
-      nextPage: view.claim.nextPage,
-      startedAt: sub.startedAt,
-      now,
-    });
-  }
+  await sendTodayView(ctx, sub, view, now);
   if (sub.pausedAt) await ctx.reply(COPY.pausedHint);
 });
 
@@ -183,9 +224,7 @@ bot.command('page', async (ctx) => {
     await ctx.reply(COPY.pageInvalid);
     return;
   }
-  await setCurrentPage(sub.id, page);
-  const juz = (await getJuzForPage(page)) ?? undefined;
-  await ctx.reply(COPY.pageUpdated(page, juz));
+  await repositionToPage(ctx, sub, page);
 });
 
 // /time: with an argument set the time directly; with none, offer buttons.
@@ -557,9 +596,7 @@ bot.on('message:text', async (ctx) => {
     await ctx.reply(COPY.pageInvalid);
     return;
   }
-  await setCurrentPage(sub.id, page);
-  const juz = (await getJuzForPage(page)) ?? undefined;
-  await ctx.reply(COPY.pageUpdated(page, juz));
+  await repositionToPage(ctx, sub, page);
 });
 
 bot.catch((err) => {

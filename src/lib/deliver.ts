@@ -200,14 +200,20 @@ export interface TodaySubscriber {
  * paused there is no scheduled send to dedupe against, so /today stays a pure
  * peek that never advances.
  */
-export async function buildTodayView(sub: TodaySubscriber, now: Date): Promise<TodayView> {
+export async function buildTodayView(
+  sub: TodaySubscriber,
+  now: Date,
+  opts: { reposition?: boolean } = {},
+): Promise<TodayView> {
   const basmala = await getBasmala();
   const local = getLocalContext(sub.timezone, now);
   const scheduledFor = local.date;
-
-  // Already delivered today: re-show exactly those pages, never claim/advance.
   const delivered = await getDeliveryFor(sub.id, scheduledFor);
-  if (delivered) {
+
+  // /today on an already-delivered day re-shows exactly what was delivered. A
+  // reposition (/page) instead always shows the NEW page the user just set, so
+  // it skips this re-show and renders the current position below.
+  if (delivered && !opts.reposition) {
     const content = await getWird(delivered.startPage, delivered.pageCount);
     return {
       messages: formatWird(content, basmala, COPY.wirdLead),
@@ -216,13 +222,19 @@ export async function buildTodayView(sub: TodaySubscriber, now: Date): Promise<T
     };
   }
 
-  // Not delivered yet: show the current wird.
+  // Show the current position's wird.
   const content = await getWird(sub.currentPage, sub.wirdSize);
-  if (content.length === 0) return { messages: [], claim: null, alreadyDelivered: false };
+  if (content.length === 0) {
+    return { messages: [], claim: null, alreadyDelivered: delivered !== null };
+  }
   const messages = formatWird(content, basmala, COPY.wirdLead);
 
-  // Claim it as today's delivery, unless paused or it is not an active day.
-  const claimable = sub.pausedAt === null && isDayActive(sub.activeDays, local.isoWeekday);
+  // Claim it as today's delivery only when today is genuinely free: not already
+  // delivered, an active day, and not paused. A reposition on an
+  // already-delivered (or off / paused) day just shows the new wird as a
+  // preview and leaves today's record and the position untouched.
+  const claimable =
+    delivered === null && sub.pausedAt === null && isDayActive(sub.activeDays, local.isoWeekday);
   const claim = claimable
     ? {
         scheduledFor,
@@ -231,7 +243,7 @@ export async function buildTodayView(sub: TodaySubscriber, now: Date): Promise<T
         nextPage: advanceStartPage(sub.currentPage, content.length),
       }
     : null;
-  return { messages, claim, alreadyDelivered: false };
+  return { messages, claim, alreadyDelivered: delivered !== null };
 }
 
 /** Pull the scheduling fields the core math needs out of a subscriber row. */

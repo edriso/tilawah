@@ -36,10 +36,11 @@ describe('page copy (the /page command)', () => {
     expect(msg).toContain('/page 100');
   });
 
-  it('updated message confirms the new position and points at /today', () => {
-    const msg = COPY.pageUpdated(100, 5);
-    expect(msg).toContain('صفحة ١٠٠ (الجزء ٥)');
-    expect(msg).toContain('/today');
+  it('page-set messages name the new position (and the next page when claimed)', () => {
+    const claimed = COPY.pageSetClaimed(100, 101, 5);
+    expect(claimed).toContain('صفحة ١٠٠ (الجزء ٥)');
+    expect(claimed).toContain('١٠١'); // the next page after today's wird
+    expect(COPY.pageSetPreview(100, 5)).toContain('صفحة ١٠٠ (الجزء ٥)');
   });
 
   it('invalid message states the allowed range', () => {

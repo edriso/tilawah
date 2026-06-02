@@ -141,6 +141,28 @@ describe('buildTodayView (/today claims today)', () => {
     expect(view.messages).toEqual([]);
     expect(view.claim).toBeNull();
   });
+
+  it('reposition shows the new page and claims when today is still free', async () => {
+    const view = await buildTodayView(todaySub({ currentPage: 5 }), NOW, { reposition: true });
+    expect(view.messages.length).toBeGreaterThan(0);
+    expect(view.claim).toEqual({
+      scheduledFor: '2026-06-01',
+      startPage: 5,
+      pageCount: 1,
+      nextPage: advanceStartPage(5, 1),
+    });
+    expect(h.getWird).toHaveBeenCalledWith(5, 1);
+  });
+
+  it('reposition on an already-delivered day shows the NEW page (preview), no claim', async () => {
+    h.getDeliveryFor.mockResolvedValue({ startPage: 10, pageCount: 2 });
+    const view = await buildTodayView(todaySub({ currentPage: 5 }), NOW, { reposition: true });
+    expect(view.claim).toBeNull();
+    expect(view.messages.length).toBeGreaterThan(0);
+    // Shows the just-set current page, NOT the earlier delivered pages.
+    expect(h.getWird).toHaveBeenCalledWith(5, 1);
+    expect(h.getWird).not.toHaveBeenCalledWith(10, 2);
+  });
 });
 
 describe('deliverDueSubscribers', () => {

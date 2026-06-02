@@ -171,8 +171,14 @@ export const COPY = {
       `أو اكتبه مع الأمر مباشرة، مثل ${ltr('/page 100')}`,
     ].join('\n'),
   pageInvalid: `رقم الصفحة غير صحيح. اكتب رقمًا من ١ إلى ٦٠٤، مثل ${ltr('/page 100')}`,
-  pageUpdated: (page: number, juz?: number) =>
-    `تم ضبط موضعك على ${pagePositionAr(page, juz)} ✅\nسيبدأ وردك القادم من هنا. لرؤيته الآن اضغط /today`,
+  // After /page on a free day: the new page counts as today's wird, and the
+  // position has advanced past it (so /status shows the NEXT page).
+  pageSetClaimed: (page: number, nextPage: number, juz?: number) =>
+    `ضبطنا موضعك على ${pagePositionAr(page, juz)}، وهذا ورد اليوم 🌿\nويبدأ وردك القادم من صفحة ${toArabicDigits(nextPage)} بإذن الله.`,
+  // After /page when today is already delivered, an off day, or paused: the new
+  // wird is shown as a preview and will arrive at the next scheduled time.
+  pageSetPreview: (page: number, juz?: number) =>
+    `تم ضبط موضعك على ${pagePositionAr(page, juz)} ✅\nوسيصلك وردك من هنا في موعدك القادم.`,
 
   // ── Pause / resume (single toggle) ────────────────────────────────
   paused: 'تم إيقاف الإرسال مؤقتًا، وسيبقى موضعك محفوظًا 🌿\nوعندما تريد العودة اكتب /pause',
