@@ -28,6 +28,16 @@ It is one small TypeScript project, with everything under `src/`:
   daily scheduler. `prisma/` holds the schema, migrations, and seed; `scripts/`
   holds the data fetch.
 
+The cross-bot kernel lives in **`telegram-bot-kit`** (a separate public repo,
+pinned by git tag in `package.json`): the timezone/schedule math, the active-day
+bitmask, Arabic-Indic digits, the root `.env` loader, the logger, and the
+plain-text send wrapper. The matching files here (`src/core/schedule.ts`,
+`days.ts`, `arabic.ts`, `env.ts`; `src/lib/send.ts`, `logger.ts`) are one-line
+re-export shims, so existing imports of `../core` / `./send` / `./logger` keep
+working while the code lives (and is tested) once, in the kernel. To change that
+code: edit the kernel, `pnpm check`, tag a new version, and merge the Renovate
+bump PR it opens here. The ayah bot consumes the same kernel.
+
 Read `docs/DEPLOY.md` to run it, `docs/BOTFATHER.md` to set up the bot in
 @BotFather, and `docs/CHANNEL.md` for the channel (name, description, and the
 paste-ready pinned welcome post).
@@ -74,6 +84,12 @@ minute. For each active, non-blocked subscriber of an allowed kind:
    transaction.
 
 One subscriber failing is caught and never stops the rest of the batch.
+
+`/today` and `/page` deliver today's wird the same way: they reuse
+`buildTodayView` + `commitDelivery`, so a subscriber who reads (or repositions)
+early "claims" the day (records the delivery and advances) and the scheduler
+then skips it. The same `unique(subscriber, scheduledFor)` lock keeps it to one
+wird per local day across every entry point.
 
 ## Channel and users are optional
 
@@ -153,6 +169,9 @@ Commit the new folder under `prisma/migrations/`. Production applies it with
 
 ## Where things live
 
+- Shared kernel (schedule, days, arabic, env, logger, send): the
+  `telegram-bot-kit` package; the matching `src/core/*` and `src/lib/{send,logger}.ts`
+  files are re-export shims.
 - Page and wird math: `src/core/wird.ts`
 - Message building (one message per page): `src/core/format.ts`
 - Surah names and revelation: `src/database/reference/surahs.ts`

@@ -63,8 +63,9 @@ it. Set `USER_WIRD_ENABLED=false` for a channel only deployment. See
 
 ## User commands
 
-All in Arabic. `/today` read now, `/wird` pages per day, `/page` go to a
-specific page (1 to 604), `/time` send time, `/days` send days, `/timezone`
+All in Arabic. `/today` read today's wird now (counts as today's), `/wird` pages
+per day, `/page` go to a specific page (1 to 604) and read it now, `/time` send
+time, `/days` send days, `/timezone`
 timezone, `/pause` take a break or come back, `/status` your settings, `/help`
 help.
 
