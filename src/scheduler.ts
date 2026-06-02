@@ -1,6 +1,5 @@
 import cron, { type ScheduledTask } from 'node-cron';
 import type { Bot, Context } from 'grammy';
-import { pruneCronRuns, withCronRun } from './database';
 import { deliverDueSubscribers, type DeliveryStats } from './lib/deliver';
 import { sweepPending } from './lib/pending';
 import { logger } from './lib/logger';
@@ -37,11 +36,7 @@ export async function runDeliveryOnce(
   }
   deliveryRunning = true;
   try {
-    // Record each real batch in cron_runs (with its stats) so we can answer
-    // "did the send run, and what did it do?" without grepping logs. Skipped
-    // (locked) triggers return above and are not recorded, keeping it to one
-    // row per actual run.
-    return await withCronRun('delivery', () => deliverDueSubscribers(bot, now), now);
+    return await deliverDueSubscribers(bot, now);
   } finally {
     deliveryRunning = false;
   }
@@ -52,7 +47,6 @@ export async function runDeliveryOnce(
  *   - Delivery tick, every minute. Each subscriber is judged in their own
  *     timezone, so one global minute-tick serves every timezone correctly.
  *     The (subscriber, local date) record keeps it to one wird per day.
- *   - Cron-run cleanup, once a day, so the observability table stays small.
  *   - Pending-input sweep, every few minutes, so abandoned /page and /wird
  *     prompts never leak memory.
  *
@@ -67,17 +61,11 @@ export function startScheduler(bot: Bot<Context>): void {
       .catch((err) => logger.error('Delivery tick failed', { error: String(err) }));
   });
 
-  const cleanup = cron.schedule('30 3 * * *', () => {
-    pruneCronRuns(30)
-      .then((deleted) => logger.info('Pruned old cron runs', { deleted }))
-      .catch((err) => logger.error('Cron-run cleanup failed', { error: String(err) }));
-  });
-
   // Drop abandoned /page and /wird prompts so the pending-input map never
   // grows unbounded over a long-running process.
   const pendingSweep = cron.schedule('*/5 * * * *', () => sweepPending());
 
-  tasks.push(tick, cleanup, pendingSweep);
+  tasks.push(tick, pendingSweep);
   logger.info('Scheduler started', { jobs: tasks.length });
 }
 
