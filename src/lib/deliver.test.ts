@@ -361,4 +361,51 @@ describe('deliverDueSubscribers (image format)', () => {
     expect(h.commitDelivery).toHaveBeenCalledOnce();
     expect(stats).toMatchObject({ due: 1, sent: 1 });
   });
+
+  it('sends one photo per page for a multi-page image wird (lead only on page 1)', async () => {
+    h.listDeliverableSubscribers.mockResolvedValue([
+      sub({ wirdFormat: 'image', wirdSize: 2, currentPage: 1 }),
+    ]);
+    h.getWird.mockResolvedValue(TWO_PAGES);
+    h.sendPhoto
+      .mockResolvedValueOnce({ result: 'ok', fileId: 'F1' })
+      .mockResolvedValueOnce({ result: 'ok', fileId: 'F2' });
+
+    const stats = await deliverDueSubscribers(fakeBot, NOW);
+
+    expect(h.sendPhoto).toHaveBeenCalledTimes(2); // a photo per page
+    expect(h.sendMessages).not.toHaveBeenCalled();
+    // The lead line ("🌿 وردك اليوم") is on the first page's caption only.
+    expect(h.sendPhoto.mock.calls[0][3]).toContain('🌿');
+    expect(h.sendPhoto.mock.calls[1][3]).not.toContain('🌿');
+    // Both pages cached, and the position advances by the full 2.
+    expect(h.cachePageImageId).toHaveBeenCalledWith(1, 'F1');
+    expect(h.cachePageImageId).toHaveBeenCalledWith(2, 'F2');
+    expect(h.commitDelivery.mock.calls[0][0]).toMatchObject({
+      pageCount: 2,
+      nextPage: advanceStartPage(1, 2),
+    });
+    expect(stats).toMatchObject({ due: 1, sent: 1, failed: 0 });
+  });
+
+  it('on a multi-page image wird, one failed page falls back to text and the wird still completes', async () => {
+    h.listDeliverableSubscribers.mockResolvedValue([
+      sub({ wirdFormat: 'image', wirdSize: 2, currentPage: 1 }),
+    ]);
+    h.getWird.mockResolvedValue(TWO_PAGES);
+    h.sendPhoto
+      .mockResolvedValueOnce({ result: 'ok', fileId: 'F1' }) // page 1 as image
+      .mockResolvedValueOnce({ result: 'failed' }); // page 2 image fails
+
+    const stats = await deliverDueSubscribers(fakeBot, NOW);
+
+    expect(h.sendPhoto).toHaveBeenCalledTimes(2); // tried image for both
+    expect(h.sendMessages).toHaveBeenCalledOnce(); // page 2 fell back to text
+    // The whole wird is recorded and the position advances by 2 (no page lost).
+    expect(h.commitDelivery.mock.calls[0][0]).toMatchObject({
+      pageCount: 2,
+      nextPage: advanceStartPage(1, 2),
+    });
+    expect(stats).toMatchObject({ due: 1, sent: 1, failed: 0 });
+  });
 });
