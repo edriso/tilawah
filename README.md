@@ -11,6 +11,11 @@ extend the project.
 ## What it does
 
 - Sends a daily wird of one or more Mushaf pages.
+- Each page is sent as a picture of the Madani Mushaf page by default (when a
+  page-image source is configured), or as plain text. Readers switch with
+  `/format`, the channel admin with `/admin_format`. If an image is missing the
+  bot quietly sends that page as text, so a wird always arrives. See
+  `docs/DEPLOY.md` for the image source and self-hosting.
 - A public channel posts the daily portion to everyone who follows it. An admin
   sets the last page read and the bot continues from the next page.
 - Each user can set how many pages a day (1 to 20), which days, what time, and
@@ -43,6 +48,12 @@ well known anchors), and frozen to a committed file. The app never edits the
 Quran tables after seeding, and it refuses to start if the data is incomplete.
 See `NOTICE` for the source and license.
 
+For the image format, the 604 page images are likewise a verified asset: a
+configured source, or a self-hosted copy downloaded and integrity-checked with
+`pnpm data:mushaf` (it writes a tracked SHA-256 manifest, re-verified with
+`pnpm data:mushaf --check`). The images themselves are not committed; see
+`docs/DEPLOY.md`.
+
 ## Quick start
 
 You need Node 20+, pnpm, and a MySQL or MariaDB database.
@@ -63,8 +74,8 @@ it. Set `USER_WIRD_ENABLED=false` for a channel only deployment. See
 ## User commands
 
 All in Arabic. `/today` read today's wird now (counts as today's), `/wird` pages
-per day, `/page` go to a specific page (1 to 604) and read it now, `/time` send
-time, `/days` send days, `/timezone`
+per day, `/format` text or Mushaf-page image, `/page` go to a specific page (1
+to 604) and read it now, `/time` send time, `/days` send days, `/timezone`
 timezone, `/pause` take a break or come back, `/status` your settings, `/help`
 help.
 
@@ -73,6 +84,7 @@ help.
 Private chat, admins only. `/admin_setpage N` set the last page read (the
 channel resumes at N+1), `/admin_wird N` pages per day, `/admin_time HH:MM`
 post time, `/admin_tz Area/City` timezone, `/admin_pause` pause or resume,
+`/admin_format text|image` how the channel posts (text or Mushaf-page image),
 `/admin_status` channel status, `/admin_send` send the batch now.
 
 ## Development

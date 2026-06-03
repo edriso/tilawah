@@ -46,11 +46,17 @@ description, and the paste-ready pinned welcome post).
 1. Never type Quran text, page numbers, or juz numbers by hand. They only come
    from `pnpm data:fetch` (Tanzil Uthmani text plus the Madani Mushaf page and
    juz boundaries), and every value is verified before it is written. The
-   Surah and Ayah tables are read only after seeding.
+   Surah and Ayah tables are read only after seeding. The page IMAGES (the image
+   format) are Quran content too: use only a VERIFIED Madani Mushaf source, and
+   self-host with `pnpm data:mushaf` (download + integrity check + manifest), not
+   an arbitrary URL.
 2. Keep `core` pure. No database or network imports there. That is what keeps
    it easy to test.
-3. The bot sends plain text, never Markdown or HTML parse_mode. Quran text
-   would make a parsed message fail with a 400. See `src/lib/send.ts`.
+3. The bot uses NO Markdown or HTML parse_mode, ever, for either format: plain
+   text messages and plain image captions both. Quran text/characters would make
+   a parsed message fail with a 400. See `src/lib/send.ts` (text) and
+   `src/lib/send-photo.ts` (image captions). Image is the default format; text
+   is the fallback when no image source is set or a page image fails.
 4. Advance a subscriber's page ONLY after a real send. A failed send must
    retry the same pages, never skip them.
 5. One wird per subscriber per local day. The `unique(subscriberId,
