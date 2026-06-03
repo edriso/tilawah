@@ -114,9 +114,16 @@ anyone. The bot uploads each page from disk itself (no public URL needed, which
 suits this long-polling bot). On your laptop you already ran `pnpm data:mushaf`
 and checked it; now copy the folder up and bind-mount it:
 
+Deploy the code FIRST (so the bot folder exists on the server and `manifest.json`
+is tracked by git), then upload. `--mkpath` creates the destination folder, and
+`--exclude manifest.json` skips the manifest because it ships with the code from
+git: uploading it before the first `git pull` leaves an untracked file that
+blocks the pull.
+
 ```bash
 # on your laptop
-rsync -av assets/mushaf/ root@<server>:/opt/bots/telegram/tilawah/assets/mushaf/
+rsync -av --mkpath --exclude manifest.json \
+  assets/mushaf/ root@<server>:/opt/bots/telegram/tilawah/assets/mushaf/
 ```
 
 In `/opt/bots/docker-compose.yml`, give the `tilawah` service the read-only
