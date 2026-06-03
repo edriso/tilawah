@@ -66,6 +66,9 @@ in a private chat with the bot. They act on the channel.
   next post starts at page N+1, wrapping from 604 back to 1. Use this to align
   the channel with where your readers are, or to skip ahead or back.
 - `/admin_wird N` set how many pages the channel posts per day (1 to 20).
+- `/admin_format text|image` how the channel posts the wird: a picture of the
+  Mushaf page (the default) or plain text. Image needs `MUSHAF_IMAGE_BASE_URL`
+  set (see `docs/DEPLOY.md`); without it the channel quietly posts text.
 - `/admin_time HH:MM` set the daily post time (24-hour, in the channel's
   timezone).
 - `/admin_tz Area/City` set the channel's timezone, e.g. `Africa/Cairo`.

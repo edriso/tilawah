@@ -9,3 +9,4 @@ export * from './wird';
 export * from './arabic';
 export * from './basmala';
 export * from './format';
+export * from './mushaf-image';

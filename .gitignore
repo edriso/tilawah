@@ -4,10 +4,11 @@ node_modules/
 # Build output
 dist/
 
-# Environment (never commit secrets)
+# Environment (never commit secrets). Ignore .env and EVERY variant
+# (.env.local, .env.production, .env.bak.*, ...) except the committed template.
 .env
-.env.local
-.env.production
+.env.*
+!.env.example
 
 # Prisma generated client (regenerate with `pnpm db:generate`)
 **/generated/
@@ -24,6 +25,12 @@ docs/schema.sql
 # OS
 .DS_Store
 Thumbs.db
+
+# Self-hosted Mushaf page images (download with `pnpm data:mushaf`). The image
+# files are too large to commit, but the manifest of SHA-256 fingerprints IS
+# tracked so the set can be re-verified offline (`pnpm data:mushaf --check`).
+assets/mushaf/*.jpg
+assets/mushaf/*.png
 
 # Logs
 *.log

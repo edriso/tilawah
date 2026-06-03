@@ -73,6 +73,12 @@ export function setWirdSize(subscriberId: number, wirdSize: number) {
   return prisma.subscriber.update({ where: { id: subscriberId }, data: { wirdSize } });
 }
 
+/** Update how a subscriber receives the wird: "text" or "image". Caller
+ *  validates the value (see normalizeWirdFormat in src/core). */
+export function setWirdFormat(subscriberId: number, wirdFormat: string) {
+  return prisma.subscriber.update({ where: { id: subscriberId }, data: { wirdFormat } });
+}
+
 /**
  * Set the next page a subscriber will receive (1..604). Used by the channel
  * admin "last page read" command (which passes the page AFTER the one read)

@@ -122,6 +122,7 @@ Quran data is not fully seeded.
 ```bash
 pnpm install
 pnpm data:fetch     # download + verify the Quran text, pages, and juz (once; also committed)
+pnpm data:mushaf    # (optional) download + verify the 604 page images to self-host them
 pnpm db:deploy      # apply migrations (create tables)
 pnpm db:seed        # fill the Quran tables
 pnpm dev            # run the bot with reload
@@ -177,4 +178,13 @@ Commit the new folder under `prisma/migrations/`. Production applies it with
 - Ayah count oracle: `src/database/reference/ayah-counts.ts`
 - Page and juz constants and anchors: `src/database/reference/pages.ts`
 - Message wording (Arabic): `src/lib/copy.ts`
-- The send engine: `src/lib/deliver.ts`
+- The send engine: `src/lib/deliver.ts` (`sendWird` renders a wird one page at
+  a time in either format; both `/today` and the scheduler call it)
+- Delivery format (Mushaf-page image vs text): `src/core/mushaf-image.ts` (the
+  format flag and the page-image URL builder), `src/lib/send-photo.ts` (the
+  photo sender), the `wirdFormat` column and the `mushaf_page_images` file_id
+  cache. Image is the DEFAULT format (the `wirdFormat` column defaults to
+  "image"); a user switches with `/format`, the channel admin with
+  `/admin_format`. Image needs `MUSHAF_IMAGE_BASE_URL` set; without a source the
+  bot falls back to text at send time. Like the text, image pages must come from
+  a verified Madani Mushaf source.

@@ -29,6 +29,12 @@ coverage
 # Tests: not imported at runtime (the bot runs from source).
 src/**/*.test.ts
 
+# Self-hosted Mushaf images: never bake them into the image. They live in a
+# bind mount or named volume at runtime (see docs/DEPLOY.md), so the image stays
+# small and a rebuild never re-bundles ~90 MB. The empty mount point is created
+# in the Dockerfile.
+assets/mushaf
+
 # Docs the build does not need
 README.md
 CLAUDE.md

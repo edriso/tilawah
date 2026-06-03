@@ -22,6 +22,8 @@
     "db:reset": "prisma db push --force-reset && tsx prisma/seed.ts",
     "db:seed": "tsx prisma/seed.ts",
     "data:fetch": "tsx scripts/fetch-quran.ts",
+    "data:mushaf": "tsx scripts/fetch-mushaf-images.ts",
+    "test:image": "tsx scripts/test-mushaf-image.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "eslint .",

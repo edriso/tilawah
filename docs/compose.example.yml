@@ -50,3 +50,16 @@ services:
     depends_on:
       shared-db:
         condition: service_healthy
+    # Self-hosted Mushaf images (optional; only when MUSHAF_IMAGE_BASE_URL is a
+    # LOCAL path like "/app/assets/mushaf/{page3}.jpg"). The recommended way is a
+    # BIND MOUNT of a host folder you fill yourself: on your laptop run
+    # `pnpm data:mushaf` (download + verify), eyeball a few pages, then upload
+    # the exact files to the server, e.g.
+    #   rsync -av assets/mushaf/ root@<server>:/opt/bots/telegram/tilawah/assets/mushaf/
+    # The bot mounts that folder READ-ONLY and uploads each page to Telegram once
+    # (then sends by cached file_id). The folder is git-ignored, so deploys never
+    # touch it, and the server never fetches from anyone. Leave this line out if
+    # you serve images by URL or use text. (Alternative: have the SERVER download
+    # them instead, see docs/DEPLOY.md, "Self-hosting the page images".)
+    volumes:
+      - ./telegram/tilawah/assets/mushaf:/app/assets/mushaf:ro

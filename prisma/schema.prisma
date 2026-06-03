@@ -85,6 +85,11 @@ model Subscriber {
   // How many Mushaf pages to send per day (1..20, default 1). Validated in
   // the app (MAX_WIRD_PAGES in src/core).
   wirdSize    Int @default(1) @map("wird_size")
+  // How the wird is delivered: "image" (default, a picture of the actual
+  // Madani Mushaf page) or "text" (plain Quran text). Image needs a page-image
+  // source configured (MUSHAF_IMAGE_BASE_URL); without it the bot falls back
+  // to text at send time. Not a Prisma enum, by project convention.
+  wirdFormat  String @default("image") @map("wird_format") @db.VarChar(16)
   // The NEXT page to send (1..604). Advances by wirdSize after each send and
   // loops past 604 back to 1. A brand-new subscriber starts at page 1.
   currentPage Int @default(1) @map("current_page")
@@ -136,4 +141,23 @@ model DeliveryLog {
   @@unique([subscriberId, scheduledFor], map: "delivery_logs_subscriber_date_key")
   @@index([subscriberId, createdAt])
   @@map("delivery_logs")
+}
+
+// ─── Mushaf page-image cache ────────────────────────────────────────
+//
+// Cache of the Telegram file_id for each Madani Mushaf page, used by the
+// optional "image" delivery format. The first time a page is sent as a photo,
+// Telegram fetches it from MUSHAF_IMAGE_BASE_URL and returns a file_id; we
+// store it here and every later send just references that id (no re-upload,
+// no dependency on the source staying reachable). At most 604 small rows.
+
+model MushafPageImage {
+  // The Madani Mushaf page (1..604) is its natural primary key.
+  page      Int      @id
+  // The Telegram file_id returned for this page, reused on every later send.
+  fileId    String   @map("file_id") @db.VarChar(255)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("mushaf_page_images")
 }

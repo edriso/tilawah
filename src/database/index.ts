@@ -11,6 +11,7 @@ export * from './services/quran.service';
 export * from './services/subscriber.service';
 export * from './services/pause.service';
 export * from './services/delivery.service';
+export * from './services/mushaf-image.service';
 
 // Reference data
 export * from './reference/surahs';

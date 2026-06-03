@@ -12,6 +12,7 @@ const h = vi.hoisted(() => ({
   getJuzForPage: vi.fn(),
   commitDelivery: vi.fn(),
   buildTodayView: vi.fn(),
+  sendWird: vi.fn(),
 }));
 
 vi.mock('./config', () => ({
@@ -24,12 +25,14 @@ vi.mock('./config', () => ({
     isDev: true,
   },
   channelEnabled: () => false,
+  imageWirdAvailable: () => false,
 }));
 vi.mock('./database', () => ({
   ensureUser: vi.fn(),
   getChannelSubscriber: vi.fn(),
   getJuzForPage: h.getJuzForPage,
   setWirdSize: vi.fn(),
+  setWirdFormat: vi.fn(),
   setCurrentPage: h.setCurrentPage,
   toggleActiveDay: vi.fn(),
   setDeliveryTime: vi.fn(),
@@ -38,7 +41,11 @@ vi.mock('./database', () => ({
   resumeSubscriber: vi.fn(),
   commitDelivery: h.commitDelivery,
 }));
-vi.mock('./lib/deliver', () => ({ buildTodayView: h.buildTodayView, previewWird: vi.fn() }));
+vi.mock('./lib/deliver', () => ({
+  buildTodayView: h.buildTodayView,
+  sendWird: h.sendWird,
+  previewWird: vi.fn(),
+}));
 vi.mock('./scheduler', () => ({ runDeliveryOnce: vi.fn() }));
 vi.mock('./lib/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
@@ -64,15 +71,29 @@ beforeEach(() => {
   vi.clearAllMocks();
   h.getJuzForPage.mockResolvedValue(5);
   h.commitDelivery.mockResolvedValue('sent');
+  // The whole wird went out (pagesSent matches the one page below), so /today
+  // and reposition claim the day.
+  h.sendWird.mockResolvedValue({ pagesSent: 1, lastResult: 'ok' });
+});
+
+// A one-page view; pagesSent (1) matching pages.length (1) means a free day is
+// claimed. basmala/lead are passed through to the (mocked) renderer.
+const ONE_PAGE_VIEW = (over: Record<string, unknown> = {}) => ({
+  pages: [{ pageNumber: 5, juz: 1, ayat: [] }],
+  basmala: 'بسم الله',
+  lead: '🌿 وردك اليوم',
+  claim: null,
+  alreadyDelivered: false,
+  ...over,
 });
 
 describe('repositionToPage', () => {
   it('persists the new page once (does NOT recurse) and claims a free day', async () => {
-    h.buildTodayView.mockResolvedValue({
-      messages: ['the wird'],
-      claim: { scheduledFor: '2026-06-01', startPage: 5, pageCount: 1, nextPage: 6 },
-      alreadyDelivered: false,
-    });
+    h.buildTodayView.mockResolvedValue(
+      ONE_PAGE_VIEW({
+        claim: { scheduledFor: '2026-06-01', startPage: 5, pageCount: 1, nextPage: 6 },
+      }),
+    );
     const ctx = fakeCtx();
     await repositionToPage(ctx as never, SUB, 5);
 
@@ -86,16 +107,13 @@ describe('repositionToPage', () => {
       { reposition: true },
     );
     expect(h.commitDelivery).toHaveBeenCalledTimes(1); // claimed
-    // A confirmation plus the wird message were sent.
-    expect(ctx.reply.mock.calls.length).toBeGreaterThanOrEqual(2);
+    // The wird itself went out via sendWird; a confirmation went via reply.
+    expect(h.sendWird).toHaveBeenCalledTimes(1);
+    expect(ctx.reply).toHaveBeenCalled();
   });
 
   it('does NOT claim when buildTodayView returns no claim (preview)', async () => {
-    h.buildTodayView.mockResolvedValue({
-      messages: ['the wird'],
-      claim: null,
-      alreadyDelivered: true,
-    });
+    h.buildTodayView.mockResolvedValue(ONE_PAGE_VIEW({ claim: null, alreadyDelivered: true }));
     const ctx = fakeCtx();
     await repositionToPage(ctx as never, SUB, 50);
 

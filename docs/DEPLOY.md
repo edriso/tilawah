@@ -57,6 +57,105 @@ Set these env vars on the host (see the single root `.env.example`):
 See `docs/CHANNEL.md` for the full admin command list and the paste-ready
 channel name, description, and pinned welcome post.
 
+## Image delivery format (the default)
+
+By default the wird is sent as a picture of the actual Madani Mushaf page. A
+user can switch to plain text (searchable and copyable) with `/format`, and the
+channel admin with `/admin_format text`. Images need a page-image source; until
+you set one, the bot quietly falls back to sending text to everyone:
+
+1. Host (or point at) a VERIFIED Madani Mushaf, 604 pages, the standard 15-line
+   King Fahd Complex layout. Like the text, the images are the holy Quran, so
+   they must come from a trusted source.
+2. Set `MUSHAF_IMAGE_BASE_URL` to the page URL template, using `{page}` for the
+   raw number or `{page3}` for it zero-padded to three digits, e.g.
+   `https://your-host.example/mushaf/{page3}.png`.
+3. Test it before turning it on for readers:
+
+   ```bash
+   pnpm test:image <yourTelegramId> 50   # sends Mushaf page 50 to you
+   ```
+
+   It prints the `file_id` Telegram returns. The bot caches that id per page
+   (table `mushaf_page_images`), so each page is fetched from the source once
+   and re-sent by reference after that. If the source is ever unreachable and a
+   page is not yet cached, the bot falls back to sending that page as text, so
+   the wird always goes out.
+
+If you leave `MUSHAF_IMAGE_BASE_URL` empty, the bot runs text-only: everyone
+quietly receives text (the default image format has nowhere to fetch pages
+from), and `/format` offers text only.
+
+### Self-hosting the page images (recommended for trust)
+
+Pointing `MUSHAF_IMAGE_BASE_URL` at a stranger's host means you depend on it
+staying up and unchanged. To own a verified copy instead:
+
+```bash
+pnpm data:mushaf            # download all 604 pages + write a SHA-256 manifest
+pnpm data:mushaf --check    # re-verify the on-disk set against the manifest (offline)
+```
+
+This writes the pages to `assets/mushaf/` and a `manifest.json` of fingerprints.
+The images are git-ignored (too large to commit), but the manifest IS tracked,
+so `--check` later flags ANY upstream change (a swapped or tampered page).
+Override the source or destination with flags, e.g.
+`pnpm data:mushaf --source "https://.../{page}.jpg" --out assets/mushaf`.
+
+The manifest pins the bytes you reviewed; it does not prove the pages are
+correct, so eyeball a few the first time. (After changing the source, clear the
+cache so new images are fetched: `TRUNCATE TABLE mushaf_page_images;`.)
+
+Three ways to serve the verified set:
+
+**A. Download on your laptop, upload to the server (recommended).** You review
+the images locally, then ship the exact bytes; the server never fetches from
+anyone. The bot uploads each page from disk itself (no public URL needed, which
+suits this long-polling bot). On your laptop you already ran `pnpm data:mushaf`
+and checked it; now copy the folder up and bind-mount it:
+
+```bash
+# on your laptop
+rsync -av assets/mushaf/ root@<server>:/opt/bots/telegram/tilawah/assets/mushaf/
+```
+
+In `/opt/bots/docker-compose.yml`, give the `tilawah` service the read-only
+bind mount shown in `compose.example.yml`:
+
+```yaml
+    volumes:
+      - ./telegram/tilawah/assets/mushaf:/app/assets/mushaf:ro
+```
+
+Set `MUSHAF_IMAGE_BASE_URL="/app/assets/mushaf/{page3}.jpg"` (a path, not a URL)
+in the bot's `.env`, then `docker compose up -d --build tilawah`. The folder is
+git-ignored, so **deploys never touch it**, and the `file_id` cache (in the
+database) means each page uploads to Telegram only once, so **deploys never
+re-upload** either. Refresh later by re-running `rsync`.
+
+**B. Let the server download instead.** If you would rather not upload ~90 MB,
+add a one-off populate service to the compose file (it writes to a named volume
+the bot mounts):
+
+```yaml
+  tilawah-mushaf:
+    build: ./telegram/tilawah
+    env_file: ./telegram/tilawah/.env
+    command: sh -c "pnpm data:mushaf --out /app/assets/mushaf"
+    volumes: ["tilawah-mushaf:/app/assets/mushaf"]
+    restart: 'no'
+    profiles: ['mushaf']
+# add to tilawah:  volumes: ["tilawah-mushaf:/app/assets/mushaf:ro"]
+# add top-level:   volumes: { tilawah-mushaf: {} }
+```
+
+Then `docker compose run --rm --build tilawah-mushaf` once. The server downloads
+from the source, not your laptop, but the result is the same.
+
+**C. Your own static host (URL).** If you already serve static files (a Netlify
+site, a Caddy `file_server`), upload `assets/mushaf/` there and set
+`MUSHAF_IMAGE_BASE_URL="https://your-host/mushaf/{page3}.jpg"`. No bot change.
+
 ## Running with Docker
 
 The repo ships a `Dockerfile` (runs from TypeScript with tsx, no compile step)

@@ -86,6 +86,8 @@ export interface SettingsView {
   pausedAt: Date | null;
   /** Juz of the current page, shown if known. */
   currentJuz?: number;
+  /** How the wird is delivered: "text" or "image". */
+  wirdFormat?: 'text' | 'image';
 }
 
 /** Build the status / settings summary, shared by users and the channel. */
@@ -98,7 +100,7 @@ export function settingsSummary(s: SettingsView, opts: { isChannel?: boolean } =
   else status = 'يعمل ✅';
 
   const heading = opts.isChannel ? 'إعدادات القناة:' : 'إعداداتك الحالية:';
-  return [
+  const lines = [
     heading,
     `• الحالة: ${status}`,
     `• الورد اليومي: ${wirdSizeSummaryAr(s.wirdSize)}`,
@@ -106,7 +108,13 @@ export function settingsSummary(s: SettingsView, opts: { isChannel?: boolean } =
     `• وقت الإرسال: ${formatTimeAr(s.deliveryHour, s.deliveryMinute)}`,
     `• الأيام: ${daysSummaryAr(s.activeDays)}`,
     `• المنطقة الزمنية: ${ltr(s.timezone)}`,
-  ].join('\n');
+  ];
+  // Show the delivery format (image is the default). Omitted only when a caller
+  // does not track it.
+  if (s.wirdFormat) {
+    lines.push(`• طريقة الإرسال: ${s.wirdFormat === 'image' ? 'صورة 🖼️' : 'نص 📝'}`);
+  }
+  return lines.join('\n');
 }
 
 export const COPY = {
@@ -147,6 +155,7 @@ export const COPY = {
     'الأوامر:',
     '/today: قراءة ورد اليوم الآن (يُحتسب وردك لهذا اليوم)',
     `/wird: حجم الورد اليومي (١ إلى ٢٠ صفحة)، مثل ${ltr('/wird 5')}`,
+    '/format: طريقة الإرسال، نصًّا أو صورة من المصحف',
     `/page: الانتقال إلى صفحة معيّنة (١ إلى ٦٠٤)، مثل ${ltr('/page 100')}`,
     '/time: ضبط وقت الإرسال',
     '/days: اختيار أيام الإرسال',
@@ -178,6 +187,29 @@ export const COPY = {
   wirdInvalid: `الرجاء كتابة رقم صحيح من ١ إلى ٢٠، مثل ${ltr('/wird 5')}`,
   wirdUpdated: (pages: number) =>
     `تم ضبط الورد على ${wirdSizeSummaryAr(pages)} في اليوم ✅\nبهذه السرعة تختم القرآن في نحو ${toArabicDigits(khatmaDays(pages))} يومًا بإذن الله.`,
+
+  // ── Delivery format (text or image) ───────────────────────────────
+  formatPrompt: (current: 'text' | 'image', imageAvailable: boolean) => {
+    const now =
+      current === 'image'
+        ? 'يصلك وردك الآن على هيئة صورة من المصحف.'
+        : 'يصلك وردك الآن على هيئة نص.';
+    const lines = [`طريقة إرسال وردك: ${current === 'image' ? 'صورة 🖼️' : 'نص 📝'}`, now];
+    if (imageAvailable) {
+      lines.push('اختر الطريقة التي تناسبك:');
+      lines.push('• النص يمكنك نسخه والبحث فيه.');
+      lines.push('• الصورة تعرض صفحة المصحف كما هي.');
+    } else {
+      lines.push('خيار الصورة غير متاح في هذا البوت حاليًا.');
+    }
+    return lines.join('\n');
+  },
+  formatUpdated: (format: 'text' | 'image') =>
+    format === 'image'
+      ? 'تم ✅ سيصلك وردك على هيئة صورة من المصحف بإذن الله 🖼️'
+      : 'تم ✅ سيصلك وردك على هيئة نص بإذن الله 📝',
+  formatImageUnavailable:
+    'عذرًا، خيار الصورة غير متاح في هذا البوت حاليًا. سيبقى وردك على هيئة نص 📝',
 
   // ── Current page (go to a page) ───────────────────────────────────
   pagePrompt: (current: number, juz?: number) =>
@@ -240,6 +272,24 @@ export const COPY = {
 
   adminTimeUsage: `اكتب وقت نشر القناة بنظام ٢٤ ساعة، مثل ${ltr('/admin_time 06:00')}`,
   adminTzUsage: `اكتب المنطقة الزمنية للقناة، مثل ${ltr('/admin_tz Africa/Cairo')}`,
+
+  adminFormatUsage: (current: 'text' | 'image', imageAvailable: boolean) => {
+    const lines = [
+      `طريقة نشر القناة الحالية: ${current === 'image' ? 'صورة 🖼️' : 'نص 📝'}`,
+      `اكتب ${ltr('/admin_format text')} للنص أو ${ltr('/admin_format image')} للصورة.`,
+    ];
+    if (!imageAvailable) {
+      lines.push('ملاحظة: خيار الصورة غير مُعدّ بعد (اضبط MUSHAF_IMAGE_BASE_URL في الإعدادات).');
+    }
+    return lines.join('\n');
+  },
+  adminFormatInvalid: `القيمة غير صحيحة. اكتب ${ltr('text')} أو ${ltr('image')}.`,
+  adminFormatImageUnavailable:
+    'خيار الصورة غير مُعدّ. اضبط MUSHAF_IMAGE_BASE_URL في الإعدادات أولًا، ثم أعد المحاولة.',
+  adminFormatDone: (format: 'text' | 'image') =>
+    format === 'image'
+      ? 'تم ✅ ستنشر القناة الورد على هيئة صورة من المصحف 🖼️'
+      : 'تم ✅ ستنشر القناة الورد على هيئة نص 📝',
 
   channelPaused: 'تم إيقاف نشر القناة مؤقتًا. للعودة اكتب /admin_pause',
   channelResumed: 'تمت العودة لنشر القناة ✅',

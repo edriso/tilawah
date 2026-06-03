@@ -47,10 +47,21 @@ COPY . .
 # COPY ordering and guarantees it matches the committed schema.
 RUN pnpm db:generate
 
+# Mount point for the optional self-hosted Mushaf page images. At runtime either
+# a bind mount (you upload the verified folder) or a named volume (the server
+# downloads it) is mounted here; see docs/DEPLOY.md. We create it owned by `node`
+# so that, if a fresh NAMED volume is used, Docker seeds it from this directory
+# (contents AND ownership) and the one-off `pnpm data:mushaf` populate (run as
+# `node`) can write into it; the running bot only reads. The image ships it
+# empty (.dockerignore keeps the ~90 MB of images out, so a rebuild never
+# re-bundles them).
+RUN mkdir -p /app/assets/mushaf && chown -R node:node /app/assets
+
 # This image is the production artifact, so default to production for runtime.
 ENV NODE_ENV=production
 
-# Drop root for runtime. The bot writes nothing to disk; logs go to stdout.
+# Drop root for runtime. The bot writes nothing to disk (logs go to stdout); the
+# only path it may write is the Mushaf image volume during the one-off populate.
 USER node
 
 # Liveness: hit the in-process /health server so an orchestrator can tell a

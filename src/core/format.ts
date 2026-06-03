@@ -35,8 +35,11 @@ export function formatAyahLine(ayah: PageAyah): string {
  * The page banner, e.g. "📖 صفحة ٢٥ • الجزء ٢". A page that straddles a juz
  * boundary (only a handful do, e.g. page 62) names both, e.g. "الجزءان ٣ و٤",
  * so the label is never wrong for the part of the page in the next juz.
+ *
+ * Exported because the image format reuses it verbatim as a photo's caption,
+ * so the text and image formats label a page identically (one source of truth).
  */
-function pageHeader(page: PageContent): string {
+export function pageBanner(page: PageContent): string {
   const juzEnd = page.juzEnd ?? page.juz;
   const juzLabel =
     juzEnd > page.juz
@@ -95,7 +98,7 @@ function renderSection(section: SurahSection, basmala: string): string {
  * splits at AYAH boundaries and guarantees every message fits.
  */
 export function formatPage(page: PageContent, basmala: string): string[] {
-  const header = pageHeader(page);
+  const header = pageBanner(page);
   const whole = [header, ...sectionsOf(page).map((s) => renderSection(s, basmala))].join('\n\n');
   if (whole.length <= SAFE_LIMIT) return [whole];
   return chunkPage(page, basmala, header);

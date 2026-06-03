@@ -1,4 +1,4 @@
-import { loadEnv } from './core';
+import { loadEnv, hasPagePlaceholder } from './core';
 
 // Load the single root .env before we read any variable.
 loadEnv();
@@ -44,6 +44,22 @@ function parseBool(raw: string | undefined, defaultValue: boolean): boolean {
   return !['false', '0', 'no', 'off'].includes(raw.trim().toLowerCase());
 }
 
+/** Validate the optional Mushaf image source template. Empty = feature off
+ *  (null). It may be an http(s) URL (Telegram fetches it) or a local file path
+ *  (the bot uploads it); either way it must carry a {page}/{page3} placeholder,
+ *  so we fail fast on a template that could never form a real page source. */
+function parseImageBaseUrl(raw: string | undefined): string | null {
+  const url = raw?.trim();
+  if (!url) return null;
+  if (!hasPagePlaceholder(url)) {
+    throw new Error(
+      `MUSHAF_IMAGE_BASE_URL must contain a {page} or {page3} placeholder (got "${url}"). ` +
+        `Example: https://your-host.example/mushaf/{page3}.png or /app/assets/mushaf/{page3}.jpg`,
+    );
+  }
+  return url;
+}
+
 export const config = Object.freeze({
   // REQUIRED. Bot token from @BotFather.
   botToken: requireEnv('BOT_TOKEN').trim(),
@@ -56,10 +72,20 @@ export const config = Object.freeze({
   adminIds: parseIdSet(process.env.ADMIN_TELEGRAM_IDS),
   // Whether the personal user bot serves individual users. Off = channel-only.
   userWirdEnabled: parseBool(process.env.USER_WIRD_ENABLED, true),
+  // Template URL for Madani Mushaf page images, or null when the image
+  // delivery format is not configured. See parseImageBaseUrl and .env.example.
+  mushafImageBaseUrl: parseImageBaseUrl(process.env.MUSHAF_IMAGE_BASE_URL),
   isDev: process.env.NODE_ENV !== 'production',
 });
 
 /** True when at least one channel chat is configured. */
 export function channelEnabled(): boolean {
   return config.channelChatIdRaw !== null;
+}
+
+/** True when the image delivery format can be served (a page-image source is
+ *  configured). When false, /format offers text only and any image-format
+ *  subscriber falls back to text. */
+export function imageWirdAvailable(): boolean {
+  return config.mushafImageBaseUrl !== null;
 }

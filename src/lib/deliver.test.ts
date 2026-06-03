@@ -11,7 +11,10 @@ const h = vi.hoisted(() => ({
   getBasmala: vi.fn(),
   commitDelivery: vi.fn(),
   markBlocked: vi.fn(),
+  getCachedPageImageIds: vi.fn(),
+  cachePageImageId: vi.fn(),
   sendMessages: vi.fn(),
+  sendPhoto: vi.fn(),
 }));
 
 vi.mock('../database', () => ({
@@ -22,17 +25,31 @@ vi.mock('../database', () => ({
   getBasmala: h.getBasmala,
   commitDelivery: h.commitDelivery,
   markBlocked: h.markBlocked,
+  getCachedPageImageIds: h.getCachedPageImageIds,
+  cachePageImageId: h.cachePageImageId,
   KIND_USER: 'user',
   KIND_CHANNEL: 'channel',
 }));
 vi.mock('./send', () => ({ sendMessages: h.sendMessages }));
-vi.mock('../config', () => ({ config: { userWirdEnabled: true }, channelEnabled: () => true }));
+vi.mock('./send-photo', () => ({ sendPhoto: h.sendPhoto }));
+// A page-image source is configured by default so the image tests exercise the
+// real photo path; the text tests don't reach it. The fallback test nulls it.
+vi.mock('../config', () => ({
+  config: { userWirdEnabled: true, mushafImageBaseUrl: 'https://x/{page3}.png' },
+  channelEnabled: () => true,
+}));
 vi.mock('./logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
+import { InputFile } from 'grammy';
 import { deliverDueSubscribers, buildTodayView } from './deliver';
+import { config } from '../config';
 import { advanceStartPage } from '../core';
+
+// The real config is frozen (readonly); the mock is a plain object we tweak per
+// test, so reach it through a mutable view.
+const mutableConfig = config as { mushafImageBaseUrl: string | null };
 
 const NOW = new Date('2026-06-01T12:00:00Z');
 const fakeBot = {} as never;
@@ -80,12 +97,17 @@ function sub(over: Record<string, unknown> = {}) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // Restore the image source each run, in case a test nulled it.
+  mutableConfig.mushafImageBaseUrl = 'https://x/{page3}.png';
   h.getBasmala.mockResolvedValue('بسم الله');
   h.getWird.mockResolvedValue(CONTENT);
   h.hasDeliveryFor.mockResolvedValue(false);
   h.getDeliveryFor.mockResolvedValue(null);
   h.commitDelivery.mockResolvedValue('sent');
   h.sendMessages.mockResolvedValue('ok');
+  h.getCachedPageImageIds.mockResolvedValue(new Map());
+  h.cachePageImageId.mockResolvedValue({});
+  h.sendPhoto.mockResolvedValue({ result: 'ok', fileId: 'FILE_1' });
 });
 
 // NOW (2026-06-01, UTC) is a Monday, ISO weekday 1.
@@ -103,7 +125,7 @@ describe('buildTodayView (/today claims today)', () => {
   it('claims today on an active, unpaused, not-yet-delivered day', async () => {
     const view = await buildTodayView(todaySub(), NOW);
     expect(view.alreadyDelivered).toBe(false);
-    expect(view.messages.length).toBeGreaterThan(0);
+    expect(view.pages.length).toBeGreaterThan(0);
     expect(view.claim).toEqual({
       scheduledFor: '2026-06-01',
       startPage: 5,
@@ -124,27 +146,27 @@ describe('buildTodayView (/today claims today)', () => {
   it('is a pure peek on an off day (no claim)', async () => {
     // activeDays = 2 is Tuesday only, so Monday (NOW) is off.
     const view = await buildTodayView(todaySub({ activeDays: 2 }), NOW);
-    expect(view.messages.length).toBeGreaterThan(0);
+    expect(view.pages.length).toBeGreaterThan(0);
     expect(view.claim).toBeNull();
     expect(view.alreadyDelivered).toBe(false);
   });
 
   it('is a pure peek while paused (no claim)', async () => {
     const view = await buildTodayView(todaySub({ pausedAt: new Date() }), NOW);
-    expect(view.messages.length).toBeGreaterThan(0);
+    expect(view.pages.length).toBeGreaterThan(0);
     expect(view.claim).toBeNull();
   });
 
   it('returns no messages (and no claim) when content cannot be built', async () => {
     h.getWird.mockResolvedValue([]);
     const view = await buildTodayView(todaySub(), NOW);
-    expect(view.messages).toEqual([]);
+    expect(view.pages).toEqual([]);
     expect(view.claim).toBeNull();
   });
 
   it('reposition shows the new page and claims when today is still free', async () => {
     const view = await buildTodayView(todaySub({ currentPage: 5 }), NOW, { reposition: true });
-    expect(view.messages.length).toBeGreaterThan(0);
+    expect(view.pages.length).toBeGreaterThan(0);
     expect(view.claim).toEqual({
       scheduledFor: '2026-06-01',
       startPage: 5,
@@ -158,7 +180,7 @@ describe('buildTodayView (/today claims today)', () => {
     h.getDeliveryFor.mockResolvedValue({ startPage: 10, pageCount: 2 });
     const view = await buildTodayView(todaySub({ currentPage: 5 }), NOW, { reposition: true });
     expect(view.claim).toBeNull();
-    expect(view.messages.length).toBeGreaterThan(0);
+    expect(view.pages.length).toBeGreaterThan(0);
     // Shows the just-set current page, NOT the earlier delivered pages.
     expect(h.getWird).toHaveBeenCalledWith(5, 1);
     expect(h.getWird).not.toHaveBeenCalledWith(10, 2);
@@ -256,5 +278,87 @@ describe('deliverDueSubscribers', () => {
     const stats = await deliverDueSubscribers(fakeBot, NOW);
     expect(stats.failed).toBe(1);
     expect(stats.sent).toBe(1); // the second still delivered
+  });
+});
+
+describe('deliverDueSubscribers (image format)', () => {
+  it('sends a photo (not text) from the source URL and caches the file_id', async () => {
+    h.listDeliverableSubscribers.mockResolvedValue([sub({ wirdFormat: 'image', currentPage: 1 })]);
+    const stats = await deliverDueSubscribers(fakeBot, NOW);
+
+    expect(h.sendMessages).not.toHaveBeenCalled();
+    expect(h.sendPhoto).toHaveBeenCalledOnce();
+    // page 1 -> {page3} -> 001, with a caption
+    const [, chatId, photo, caption] = h.sendPhoto.mock.calls[0];
+    expect(chatId).toBe(123n);
+    expect(photo).toBe('https://x/001.png');
+    expect(typeof caption).toBe('string');
+    // The returned file_id is cached for next time.
+    expect(h.cachePageImageId).toHaveBeenCalledWith(1, 'FILE_1');
+    expect(h.commitDelivery).toHaveBeenCalledOnce();
+    expect(stats).toMatchObject({ due: 1, sent: 1, failed: 0 });
+  });
+
+  it('uploads a local file (InputFile) when the source is a filesystem path', async () => {
+    mutableConfig.mushafImageBaseUrl = '/srv/mushaf/{page3}.jpg'; // a path, not a URL
+    h.listDeliverableSubscribers.mockResolvedValue([sub({ wirdFormat: 'image', currentPage: 1 })]);
+    await deliverDueSubscribers(fakeBot, NOW);
+    const photoArg = h.sendPhoto.mock.calls[0][2];
+    expect(photoArg).toBeInstanceOf(InputFile); // uploaded from disk, not a URL string
+    expect(h.cachePageImageId).toHaveBeenCalledWith(1, 'FILE_1'); // file_id still cached
+  });
+
+  it('reuses a cached file_id and does not re-cache it', async () => {
+    h.listDeliverableSubscribers.mockResolvedValue([sub({ wirdFormat: 'image', currentPage: 1 })]);
+    h.getCachedPageImageIds.mockResolvedValue(new Map([[1, 'CACHED_1']]));
+    h.sendPhoto.mockResolvedValue({ result: 'ok', fileId: 'CACHED_1' });
+
+    await deliverDueSubscribers(fakeBot, NOW);
+
+    expect(h.sendPhoto.mock.calls[0][2]).toBe('CACHED_1'); // sent by file_id, not URL
+    expect(h.cachePageImageId).not.toHaveBeenCalled(); // unchanged, no re-cache
+  });
+
+  it('falls back to text when the photo send fails (never wedges on a bad page)', async () => {
+    h.listDeliverableSubscribers.mockResolvedValue([sub({ wirdFormat: 'image', currentPage: 1 })]);
+    h.sendPhoto.mockResolvedValue({ result: 'failed' }); // e.g. missing page / bad URL
+    // The text fallback succeeds (sendMessages defaults to 'ok' in beforeEach).
+    const stats = await deliverDueSubscribers(fakeBot, NOW);
+    expect(h.sendPhoto).toHaveBeenCalledOnce();
+    expect(h.sendMessages).toHaveBeenCalledOnce(); // delivered as text instead
+    expect(h.commitDelivery).toHaveBeenCalledOnce();
+    expect(stats).toMatchObject({ due: 1, sent: 1, failed: 0 });
+  });
+
+  it('does not advance when BOTH the photo and the text fallback fail (outage)', async () => {
+    h.listDeliverableSubscribers.mockResolvedValue([sub({ wirdFormat: 'image', currentPage: 1 })]);
+    h.sendPhoto.mockResolvedValue({ result: 'failed' });
+    h.sendMessages.mockResolvedValue('failed');
+    const stats = await deliverDueSubscribers(fakeBot, NOW);
+    expect(h.commitDelivery).not.toHaveBeenCalled();
+    expect(stats).toMatchObject({ due: 1, failed: 1, sent: 0 });
+  });
+
+  it('marks a user blocked on a 403 photo send and does NOT fall back to text', async () => {
+    h.listDeliverableSubscribers.mockResolvedValue([
+      sub({ id: 1, kind: 'user', wirdFormat: 'image', currentPage: 1 }),
+    ]);
+    h.sendPhoto.mockResolvedValue({ result: 'blocked' });
+    const stats = await deliverDueSubscribers(fakeBot, NOW);
+    expect(h.sendMessages).not.toHaveBeenCalled(); // a blocked chat blocks text too
+    expect(h.markBlocked).toHaveBeenCalledWith(1);
+    expect(h.commitDelivery).not.toHaveBeenCalled();
+    expect(stats).toMatchObject({ due: 1, failed: 1, sent: 0 });
+  });
+
+  it('falls back to text when image is requested but no source is configured', async () => {
+    mutableConfig.mushafImageBaseUrl = null; // restored in beforeEach
+    h.listDeliverableSubscribers.mockResolvedValue([sub({ wirdFormat: 'image', currentPage: 1 })]);
+    const stats = await deliverDueSubscribers(fakeBot, NOW);
+    // The holy text still goes out, as text; no photo attempted.
+    expect(h.sendPhoto).not.toHaveBeenCalled();
+    expect(h.sendMessages).toHaveBeenCalledOnce();
+    expect(h.commitDelivery).toHaveBeenCalledOnce();
+    expect(stats).toMatchObject({ due: 1, sent: 1 });
   });
 });

@@ -1,10 +1,17 @@
 import { Bot, type Context } from 'grammy';
-import { activeDaysList, nextPageAfter } from './core';
+import {
+  activeDaysList,
+  nextPageAfter,
+  normalizeWirdFormat,
+  isWirdFormat,
+  WIRD_FORMAT_IMAGE,
+} from './core';
 import {
   ensureUser,
   getChannelSubscriber,
   getJuzForPage,
   setWirdSize,
+  setWirdFormat,
   setCurrentPage,
   toggleActiveDay,
   setDeliveryTime,
@@ -14,15 +21,16 @@ import {
   commitDelivery,
   type Subscriber,
 } from './database';
-import { config } from './config';
+import { config, imageWirdAvailable } from './config';
 import { logger } from './lib/logger';
 import { COPY, settingsSummary, formatTimeAr, daysSummaryAr } from './lib/copy';
-import { previewWird, buildTodayView, type TodayView } from './lib/deliver';
+import { previewWird, buildTodayView, sendWird, type TodayView } from './lib/deliver';
 import { runDeliveryOnce } from './scheduler';
 import { buildDaysKeyboard, DAY_TOGGLE_PREFIX, DAYS_DONE } from './lib/days-keyboard';
 import { buildTimeKeyboard, TIME_PICK_PREFIX } from './lib/time-keyboard';
 import { buildTimezoneKeyboard, TZ_PICK_PREFIX, COMMON_TIMEZONES } from './lib/timezone-keyboard';
 import { buildWirdKeyboard, WIRD_PICK_PREFIX } from './lib/wird-keyboard';
+import { buildFormatKeyboard, FORMAT_PICK_PREFIX } from './lib/format-keyboard';
 import {
   parseTime,
   isValidTimezone,
@@ -89,6 +97,7 @@ async function statusText(sub: Subscriber, isChannel = false): Promise<string> {
       currentPage: sub.currentPage,
       pausedAt: sub.pausedAt,
       currentJuz,
+      wirdFormat: normalizeWirdFormat(sub.wirdFormat),
     },
     { isChannel },
   );
@@ -127,8 +136,14 @@ async function sendTodayView(
   view: TodayView,
   now: Date,
 ): Promise<void> {
-  for (const message of view.messages) await ctx.reply(message);
-  if (view.claim) {
+  const { pagesSent } = await sendWird(bot, sub.chatId, view.pages, view.basmala, {
+    lead: view.lead,
+    format: normalizeWirdFormat(sub.wirdFormat),
+  });
+  // Claim the day only if the whole wird went out, so a send failure (e.g. an
+  // unreachable image source) leaves today unclaimed for the scheduler to
+  // deliver later, rather than recording a wird the user never fully received.
+  if (view.claim && pagesSent === view.pages.length) {
     await commitDelivery({
       subscriberId: sub.id,
       scheduledFor: view.claim.scheduledFor,
@@ -153,7 +168,7 @@ export async function repositionToPage(ctx: Context, sub: Subscriber, page: numb
   await setCurrentPage(sub.id, page);
   const now = new Date();
   const view = await buildTodayView({ ...sub, currentPage: page }, now, { reposition: true });
-  if (view.messages.length === 0) {
+  if (view.pages.length === 0) {
     logger.warn('reposition produced no wird', { subscriberId: sub.id, page });
     await ctx.reply(COPY.notReady);
     return;
@@ -177,7 +192,7 @@ bot.command('today', async (ctx) => {
   if (!sub) return;
   const now = new Date();
   const view = await buildTodayView(sub, now);
-  if (view.messages.length === 0) {
+  if (view.pages.length === 0) {
     logger.warn('buildTodayView returned no messages', { subscriberId: sub.id });
     await ctx.reply(COPY.notReady);
     return;
@@ -204,6 +219,17 @@ bot.command('wird', async (ctx) => {
   }
   await setWirdSize(sub.id, size);
   await ctx.reply(COPY.wirdUpdated(size));
+});
+
+// /format: choose how the wird arrives, text or a picture of the Mushaf page.
+// Image is offered only when a page-image source is configured on this server.
+bot.command('format', async (ctx) => {
+  const sub = await userSubscriber(ctx);
+  if (!sub) return;
+  const current = normalizeWirdFormat(sub.wirdFormat);
+  await ctx.reply(COPY.formatPrompt(current, imageWirdAvailable()), {
+    reply_markup: buildFormatKeyboard(current, imageWirdAvailable()),
+  });
 });
 
 // /page: jump to a specific Mushaf page (1..604). With no argument, show the
@@ -304,6 +330,28 @@ bot.callbackQuery(new RegExp(`^${WIRD_PICK_PREFIX}(\\d+)$`), async (ctx) => {
   await setWirdSize(sub.id, size);
   await ctx.editMessageReplyMarkup(); // remove the keyboard
   await ctx.reply(COPY.wirdUpdated(size));
+  await ctx.answerCallbackQuery();
+});
+
+// ─── Format-picker buttons ──────────────────────────────────────────
+
+bot.callbackQuery(new RegExp(`^${FORMAT_PICK_PREFIX}(text|image)$`), async (ctx) => {
+  const sub = await userFromCallback(ctx);
+  if (!sub) {
+    await ctx.answerCallbackQuery();
+    return;
+  }
+  const chosen = normalizeWirdFormat(ctx.match![1]);
+  // Image is only honoured when a source is configured; callback data is
+  // client-supplied, so re-check rather than trust the (hidden) button.
+  if (chosen === WIRD_FORMAT_IMAGE && !imageWirdAvailable()) {
+    await ctx.reply(COPY.formatImageUnavailable);
+    await ctx.answerCallbackQuery();
+    return;
+  }
+  await setWirdFormat(sub.id, chosen);
+  await ctx.editMessageReplyMarkup(); // remove the keyboard
+  await ctx.reply(COPY.formatUpdated(chosen));
   await ctx.answerCallbackQuery();
 });
 
@@ -436,6 +484,32 @@ bot.command('admin_wird', async (ctx) => {
   }
   await setWirdSize(channel.id, size);
   await ctx.reply(COPY.adminWirdDone(size));
+});
+
+// /admin_format <text|image>: how the channel posts the wird. Like the user
+// /format, but arg-based to match the other admin commands. Image needs a
+// page-image source configured (MUSHAF_IMAGE_BASE_URL).
+bot.command('admin_format', async (ctx) => {
+  const channel = await adminChannel(ctx);
+  if (!channel) return;
+  const arg = commandArg(ctx, 'admin_format');
+  if (!arg) {
+    await ctx.reply(
+      COPY.adminFormatUsage(normalizeWirdFormat(channel.wirdFormat), imageWirdAvailable()),
+    );
+    return;
+  }
+  const chosen = arg.trim().toLowerCase();
+  if (!isWirdFormat(chosen)) {
+    await ctx.reply(COPY.adminFormatInvalid);
+    return;
+  }
+  if (chosen === WIRD_FORMAT_IMAGE && !imageWirdAvailable()) {
+    await ctx.reply(COPY.adminFormatImageUnavailable);
+    return;
+  }
+  await setWirdFormat(channel.id, chosen);
+  await ctx.reply(COPY.adminFormatDone(chosen));
 });
 
 // /admin_time HH:MM: set the channel's daily post time.
@@ -610,6 +684,7 @@ async function setBotCommands() {
     await bot.api.setMyCommands([
       { command: 'today', description: 'قراءة ورد اليوم' },
       { command: 'wird', description: 'حجم الورد اليومي' },
+      { command: 'format', description: 'طريقة الإرسال: نص أو صورة' },
       { command: 'page', description: 'الانتقال إلى صفحة معيّنة' },
       { command: 'time', description: 'ضبط وقت الإرسال' },
       { command: 'days', description: 'اختيار أيام الإرسال' },
