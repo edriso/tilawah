@@ -29,7 +29,7 @@ import {
 } from '../database';
 import { config, channelEnabled } from '../config';
 import { sendMessages, type SendResult } from './send';
-import { sendPhoto } from './send-photo';
+import { sendPhoto, sendPhotoAlbum, MAX_ALBUM_SIZE } from './send-photo';
 import { COPY } from './copy';
 import { logger } from './logger';
 
@@ -62,19 +62,76 @@ export interface SendWirdResult {
   lastResult: SendResult;
 }
 
+/** Split a list into consecutive chunks of at most `size`, preserving order. */
+function chunk<T>(items: T[], size: number): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
+  return out;
+}
+
 /**
- * Send a wird (one or more pages) to a chat, ONE page at a time, in either
- * text or image format. Sending per page (not as one album) keeps the
- * partial-failure contract identical for both formats: the caller advances the
- * position by exactly `pagesSent`, so a mid-wird failure never skips a page nor
- * re-sends one that already arrived.
+ * How a page is sent as a photo: a cached Telegram file_id (resend), an http URL
+ * (Telegram fetches it), or a local file the bot uploads (InputFile, for
+ * self-hosted images on a bot with no public URL). Null when no source is
+ * configured, so the caller sends the page as text instead.
+ */
+function resolvePhoto(
+  pageNumber: number,
+  cached: Map<number, string>,
+  baseUrl: string | null,
+): string | InputFile | null {
+  const cachedId = cached.get(pageNumber);
+  if (cachedId) return cachedId;
+  if (!baseUrl) return null;
+  const src = mushafImageSource(baseUrl, pageNumber);
+  return isHttpSource(src) ? src : new InputFile(src);
+}
+
+/** A page photo's caption: the page banner, with the wird lead prepended on the
+ *  very first page of the wird only. (Each Mushaf image already shows its own
+ *  page number, so this is just a friendly header, not the only label.) */
+function imageCaption(page: PageContent, lead?: string): string {
+  const banner = pageBanner(page);
+  return lead ? `${lead}\n\n${banner}` : banner;
+}
+
+/** Remember a page's file_id for next time, unless it is already what we sent.
+ *  Updates the in-memory map too, so one wird never re-caches the same id. */
+async function cacheFileId(
+  pageNumber: number,
+  fileId: string | undefined,
+  cached: Map<number, string>,
+): Promise<void> {
+  if (!fileId || cached.get(pageNumber) === fileId) return;
+  try {
+    await cachePageImageId(pageNumber, fileId);
+    cached.set(pageNumber, fileId);
+  } catch (err) {
+    logger.warn('Could not cache page image file_id', { page: pageNumber, error: String(err) });
+  }
+}
+
+/**
+ * Send a wird (one or more pages) to a chat, in reading order, in the
+ * subscriber's chosen format. The caller advances the position by exactly
+ * `pagesSent`, so a mid-wird failure never skips a page nor re-sends one that
+ * already arrived.
  *
- * Image format sends each page as a photo. The first time a page is sent we let
- * Telegram fetch it from the configured source URL, then cache the file_id it
- * returns so every later send is a cheap reference. If the image format is
- * requested but no source is configured (and the page is not yet cached), we
- * fall back to text for that page: the holy text always goes out, never an
- * empty or skipped send.
+ * TEXT: one message (set) per page, in order.
+ *
+ * IMAGE: pages are grouped into albums of up to 10 and sent with one
+ * sendMediaGroup per group, so a multi-page wird arrives as a single, ordered,
+ * one-notification post that reads like a slice of the Mushaf. A 1-page group is
+ * a plain photo. Each page image already shows its own number, so only the first
+ * item of the first album carries the lead/banner caption. The first time a page
+ * is sent, Telegram is given the source (URL or uploaded file) and we cache the
+ * file_id it returns, so every later send is a cheap reference.
+ *
+ * Robustness: an album is atomic, so if a group fails (e.g. one missing page) we
+ * fall back to sending that group page-by-page, and a failed single photo falls
+ * back to TEXT for that page. So a bad source can never wedge a subscriber or
+ * cost the rest of the wird: the holy text always goes out. (A real Telegram
+ * outage fails the text send too, so nothing is sent and it is retried next run.)
  */
 export async function sendWird(
   bot: Bot<Context>,
@@ -83,86 +140,96 @@ export async function sendWird(
   basmala: string,
   opts: SendWirdOptions,
 ): Promise<SendWirdResult> {
-  const useImage = opts.format === WIRD_FORMAT_IMAGE;
+  if (opts.format !== WIRD_FORMAT_IMAGE) {
+    return sendPagesAsText(bot, chatId, pages, basmala, opts.lead);
+  }
+
   const baseUrl = config.mushafImageBaseUrl ?? null;
-  // One lookup of the cached file_ids for the whole wird (image format only).
-  const cached = useImage
-    ? await getCachedPageImageIds(pages.map((p) => p.pageNumber))
-    : new Map<number, string>();
+  const cached = await getCachedPageImageIds(pages.map((p) => p.pageNumber));
 
   let pagesSent = 0;
   let lastResult: SendResult = 'ok';
 
-  for (let i = 0; i < pages.length; i++) {
-    const page = pages[i]!;
-    const lead = i === 0 ? opts.lead : undefined;
+  // Send one page as a photo when a source resolves, else as text. Caches a new
+  // file_id on success. 'blocked' stops the wird (text would be blocked too);
+  // 'failed' falls back to text so a bad page never wedges the reader.
+  const sendOnePage = async (page: PageContent, lead?: string): Promise<SendResult> => {
+    const photo = resolvePhoto(page.pageNumber, cached, baseUrl);
+    if (photo === null) {
+      logger.debug('No page-image source; sending this page as text', { page: page.pageNumber });
+      return sendMessages(bot, chatId, formatWird([page], basmala, lead));
+    }
+    const { result, fileId } = await sendPhoto(bot, chatId, photo, imageCaption(page, lead));
+    if (result === 'ok') {
+      await cacheFileId(page.pageNumber, fileId, cached);
+      return 'ok';
+    }
+    if (result === 'blocked') return 'blocked';
+    logger.warn('Image send failed; falling back to text for this page', { page: page.pageNumber });
+    return sendMessages(bot, chatId, formatWird([page], basmala, lead));
+  };
 
-    if (useImage) {
-      const cachedId = cached.get(page.pageNumber);
-      const built = baseUrl ? mushafImageSource(baseUrl, page.pageNumber) : null;
-      // What to send: a cached file_id (Telegram resends), an http URL (Telegram
-      // fetches it), or a local file the bot uploads itself (InputFile) for
-      // self-hosted images on a bot with no public URL.
-      const photo: string | InputFile | null = cachedId
-        ? cachedId
-        : built === null
-          ? null
-          : isHttpSource(built)
-            ? built
-            : new InputFile(built);
-      if (photo !== null) {
-        const banner = pageBanner(page);
-        const caption = lead ? `${lead}\n\n${banner}` : banner;
-        const { result, fileId } = await sendPhoto(bot, chatId, photo, caption);
-        if (result === 'ok') {
-          // Cache the file_id only when we sent by URL (or it changed), so later
-          // sends reference it instead of re-fetching the source.
-          if (fileId && fileId !== cachedId) {
-            try {
-              await cachePageImageId(page.pageNumber, fileId);
-            } catch (err) {
-              logger.warn('Could not cache page image file_id', {
-                page: page.pageNumber,
-                error: String(err),
-              });
-            }
-          }
-          lastResult = 'ok';
-          pagesSent++;
-          continue;
-        }
-        if (result === 'blocked') {
-          // The chat blocked the bot; a text send would be blocked too. Stop and
-          // let the caller mark them blocked.
-          lastResult = 'blocked';
-          break;
-        }
-        // result === 'failed': this page could not be sent as a photo (a page
-        // missing from the source, a non-image URL, or over Telegram's size
-        // limit). Fall through to TEXT for this page so a bad source can never
-        // wedge a subscriber (or the channel) on it forever: the holy text still
-        // goes out and the position advances. A warning so a broken source is
-        // visible. (A genuine Telegram outage fails the text send below too, so
-        // nothing is sent and it is simply retried next run.)
-        logger.warn('Image send failed; falling back to text for this page', {
-          page: page.pageNumber,
-        });
-      } else {
-        // No source configured at all: expected when images are simply not set
-        // up. Debug, not warn, since with image as the default it would
-        // otherwise log for every page of every send.
-        logger.debug('No page-image source; sending this page as text', {
-          page: page.pageNumber,
-        });
+  for (const group of chunk(pages, MAX_ALBUM_SIZE)) {
+    const lead = pagesSent === 0 ? opts.lead : undefined;
+    const photos = group.map((p) => resolvePhoto(p.pageNumber, cached, baseUrl));
+
+    // Album the group when it has 2+ pages and every page has a real source
+    // (a page with no source must go as text, which cannot sit in a photo album).
+    if (group.length >= 2 && photos.every((ph) => ph !== null)) {
+      const items = group.map((p, i) => ({
+        media: photos[i]!,
+        caption: i === 0 ? imageCaption(p, lead) : undefined,
+      }));
+      const album = await sendPhotoAlbum(bot, chatId, items);
+      if (album.result === 'ok') {
+        await Promise.all(group.map((p, i) => cacheFileId(p.pageNumber, album.fileIds[i], cached)));
+        pagesSent += group.length;
+        lastResult = 'ok';
+        continue;
       }
+      if (album.result === 'blocked') {
+        lastResult = 'blocked';
+        break;
+      }
+      logger.warn('Album send failed; sending this group page-by-page', {
+        startPage: group[0]!.pageNumber,
+        count: group.length,
+      });
     }
 
-    const messages = formatWird([page], basmala, lead);
+    // Per-page send: a single page, an un-albumable group, or an album that
+    // failed. Each page falls back to text on its own if needed.
+    let broke = false;
+    for (let i = 0; i < group.length; i++) {
+      lastResult = await sendOnePage(group[i]!, i === 0 ? lead : undefined);
+      if (lastResult !== 'ok') {
+        broke = true;
+        break;
+      }
+      pagesSent++;
+    }
+    if (broke) break;
+  }
+
+  return { pagesSent, lastResult };
+}
+
+/** Send each page as a plain-text message (set), in order. */
+async function sendPagesAsText(
+  bot: Bot<Context>,
+  chatId: bigint,
+  pages: PageContent[],
+  basmala: string,
+  lead?: string,
+): Promise<SendWirdResult> {
+  let pagesSent = 0;
+  let lastResult: SendResult = 'ok';
+  for (let i = 0; i < pages.length; i++) {
+    const messages = formatWird([pages[i]!], basmala, i === 0 ? lead : undefined);
     lastResult = await sendMessages(bot, chatId, messages);
     if (lastResult !== 'ok') break;
     pagesSent++;
   }
-
   return { pagesSent, lastResult };
 }
 

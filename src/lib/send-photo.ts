@@ -1,8 +1,11 @@
 import type { Bot, Context, InputFile } from 'grammy';
-import { GrammyError } from 'grammy';
+import { GrammyError, InputMediaBuilder } from 'grammy';
 import type { Message } from 'grammy/types';
 import type { SendResult } from './send';
 import { logger } from './logger';
+
+/** Telegram's media-group (album) size limit: 2 to 10 items per album. */
+export const MAX_ALBUM_SIZE = 10;
 
 // Sending a Mushaf page as a photo, for the optional "image" delivery format.
 // This mirrors the plain-text sender in the kernel (telegram-bot-kit/send):
@@ -76,5 +79,71 @@ export async function sendPhoto(
     }
     logger.error('Failed to send photo', { chatId: String(chatId), error: String(err) });
     return { result: 'failed' };
+  }
+}
+
+/** One photo in an album: its source (URL, cached file_id, or InputFile) and an
+ *  optional caption. Telegram shows only the FIRST item's caption for the
+ *  album, so callers set it on the first item alone. */
+export interface AlbumPhoto {
+  media: string | InputFile;
+  caption?: string;
+}
+
+export interface AlbumSendResult {
+  result: SendResult;
+  /** file_id of each sent photo, index-aligned with the input items (so each
+   *  page's id can be cached). Empty on a failed/blocked send. */
+  fileIds: (string | undefined)[];
+}
+
+/**
+ * Send 2..10 photos as a single album (media group). The pages arrive in array
+ * order, grouped under one notification, which reads like a slice of the Mushaf
+ * (each page image already shows its own number, so only the first item carries
+ * a caption: the wird lead / starting banner).
+ *
+ * Atomic: Telegram delivers the whole group or none, so the result is the same
+ * SendResult as a single photo (ok / blocked / failed) for the group as a whole.
+ * The caller falls back to per-page sending on a 'failed' so one bad page never
+ * costs the rest of the wird. A 429 is waited out once, like the single sender.
+ */
+export async function sendPhotoAlbum(
+  bot: Bot<Context>,
+  chatId: bigint,
+  photos: AlbumPhoto[],
+): Promise<AlbumSendResult> {
+  const media = photos.map((p) =>
+    InputMediaBuilder.photo(p.media, p.caption ? { caption: p.caption } : {}),
+  );
+  const send = () => bot.api.sendMediaGroup(Number(chatId), media);
+  try {
+    return { result: 'ok', fileIds: (await send()).map(largestPhotoFileId) };
+  } catch (err) {
+    if (err instanceof GrammyError && err.error_code === 403) {
+      logger.info('Subscriber has blocked the bot', { chatId: String(chatId) });
+      return { result: 'blocked', fileIds: [] };
+    }
+    if (err instanceof GrammyError && err.error_code === 429) {
+      const retryAfter = err.parameters?.retry_after ?? 1;
+      if (retryAfter <= MAX_RETRY_AFTER_SECONDS) {
+        logger.warn('Rate limited, waiting then retrying once', {
+          chatId: String(chatId),
+          retryAfter,
+        });
+        await sleep(retryAfter * 1000);
+        try {
+          return { result: 'ok', fileIds: (await send()).map(largestPhotoFileId) };
+        } catch (retryErr) {
+          logger.error('Album send failed after retry', {
+            chatId: String(chatId),
+            error: String(retryErr),
+          });
+          return { result: 'failed', fileIds: [] };
+        }
+      }
+    }
+    logger.error('Failed to send album', { chatId: String(chatId), error: String(err) });
+    return { result: 'failed', fileIds: [] };
   }
 }

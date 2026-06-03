@@ -66,11 +66,7 @@ const sha256 = (buf: Buffer) => createHash('sha256').update(buf).digest('hex');
 function looksLikeImage(buf: Buffer): boolean {
   const jpeg = buf.length > 3 && buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff;
   const png =
-    buf.length > 8 &&
-    buf[0] === 0x89 &&
-    buf[1] === 0x50 &&
-    buf[2] === 0x4e &&
-    buf[3] === 0x47;
+    buf.length > 8 && buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47;
   return jpeg || png;
 }
 
@@ -79,7 +75,9 @@ async function downloadPage(template: string, page: number): Promise<Buffer> {
   let lastErr = '';
   for (let attempt = 0; attempt <= RETRIES; attempt++) {
     try {
-      const res = await fetch(url, { headers: { 'User-Agent': 'tilawah-bot/1.0 (mushaf images)' } });
+      const res = await fetch(url, {
+        headers: { 'User-Agent': 'tilawah-bot/1.0 (mushaf images)' },
+      });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const buf = Buffer.from(await res.arrayBuffer());
       if (!looksLikeImage(buf)) throw new Error('not a JPEG/PNG (got an error page?)');
@@ -97,7 +95,11 @@ async function downloadPage(template: string, page: number): Promise<Buffer> {
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /** Run tasks with a small concurrency cap, preserving order of results. */
-async function pool<T>(items: number[], limit: number, fn: (n: number) => Promise<T>): Promise<T[]> {
+async function pool<T>(
+  items: number[],
+  limit: number,
+  fn: (n: number) => Promise<T>,
+): Promise<T[]> {
   const out: T[] = new Array(items.length);
   let next = 0;
   async function worker() {
@@ -215,7 +217,9 @@ async function main(): Promise<void> {
   ).toFixed(1);
   console.log(`\n✓ Saved ${pages.length} pages (${totalMb} MB) + manifest.json to ${outDir}`);
   if (prev && changed.length) {
-    console.log(`⚠ ${changed.length} page(s) changed vs the previous manifest: ${changed.join(', ')}`);
+    console.log(
+      `⚠ ${changed.length} page(s) changed vs the previous manifest: ${changed.join(', ')}`,
+    );
   }
   console.log(
     `\nServe them and point the bot at them, e.g. on your own host:\n` +

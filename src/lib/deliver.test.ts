@@ -15,6 +15,7 @@ const h = vi.hoisted(() => ({
   cachePageImageId: vi.fn(),
   sendMessages: vi.fn(),
   sendPhoto: vi.fn(),
+  sendPhotoAlbum: vi.fn(),
 }));
 
 vi.mock('../database', () => ({
@@ -31,7 +32,11 @@ vi.mock('../database', () => ({
   KIND_CHANNEL: 'channel',
 }));
 vi.mock('./send', () => ({ sendMessages: h.sendMessages }));
-vi.mock('./send-photo', () => ({ sendPhoto: h.sendPhoto }));
+vi.mock('./send-photo', () => ({
+  sendPhoto: h.sendPhoto,
+  sendPhotoAlbum: h.sendPhotoAlbum,
+  MAX_ALBUM_SIZE: 10,
+}));
 // A page-image source is configured by default so the image tests exercise the
 // real photo path; the text tests don't reach it. The fallback test nulls it.
 vi.mock('../config', () => ({
@@ -108,6 +113,11 @@ beforeEach(() => {
   h.getCachedPageImageIds.mockResolvedValue(new Map());
   h.cachePageImageId.mockResolvedValue({});
   h.sendPhoto.mockResolvedValue({ result: 'ok', fileId: 'FILE_1' });
+  // Album succeeds by default, returning a file_id per item (FA1, FA2, ...).
+  h.sendPhotoAlbum.mockImplementation(async (_bot, _chatId, items: { caption?: string }[]) => ({
+    result: 'ok',
+    fileIds: items.map((_, i) => `FA${i + 1}`),
+  }));
 });
 
 // NOW (2026-06-01, UTC) is a Monday, ISO weekday 1.
@@ -362,25 +372,24 @@ describe('deliverDueSubscribers (image format)', () => {
     expect(stats).toMatchObject({ due: 1, sent: 1 });
   });
 
-  it('sends one photo per page for a multi-page image wird (lead only on page 1)', async () => {
+  it('sends a multi-page image wird as ONE album, in order, lead on the first item only', async () => {
     h.listDeliverableSubscribers.mockResolvedValue([
       sub({ wirdFormat: 'image', wirdSize: 2, currentPage: 1 }),
     ]);
     h.getWird.mockResolvedValue(TWO_PAGES);
-    h.sendPhoto
-      .mockResolvedValueOnce({ result: 'ok', fileId: 'F1' })
-      .mockResolvedValueOnce({ result: 'ok', fileId: 'F2' });
 
     const stats = await deliverDueSubscribers(fakeBot, NOW);
 
-    expect(h.sendPhoto).toHaveBeenCalledTimes(2); // a photo per page
+    expect(h.sendPhotoAlbum).toHaveBeenCalledOnce(); // one grouped, ordered post
+    expect(h.sendPhoto).not.toHaveBeenCalled();
     expect(h.sendMessages).not.toHaveBeenCalled();
-    // The lead line ("🌿 وردك اليوم") is on the first page's caption only.
-    expect(h.sendPhoto.mock.calls[0][3]).toContain('🌿');
-    expect(h.sendPhoto.mock.calls[1][3]).not.toContain('🌿');
-    // Both pages cached, and the position advances by the full 2.
-    expect(h.cachePageImageId).toHaveBeenCalledWith(1, 'F1');
-    expect(h.cachePageImageId).toHaveBeenCalledWith(2, 'F2');
+    const items = h.sendPhotoAlbum.mock.calls[0][2];
+    expect(items).toHaveLength(2); // page order preserved by the array
+    expect(items[0].caption).toContain('🌿'); // lead on the first item
+    expect(items[1].caption).toBeUndefined(); // Telegram shows only the first caption
+    // Each page's returned file_id is cached, and the position advances by 2.
+    expect(h.cachePageImageId).toHaveBeenCalledWith(1, 'FA1');
+    expect(h.cachePageImageId).toHaveBeenCalledWith(2, 'FA2');
     expect(h.commitDelivery.mock.calls[0][0]).toMatchObject({
       pageCount: 2,
       nextPage: advanceStartPage(1, 2),
@@ -388,18 +397,20 @@ describe('deliverDueSubscribers (image format)', () => {
     expect(stats).toMatchObject({ due: 1, sent: 1, failed: 0 });
   });
 
-  it('on a multi-page image wird, one failed page falls back to text and the wird still completes', async () => {
+  it('falls back to per-page (image then text) when the album send fails, and still completes', async () => {
     h.listDeliverableSubscribers.mockResolvedValue([
       sub({ wirdFormat: 'image', wirdSize: 2, currentPage: 1 }),
     ]);
     h.getWird.mockResolvedValue(TWO_PAGES);
+    h.sendPhotoAlbum.mockResolvedValue({ result: 'failed', fileIds: [] }); // album fails
     h.sendPhoto
       .mockResolvedValueOnce({ result: 'ok', fileId: 'F1' }) // page 1 as image
-      .mockResolvedValueOnce({ result: 'failed' }); // page 2 image fails
+      .mockResolvedValueOnce({ result: 'failed' }); // page 2 image fails -> text
 
     const stats = await deliverDueSubscribers(fakeBot, NOW);
 
-    expect(h.sendPhoto).toHaveBeenCalledTimes(2); // tried image for both
+    expect(h.sendPhotoAlbum).toHaveBeenCalledOnce(); // tried the album first
+    expect(h.sendPhoto).toHaveBeenCalledTimes(2); // then per-page
     expect(h.sendMessages).toHaveBeenCalledOnce(); // page 2 fell back to text
     // The whole wird is recorded and the position advances by 2 (no page lost).
     expect(h.commitDelivery.mock.calls[0][0]).toMatchObject({

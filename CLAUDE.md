@@ -184,13 +184,19 @@ Commit the new folder under `prisma/migrations/`. Production applies it with
 - Ayah count oracle: `src/database/reference/ayah-counts.ts`
 - Page and juz constants and anchors: `src/database/reference/pages.ts`
 - Message wording (Arabic): `src/lib/copy.ts`
-- The send engine: `src/lib/deliver.ts` (`sendWird` renders a wird one page at
-  a time in either format; both `/today` and the scheduler call it)
+- The send engine: `src/lib/deliver.ts` (`sendWird`, called by both `/today` and
+  the scheduler). Text goes one message per page, in order. Images go as albums
+  of up to 10 pages per `sendMediaGroup` (one ordered, single-notification post,
+  caption on the first item only, since each Mushaf image shows its own page
+  number); a 1-page wird is a plain photo. If an album fails it falls back to
+  per-page, and a failed photo falls back to text, so a bad page never costs the
+  rest of the wird. The position advances by exactly the pages actually sent.
 - Delivery format (Mushaf-page image vs text): `src/core/mushaf-image.ts` (the
-  format flag and the page-image URL builder), `src/lib/send-photo.ts` (the
-  photo sender), the `wirdFormat` column and the `mushaf_page_images` file_id
-  cache. Image is the DEFAULT format (the `wirdFormat` column defaults to
+  format flag and the page-image source builder), `src/lib/send-photo.ts` (the
+  photo + album senders), the `wirdFormat` column and the `mushaf_page_images`
+  file_id cache. Image is the DEFAULT format (the `wirdFormat` column defaults to
   "image"); a user switches with `/format`, the channel admin with
-  `/admin_format`. Image needs `MUSHAF_IMAGE_BASE_URL` set; without a source the
-  bot falls back to text at send time. Like the text, image pages must come from
-  a verified Madani Mushaf source.
+  `/admin_format`. Image needs `MUSHAF_IMAGE_BASE_URL` set (an http URL or a
+  local path the bot uploads); without a source the bot falls back to text at
+  send time. Like the text, image pages must come from a verified Madani Mushaf
+  source.

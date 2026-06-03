@@ -4,13 +4,18 @@ vi.mock('./logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
-import { sendPhoto } from './send-photo';
+import { sendPhoto, sendPhotoAlbum } from './send-photo';
 
 // A minimal fake bot exposing just api.sendPhoto. Returns the spy separately so
 // we can assert on it without fighting the grammy Bot type (cast to never).
 function botWith(impl: (...args: unknown[]) => unknown) {
   const spy = vi.fn(impl);
   return { bot: { api: { sendPhoto: spy } } as never, spy };
+}
+
+function botWithGroup(impl: (...args: unknown[]) => unknown) {
+  const spy = vi.fn(impl);
+  return { bot: { api: { sendMediaGroup: spy } } as never, spy };
 }
 
 describe('sendPhoto', () => {
@@ -44,5 +49,24 @@ describe('sendPhoto', () => {
     const { bot, spy } = botWith(async () => ({ photo: [{ file_id: 'f' }] }));
     await sendPhoto(bot, 5n, 'https://x/1.jpg');
     expect(spy).toHaveBeenCalledWith(5, 'https://x/1.jpg', {});
+  });
+});
+
+describe('sendPhotoAlbum', () => {
+  it('returns ok with the largest file_id of each sent photo, in order', async () => {
+    const { bot } = botWithGroup(async () => [
+      { photo: [{ file_id: 'a-small' }, { file_id: 'a-big' }] },
+      { photo: [{ file_id: 'b-big' }] },
+    ]);
+    const r = await sendPhotoAlbum(bot, 1n, [{ media: 'u1', caption: 'cap' }, { media: 'u2' }]);
+    expect(r).toEqual({ result: 'ok', fileIds: ['a-big', 'b-big'] });
+  });
+
+  it('maps a generic (non-Grammy) error to failed with no file_ids', async () => {
+    const { bot } = botWithGroup(async () => {
+      throw new Error('boom');
+    });
+    const r = await sendPhotoAlbum(bot, 1n, [{ media: 'u1' }, { media: 'u2' }]);
+    expect(r).toEqual({ result: 'failed', fileIds: [] });
   });
 });
