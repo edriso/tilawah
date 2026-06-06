@@ -16,11 +16,17 @@ bot at `@TilawahDailyBot`.
 - It posts one Mushaf page per day by default, in order: page 1, then 2, then
   3, all the way to page 604, then it starts again at page 1. So it moves
   forward through the whole Quran and loops forever.
+- Each day's post has three parts, all on by default: a short tajweed lesson
+  first (one rule a day), then the page itself (a picture of the Mushaf page),
+  then an audio recitation of that page (Abdul Basit by default). An admin can
+  turn the lesson or the recitation off, or change the reciter (see below).
 - The page count per day, the post time, the days, and the timezone are all
   set by an admin (see the commands below). Nothing is posted while the
   channel is paused.
 - The text is the verified Tanzil Uthmani edition, numbered by the standard
-  Madani Mushaf of 604 pages. It is never edited by the bot.
+  Madani Mushaf of 604 pages. It is never edited by the bot. The recitation
+  audio comes from a trusted source (everyayah.com) and is fetched once per
+  page then re-sent from a cache.
 
 ---
 
@@ -34,7 +40,7 @@ bot at `@TilawahDailyBot`.
 
 (Telegram: channel Info, Edit, Description. Up to about 255 characters.)
 
-صفحة واحدة من القرآن الكريم كل يوم بإذن الله 🌿 بترتيب المصحف المدني، من أول القرآن إلى آخره ثم نبدأ من جديد. وللحصول على وردٍ خاص بك (صفحة أو أكثر، في الوقت والأيام التي تختارها) ابدأ مع البوت: @TilawahDailyBot
+صفحة من القرآن الكريم كل يوم بإذن الله 🌿 مع تلاوتها صوتيًا، بترتيب المصحف المدني من أوله إلى آخره ثم نبدأ من جديد. ولوردٍ خاص بك (صفحة أو أكثر، بالوقت والقارئ الذي تختار) ابدأ مع البوت: @TilawahDailyBot
 
 ---
 
@@ -48,9 +54,10 @@ bot at `@TilawahDailyBot`.
 
 • صفحة واحدة كل يوم، في وقت ثابت.
 • بترتيب المصحف: من سورة الفاتحة إلى سورة الناس، فإذا تمّ ختم القرآن بدأنا من جديد.
-• تُنشر صورة الصفحة من المصحف المدني الشريف (٦٠٤ صفحات).
+• تُنشر صورة الصفحة من المصحف المدني الشريف (٦٠٤ صفحات)، ومعها تلاوتها صوتيًا بصوت الشيخ عبد الباسط عبد الصمد.
+• ودرس تجويد قصير قبل الصفحة، يعينكم على تصحيح التلاوة.
 
-هل تريد وردًا خاصًا بك؟ يمكنك أن تأخذ صفحة أو أكثر في اليوم (حتى جزء كامل)، وتختار وقت الإرسال والأيام التي تناسبك، وتأخذ راحة وتعود من حيث توقفت.
+هل تريد وردًا خاصًا بك؟ يمكنك أن تأخذ صفحة أو أكثر في اليوم (حتى جزء كامل)، وتختار وقت الإرسال والأيام والقارئ الذي يناسبك، وتأخذ راحة وتعود من حيث توقفت.
 ابدأ الآن مع البوت: @TilawahDailyBot
 
 نسأل الله أن يرزقنا تلاوته آناء الليل وأطراف النهار، وأن يجعله حُجَّة لنا لا علينا.
@@ -69,6 +76,13 @@ in a private chat with the bot. They act on the channel.
 - `/admin_format text|image` how the channel posts the wird: a picture of the
   Mushaf page (the default) or plain text. Image needs `MUSHAF_IMAGE_BASE_URL`
   set (see `docs/DEPLOY.md`); without it the channel quietly posts text.
+- `/admin_reciter <off|key>` set the voice for the page recitation, or turn it
+  off. Keys: `abdulbasit` (default), `husary`, `alafasy`, `sudais`, `minshawi`.
+- `/admin_tajweed on|off` turn the short tajweed lesson (posted before the page)
+  on or off for the channel.
+- `/admin_review` send yourself the whole tajweed lesson deck as one document,
+  to read or forward to a scholar for review. (It works whether the lessons are
+  live or not.)
 - `/admin_time HH:MM` set the daily post time (24-hour, in the channel's
   timezone).
 - `/admin_tz Area/City` set the channel's timezone, e.g. `Africa/Cairo`.

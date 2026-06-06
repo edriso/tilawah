@@ -37,6 +37,13 @@ Set these env vars on the host (see the single root `.env.example`):
 - `TZ_NAME`              default timezone for new subscribers and the channel
 - `NODE_ENV`             defaults to "production"
 - `PORT`                 health endpoint port, defaults to 8080
+- `TAJWEED_AUDIO_BASE_URL` audio for the daily tajweed lesson's example ayah;
+  defaults to the clips baked into the image (`/app/assets/tajweed/...`)
+
+The daily **page recitation** (the reciter audio after each wird) needs no
+config: clips are fetched from everyayah.com and then re-sent from a cache. The
+**tajweed lesson** example clips are committed and baked into the image, so the
+`TAJWEED_AUDIO_BASE_URL` default above works out of the box.
 
 ## Three ways to run it
 
