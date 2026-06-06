@@ -1,0 +1,137 @@
+{
+  "source": "https://everyayah.com/data/Husary_128kbps/{surah3}{ayah3}.mp3",
+  "clips": {
+    "102001": {
+      "sha256": "f6fc5bf98d247e59ba6d1b166a6573dd6fcb423dfb82ea1c727128d25ac3301b",
+      "bytes": 89070
+    },
+    "103001": {
+      "sha256": "13901a76d34b6563f33a85f311d2b1e9301206a566646e6509283e28c07a16c2",
+      "bytes": 48528
+    },
+    "103002": {
+      "sha256": "e5bc0243e4f5e484b7a2d6837bd7c1bad09426f9f5b4b261d61757adc4ed5b23",
+      "bytes": 117491
+    },
+    "105004": {
+      "sha256": "a84aa99a3c8a243fc0ae799f620a471d48e303973c1b60d9439125792b022165",
+      "bytes": 161377
+    },
+    "106001": {
+      "sha256": "a20b858ba1c08f76f81be07c26bc0f0d694c7733cd24dfdb9bdddcf43546af02",
+      "bytes": 97429
+    },
+    "106002": {
+      "sha256": "9dcc68ed873dffcb8eac86d02d726a327b956ba8cd76031093ea965e759f9069",
+      "bytes": 178930
+    },
+    "108001": {
+      "sha256": "31ea3a14454d60775e7324a6eb92814e0eac282e31f6f29d1e3a2a62aec88261",
+      "bytes": 147166
+    },
+    "110001": {
+      "sha256": "43e463a9c1fee4a8e8714aedff619ac9434cd7cbb3801b95a0bea847e0998ad2",
+      "bytes": 152182
+    },
+    "111001": {
+      "sha256": "86bf6589db729309ef1cdb6ddae69f008b2ff3a18e7ae92ca68c539182927597",
+      "bytes": 158033
+    },
+    "112001": {
+      "sha256": "bb8ed6ccb26360926ff82046aa8d92fd06d76f49b7f3954f5e9c2a3050b5cd31",
+      "bytes": 97428
+    },
+    "112002": {
+      "sha256": "0b117b005794ad6ac371949bc7ba37dfc0bce28897510b79e9ade583777829a3",
+      "bytes": 84891
+    },
+    "112004": {
+      "sha256": "0c791d9b40f9744a118ac364e59f4e95f0e70a8d3619bc2f9d9d31d3d9cef092",
+      "bytes": 134210
+    },
+    "113001": {
+      "sha256": "6da4d35159a58276071f23442cd2435afa469a56f37c0758aaa1430ca5e4f008",
+      "bytes": 104952
+    },
+    "114001": {
+      "sha256": "a88bd24423f37b2695ba1a299612c52e02fc2cf545869517ae0ab38e29a9e253",
+      "bytes": 130866
+    },
+    "114006": {
+      "sha256": "5d613a767f089cf4400b4884c86a6bb870928706083952a75452571690bd801e",
+      "bytes": 140061
+    },
+    "073004": {
+      "sha256": "8993c3e56810dbc5870aa1022ddfae54a5e98e64e2448d7eb2a5e7ce050fca17",
+      "bytes": 164721
+    },
+    "016098": {
+      "sha256": "411774a908208a552adc23d832f2ffdafcf68aa287a46e7b5316ef37f4e45cd5",
+      "bytes": 241207
+    },
+    "091001": {
+      "sha256": "1f7d1dd3ed1fc850a8085e5ac42c64a7d902d725d51050b05cdd71540d0ab44e",
+      "bytes": 83636
+    },
+    "001007": {
+      "sha256": "83c01a366e877db3bc67b77d4a451bd3f162a5e64fda8cad80be64dae11d68cb",
+      "bytes": 243296
+    },
+    "086001": {
+      "sha256": "9f429b027677261e75ae995592004bd4a493c29fbbc1bd615a48f5e3a85b9c26",
+      "bytes": 107042
+    },
+    "078001": {
+      "sha256": "1c3d14a2a015bab67f1e9e1e8f02c9339e9f22924dc6fa055a6399eda66ed705",
+      "bytes": 132120
+    },
+    "001006": {
+      "sha256": "5bfdaf77dcbd6dff029e379ccef63e74fe0115a1f5f41710b33f22b507afbcc2",
+      "bytes": 89906
+    },
+    "096001": {
+      "sha256": "ab0517a4f12f0a4f630cbc9b379ea68155438bf6f78310751e2ce44f6c6866e8",
+      "bytes": 129612
+    },
+    "001002": {
+      "sha256": "00b03509a19a3fe5769b02392889f469fa1222cd11531bbeff2724ca5dede7c9",
+      "bytes": 104534
+    },
+    "099007": {
+      "sha256": "294d9c96fbee16eed5db40b0ed247f9311c8f253935772ad7286781f48e1eb2e",
+      "bytes": 191469
+    },
+    "002005": {
+      "sha256": "9924c2b442e701bc157c11bc08cb95bd96413b5f1e1588a4ecff58a9d5e55eb3",
+      "bytes": 311424
+    },
+    "002027": {
+      "sha256": "6760f575acd68fcde24e98ad283e91a3f262d1c4be4bcab6ab8b89b4fd777960",
+      "bytes": 638268
+    },
+    "002004": {
+      "sha256": "5bf6e50ccd326603283e548e294fa179857afa81bfaa23f77b4754619519835f",
+      "bytes": 358654
+    },
+    "050035": {
+      "sha256": "209899f0c233690e2beac88836e8dec3d7424282e4102f8d25db3033562e4772",
+      "bytes": 258344
+    },
+    "002285": {
+      "sha256": "e3c748335da057713dc3c07f42d43a0170adabb35c7500fd49856396b3375111",
+      "bytes": 866557
+    },
+    "004011": {
+      "sha256": "07aae41acef4dabfff4382dc0d5e0f7c163a3ea846ebd8a6110659bf33ecf276",
+      "bytes": 2320136
+    },
+    "001004": {
+      "sha256": "c7c9e46d06d8ec9e6e1937fc2b0762bf1d0a67079f7b4cafdb43c88250daf55b",
+      "bytes": 78203
+    },
+    "002002": {
+      "sha256": "7d5ba34f43bf871ff68be9fc25f583d5231c2ffa9178c493cd2a0430cf20ad93",
+      "bytes": 205262
+    }
+  }
+}

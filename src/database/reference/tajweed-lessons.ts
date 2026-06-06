@@ -22,8 +22,10 @@
 
 import type { TajweedLesson } from '../../core';
 
-/** Set to false only AFTER a qualified reader has reviewed every lesson. */
-export const LESSONS_PENDING_REVIEW = true;
+/** Set to false only AFTER a qualified reader has reviewed every lesson.
+ *  Enabled by the operator's explicit decision — see the launch note in the
+ *  PR/commit. Flip back to true to instantly take the lessons offline. */
+export const LESSONS_PENDING_REVIEW = false;
 
 export const TAJWEED_LESSONS: readonly TajweedLesson[] = [
   // ── Foundations ──────────────────────────────────────────────────

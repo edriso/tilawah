@@ -34,6 +34,9 @@ src/**/*.test.ts
 # small and a rebuild never re-bundles ~90 MB. The empty mount point is created
 # in the Dockerfile.
 assets/mushaf
+# NOTE: assets/tajweed (the ~8 MB of lesson example clips) is intentionally NOT
+# excluded — it is committed and baked into the image so the audio ships with the
+# code. Do not add a broad `assets` rule here.
 
 # Docs the build does not need
 README.md
