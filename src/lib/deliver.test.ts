@@ -80,6 +80,14 @@ const TWO_PAGES = [
   },
 ];
 
+// N consecutive pages (1..N), for the multi-album (>10 pages) cases.
+const manyPages = (n: number) =>
+  Array.from({ length: n }, (_, i) => ({
+    pageNumber: i + 1,
+    juz: 1,
+    ayat: [{ surahNumber: 2, surahNameAr: 'البقرة', numberInSurah: i + 1, text: 'نص' }],
+  }));
+
 // A subscriber that is due at NOW (UTC, every day, sends at 00:00).
 function sub(over: Record<string, unknown> = {}) {
   return {
@@ -418,5 +426,61 @@ describe('deliverDueSubscribers (image format)', () => {
       nextPage: advanceStartPage(1, 2),
     });
     expect(stats).toMatchObject({ due: 1, sent: 1, failed: 0 });
+  });
+
+  it('splits a >10-page image wird into multiple albums (lead on the first album only)', async () => {
+    // wirdSize 12 > MAX_ALBUM_SIZE (10): the wird is sent as two albums, 10 + 2.
+    h.listDeliverableSubscribers.mockResolvedValue([
+      sub({ wirdFormat: 'image', wirdSize: 12, currentPage: 1 }),
+    ]);
+    h.getWird.mockResolvedValue(manyPages(12));
+
+    const stats = await deliverDueSubscribers(fakeBot, NOW);
+
+    expect(h.sendPhotoAlbum).toHaveBeenCalledTimes(2);
+    const first = h.sendPhotoAlbum.mock.calls[0][2];
+    const second = h.sendPhotoAlbum.mock.calls[1][2];
+    expect(first).toHaveLength(10);
+    expect(second).toHaveLength(2);
+    expect(first[0].caption).toContain('🌿'); // the wird lead, on the very first item
+    expect(second[0].caption).not.toContain('🌿'); // later albums carry no lead
+    expect(second[1].caption).toBeUndefined(); // only the first item of an album captions
+    expect(h.sendPhoto).not.toHaveBeenCalled();
+    expect(h.sendMessages).not.toHaveBeenCalled();
+    // All 12 pages went out; the position advances by 12.
+    expect(h.cachePageImageId).toHaveBeenCalledWith(1, 'FA1');
+    expect(h.cachePageImageId).toHaveBeenCalledWith(12, 'FA2'); // 2nd item of the 2nd album
+    expect(h.commitDelivery.mock.calls[0][0]).toMatchObject({
+      pageCount: 12,
+      nextPage: advanceStartPage(1, 12),
+    });
+    expect(stats).toMatchObject({ due: 1, sent: 1, failed: 0 });
+  });
+
+  it('advances by only the pages sent when a later album AND its text fallback fail', async () => {
+    h.listDeliverableSubscribers.mockResolvedValue([
+      sub({ wirdFormat: 'image', wirdSize: 12, currentPage: 1 }),
+    ]);
+    h.getWird.mockResolvedValue(manyPages(12));
+    // First album (10 pages) ok; the second album fails, and its per-page
+    // fallback fails as photo AND as text (a real outage), so only 10 went out.
+    h.sendPhotoAlbum
+      .mockResolvedValueOnce({
+        result: 'ok',
+        fileIds: Array.from({ length: 10 }, (_, i) => `FA${i + 1}`),
+      })
+      .mockResolvedValueOnce({ result: 'failed', fileIds: [] });
+    h.sendPhoto.mockResolvedValue({ result: 'failed' });
+    h.sendMessages.mockResolvedValue('failed');
+
+    const stats = await deliverDueSubscribers(fakeBot, NOW);
+
+    expect(h.sendPhotoAlbum).toHaveBeenCalledTimes(2);
+    // Recorded as exactly the 10 pages that arrived; the rest roll to next run.
+    expect(h.commitDelivery.mock.calls[0][0]).toMatchObject({
+      pageCount: 10,
+      nextPage: advanceStartPage(1, 10),
+    });
+    expect(stats).toMatchObject({ due: 1, sent: 1 });
   });
 });

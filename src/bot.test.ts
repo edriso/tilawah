@@ -121,4 +121,41 @@ describe('repositionToPage', () => {
     expect(h.commitDelivery).not.toHaveBeenCalled();
     expect(ctx.reply).toHaveBeenCalled();
   });
+
+  it('on a PARTIAL send, claims exactly the pages that went out (mirrors the scheduler)', async () => {
+    // 3-page wird, but the send dies after 2 pages. The day must be recorded as
+    // 2 pages advancing to page 7 — NOT the claim's full 3 pages / page 8 — so
+    // the scheduler later sends only the remaining page instead of re-sending
+    // the 2 the user already received.
+    h.sendWird.mockResolvedValue({ pagesSent: 2, lastResult: 'failed' });
+    h.buildTodayView.mockResolvedValue({
+      pages: [
+        { pageNumber: 5, juz: 1, ayat: [] },
+        { pageNumber: 6, juz: 1, ayat: [] },
+        { pageNumber: 7, juz: 1, ayat: [] },
+      ],
+      basmala: 'بسم الله',
+      lead: '🌿 وردك اليوم',
+      alreadyDelivered: false,
+      claim: { scheduledFor: '2026-06-01', startPage: 5, pageCount: 3, nextPage: 8 },
+    });
+    await repositionToPage(fakeCtx() as never, SUB, 5);
+
+    expect(h.commitDelivery).toHaveBeenCalledTimes(1);
+    expect(h.commitDelivery).toHaveBeenCalledWith(
+      expect.objectContaining({ startPage: 5, pageCount: 2, nextPage: 7 }),
+    );
+  });
+
+  it('does NOT claim when nothing went out (pagesSent 0)', async () => {
+    h.sendWird.mockResolvedValue({ pagesSent: 0, lastResult: 'failed' });
+    h.buildTodayView.mockResolvedValue(
+      ONE_PAGE_VIEW({
+        claim: { scheduledFor: '2026-06-01', startPage: 5, pageCount: 1, nextPage: 6 },
+      }),
+    );
+    await repositionToPage(fakeCtx() as never, SUB, 5);
+
+    expect(h.commitDelivery).not.toHaveBeenCalled();
+  });
 });

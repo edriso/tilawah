@@ -94,7 +94,10 @@ One subscriber failing is caught and never stops the rest of the batch.
 `buildTodayView` + `commitDelivery`, so a subscriber who reads (or repositions)
 early "claims" the day (records the delivery and advances) and the scheduler
 then skips it. The same `unique(subscriber, scheduledFor)` lock keeps it to one
-wird per local day across every entry point.
+wird per local day across every entry point. Like the scheduler, the claim
+records exactly the pages that actually went out and advances by that many, so a
+partial send (e.g. an image source dies mid-wird) rolls the rest to the next run
+instead of re-sending pages the reader already received.
 
 ## Channel and users are optional
 

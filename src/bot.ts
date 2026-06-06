@@ -2,6 +2,7 @@ import { Bot, type Context } from 'grammy';
 import {
   activeDaysList,
   nextPageAfter,
+  advanceStartPage,
   normalizeWirdFormat,
   isWirdFormat,
   WIRD_FORMAT_IMAGE,
@@ -140,16 +141,19 @@ async function sendTodayView(
     lead: view.lead,
     format: normalizeWirdFormat(sub.wirdFormat),
   });
-  // Claim the day only if the whole wird went out, so a send failure (e.g. an
-  // unreachable image source) leaves today unclaimed for the scheduler to
-  // deliver later, rather than recording a wird the user never fully received.
-  if (view.claim && pagesSent === view.pages.length) {
+  // Record exactly what went out, advancing by pagesSent — mirroring the
+  // scheduler (deliver.ts). On a partial send (e.g. an image source dies mid-
+  // wird) this records the pages that actually arrived and rolls the rest to a
+  // later run; committing the FULL wird here, or nothing at all, would make the
+  // scheduler re-send pages the user already received. pagesSent === 0 sends
+  // nothing, so there is nothing to claim or advance.
+  if (view.claim && pagesSent > 0) {
     await commitDelivery({
       subscriberId: sub.id,
       scheduledFor: view.claim.scheduledFor,
       startPage: view.claim.startPage,
-      pageCount: view.claim.pageCount,
-      nextPage: view.claim.nextPage,
+      pageCount: pagesSent,
+      nextPage: advanceStartPage(view.claim.startPage, pagesSent),
       startedAt: sub.startedAt,
       now,
     });
