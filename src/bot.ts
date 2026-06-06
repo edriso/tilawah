@@ -1,4 +1,4 @@
-import { Bot, type Context } from 'grammy';
+import { Bot, InputFile, type Context } from 'grammy';
 import {
   activeDaysList,
   nextPageAfter,
@@ -35,6 +35,7 @@ import {
   sendWird,
   tajweedLessonView,
   sendLesson,
+  buildLessonReview,
   type TodayView,
 } from './lib/deliver';
 import { buildTajweedKeyboard, TAJWEED_TOGGLE } from './lib/tajweed-keyboard';
@@ -718,6 +719,22 @@ bot.command('admin_health', async (ctx) => {
       `Uptime: ${days}d ${hours}h ${mins}m`,
       `Now: ${new Date().toISOString()}`,
     ].join('\n'),
+  );
+});
+
+// /admin_review: send the whole tajweed lesson deck as one organized document
+// to the admin's DM (every lesson + its example's verified ayah text + audio
+// filename), to read, annotate, or forward to a قارئ for review. Works whether
+// or not the lessons are currently live.
+bot.command('admin_review', async (ctx) => {
+  if (!isAdmin(ctx)) {
+    if (ctx.chat?.type === 'private') await ctx.reply(COPY.adminOnly);
+    return;
+  }
+  const doc = await buildLessonReview();
+  await ctx.replyWithDocument(
+    new InputFile(Buffer.from(doc, 'utf8'), 'tajweed-lessons-review.txt'),
+    { caption: COPY.adminReviewCaption(TAJWEED_LESSON_COUNT) },
   );
 });
 

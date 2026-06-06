@@ -13,6 +13,7 @@ import {
   formatLesson,
   lessonIndexInRange,
   nextLessonIndex,
+  toArabicDigits,
   WIRD_FORMAT_IMAGE,
   type WirdFormat,
   type PageContent,
@@ -332,6 +333,56 @@ export async function sendLesson(
     }
   }
   return 'ok';
+}
+
+/**
+ * Build a single plain-text document of the WHOLE tajweed deck for review:
+ * every lesson numbered, with its example ayah's verified text pulled from the
+ * database, so a qualified reader can check both the explanation AND that the
+ * example actually demonstrates the rule. Returned as one string; the caller
+ * sends it to the admin as a document (no message-length limit), to read,
+ * annotate, or forward to a مقرئ. Ignores the on/off and review gates on
+ * purpose — you review the deck whether or not it is currently live.
+ */
+export async function buildLessonReview(): Promise<string> {
+  const pad3 = (n: number) => String(n).padStart(3, '0');
+  const lines: string[] = [
+    'مراجعة دروس التجويد',
+    '='.repeat(40),
+    `عدد الدروس: ${toArabicDigits(TAJWEED_LESSON_COUNT)}`,
+    LESSONS_PENDING_REVIEW
+      ? 'الحالة: مسودة قيد المراجعة (لا تُرسل للقراء بعد).'
+      : 'الحالة: منشورة للقراء الآن.',
+    '',
+    'يُرجى التحقق من: صحة الشرح، ومطابقة المثال للقاعدة، وسلامة اللغة.',
+    'النص القرآني للأمثلة مأخوذ من قاعدة البيانات الموثوقة (غير مكتوب يدويًا).',
+    '',
+  ];
+  for (let i = 0; i < TAJWEED_LESSONS.length; i++) {
+    const lesson = TAJWEED_LESSONS[i]!;
+    const example = await getAyahText(lesson.example.surah, lesson.example.ayah);
+    lines.push('—'.repeat(40));
+    lines.push(
+      `الدرس ${toArabicDigits(i + 1)} من ${toArabicDigits(TAJWEED_LESSON_COUNT)}: ${lesson.titleAr}`,
+    );
+    lines.push('');
+    lines.push(lesson.bodyAr);
+    lines.push('');
+    if (example) {
+      lines.push(
+        `المثال — سورة ${example.surahNameAr}، آية ${toArabicDigits(example.numberInSurah)}:`,
+      );
+      lines.push(example.text);
+    } else {
+      lines.push(
+        `⚠️ المثال (سورة ${lesson.example.surah}، آية ${lesson.example.ayah}) غير موجود في قاعدة البيانات!`,
+      );
+    }
+    if (lesson.exampleNote) lines.push(`ملاحظة: ${lesson.exampleNote}`);
+    lines.push(`ملف الصوت: ${pad3(lesson.example.surah)}${pad3(lesson.example.ayah)}.mp3`);
+    lines.push('');
+  }
+  return lines.join('\n');
 }
 
 /**

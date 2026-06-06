@@ -73,7 +73,7 @@ vi.mock('./logger', () => ({
 }));
 
 import { InputFile } from 'grammy';
-import { deliverDueSubscribers, buildTodayView } from './deliver';
+import { deliverDueSubscribers, buildTodayView, buildLessonReview } from './deliver';
 import { config } from '../config';
 import { advanceStartPage } from '../core';
 
@@ -573,5 +573,29 @@ describe('deliverDueSubscribers (tajweed lesson)', () => {
     expect(h.sendAudio).toHaveBeenCalledOnce();
     expect(h.sendAudio.mock.calls[0][2]).toBe('https://x/002027.mp3');
     expect(h.cacheTajweedAudioId).toHaveBeenCalledWith(2, 27, 'AUDIO_1');
+  });
+});
+
+describe('buildLessonReview', () => {
+  it('renders every lesson with its example text and audio filename', async () => {
+    const doc = await buildLessonReview();
+    // Header + every lesson title from the fake deck.
+    expect(doc).toContain('مراجعة دروس التجويد');
+    expect(doc).toContain('الإقلاب');
+    expect(doc).toContain('الإظهار');
+    expect(doc).toContain('المد');
+    // The example ayah's verified text (from getAyahText) is included.
+    expect(doc).toContain('نص الآية');
+    // Audio filenames are derived from each lesson's (surah, ayah).
+    expect(doc).toContain('002027.mp3'); // lesson 0 -> (2,27)
+    expect(doc).toContain('001007.mp3'); // lesson 1 -> (1,7)
+    // It covers the whole deck.
+    expect(doc).toContain('من ٣'); // "lesson N of 3"
+  });
+
+  it('flags an example ayah that is missing from the database', async () => {
+    h.getAyahText.mockResolvedValue(null);
+    const doc = await buildLessonReview();
+    expect(doc).toContain('غير موجود في قاعدة البيانات');
   });
 });

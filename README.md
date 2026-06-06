@@ -92,8 +92,9 @@ Private chat, admins only. `/admin_setpage N` set the last page read (the
 channel resumes at N+1), `/admin_wird N` pages per day, `/admin_time HH:MM`
 post time, `/admin_tz Area/City` timezone, `/admin_pause` pause or resume,
 `/admin_format text|image` how the channel posts (text or Mushaf-page image),
-`/admin_tajweed on|off` the channel's daily tajweed lesson, `/admin_status`
-channel status, `/admin_send` send the batch now.
+`/admin_tajweed on|off` the channel's daily tajweed lesson, `/admin_review` get
+the whole tajweed deck as a document to review or forward to a scholar,
+`/admin_status` channel status, `/admin_send` send the batch now.
 
 ## Development
 
