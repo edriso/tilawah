@@ -94,6 +94,12 @@ model Subscriber {
   // loops past 604 back to 1. A brand-new subscriber starts at page 1.
   currentPage Int @default(1) @map("current_page")
 
+  // Daily page recitation: after the wird, send an audio of each page. On by
+  // default. The reciter is one of the keys in src/core/reciter.ts (a short
+  // string, no Prisma enum), default Abdul Basit (murattal).
+  wirdAudioEnabled Boolean @default(true) @map("wird_audio_enabled")
+  reciter          String  @default("abdulbasit") @map("reciter") @db.VarChar(16)
+
   // Daily tajweed micro-lesson, posted right before the wird. On by default for
   // everyone (users and the channel). When off, only the wird is sent.
   tajweedEnabled     Boolean @default(true) @map("tajweed_enabled")
@@ -187,4 +193,22 @@ model TajweedAudio {
 
   @@id([surahNumber, numberInSurah])
   @@map("tajweed_audio")
+}
+
+// ─── Page-recitation audio cache ────────────────────────────────────
+//
+// Same idea as MushafPageImage, for the daily page recitation. Keyed by the
+// (page, reciter) it recites, so each page/reciter clip is fetched from the
+// trusted source (everyayah) once and then re-sent by file_id forever.
+
+model PageAudio {
+  page      Int
+  // The reciter key (see src/core/reciter.ts), e.g. "abdulbasit".
+  reciter   String   @db.VarChar(16)
+  fileId    String   @map("file_id") @db.VarChar(255)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@id([page, reciter])
+  @@map("page_audio")
 }

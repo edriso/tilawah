@@ -6,6 +6,8 @@ import {
   nextLessonIndex,
   normalizeWirdFormat,
   isWirdFormat,
+  normalizeReciter,
+  isReciter,
   WIRD_FORMAT_IMAGE,
 } from './core';
 import {
@@ -16,6 +18,8 @@ import {
   setWirdFormat,
   setCurrentPage,
   setTajweedEnabled,
+  setWirdAudioEnabled,
+  setReciter,
   toggleActiveDay,
   setDeliveryTime,
   setTimezone,
@@ -35,10 +39,12 @@ import {
   sendWird,
   tajweedLessonView,
   sendLesson,
+  sendPageAudio,
   buildLessonReview,
   type TodayView,
 } from './lib/deliver';
 import { buildTajweedKeyboard, TAJWEED_TOGGLE } from './lib/tajweed-keyboard';
+import { buildReciterKeyboard, RECITER_PICK_PREFIX, RECITER_OFF } from './lib/reciter-keyboard';
 import { runDeliveryOnce } from './scheduler';
 import { buildDaysKeyboard, DAY_TOGGLE_PREFIX, DAYS_DONE } from './lib/days-keyboard';
 import { buildTimeKeyboard, TIME_PICK_PREFIX } from './lib/time-keyboard';
@@ -113,6 +119,8 @@ async function statusText(sub: Subscriber, isChannel = false): Promise<string> {
       currentJuz,
       wirdFormat: normalizeWirdFormat(sub.wirdFormat),
       tajweedEnabled: sub.tajweedEnabled,
+      wirdAudioEnabled: sub.wirdAudioEnabled,
+      reciter: normalizeReciter(sub.reciter),
     },
     { isChannel },
   );
@@ -184,6 +192,17 @@ async function sendTodayView(
       startedAt: sub.startedAt,
       now,
     });
+  }
+
+  // After the wird, send the page recitation for the pages that went out
+  // (best effort; never affects the recorded delivery).
+  if (sub.wirdAudioEnabled && pagesSent > 0) {
+    await sendPageAudio(
+      bot,
+      sub.chatId,
+      view.pages.slice(0, pagesSent),
+      normalizeReciter(sub.reciter),
+    );
   }
 }
 
@@ -291,6 +310,30 @@ bot.command('tajweed', async (ctx) => {
   const lesson = sub.tajweedEnabled ? await tajweedLessonView(sub) : null;
   const body = lesson ? `${header}\n\n${lesson.text}` : header;
   await ctx.reply(body, { reply_markup: buildTajweedKeyboard(sub.tajweedEnabled) });
+});
+
+// /reciter: choose the voice for the daily page recitation, or turn it off.
+// No arg: show the picker (off + reciters). "/reciter off" or "/reciter <key>"
+// set it directly. On by default.
+bot.command('reciter', async (ctx) => {
+  const sub = await userSubscriber(ctx);
+  if (!sub) return;
+  const arg = commandArg(ctx, 'reciter')?.trim().toLowerCase();
+  if (arg === 'off') {
+    await setWirdAudioEnabled(sub.id, false);
+    await ctx.reply(COPY.reciterOff);
+    return;
+  }
+  if (arg && isReciter(arg)) {
+    await setReciter(sub.id, arg);
+    await ctx.reply(COPY.reciterUpdated(arg));
+    return;
+  }
+  // No (or unknown) arg: show the picker reflecting the current state.
+  const current = normalizeReciter(sub.reciter);
+  await ctx.reply(COPY.reciterPrompt(sub.wirdAudioEnabled, current), {
+    reply_markup: buildReciterKeyboard(sub.wirdAudioEnabled, current),
+  });
 });
 
 // /page: jump to a specific Mushaf page (1..604). With no argument, show the
@@ -431,6 +474,43 @@ bot.callbackQuery(TAJWEED_TOGGLE, async (ctx) => {
   await ctx.answerCallbackQuery({
     text: enabled ? COPY.tajweedToggledOn : COPY.tajweedToggledOff,
   });
+});
+
+// ─── Reciter-picker buttons ─────────────────────────────────────────
+
+// "Off": stop the page recitation.
+bot.callbackQuery(RECITER_OFF, async (ctx) => {
+  const sub = await userFromCallback(ctx);
+  if (!sub) {
+    await ctx.answerCallbackQuery();
+    return;
+  }
+  await setWirdAudioEnabled(sub.id, false);
+  await ctx
+    .editMessageReplyMarkup({
+      reply_markup: buildReciterKeyboard(false, normalizeReciter(sub.reciter)),
+    })
+    .catch(() => {});
+  await ctx.answerCallbackQuery({ text: COPY.reciterToggledOff });
+});
+
+// Pick a reciter: turn audio on and set the voice.
+bot.callbackQuery(new RegExp(`^${RECITER_PICK_PREFIX}(.+)$`), async (ctx) => {
+  const sub = await userFromCallback(ctx);
+  if (!sub) {
+    await ctx.answerCallbackQuery();
+    return;
+  }
+  const key = ctx.match![1];
+  if (!isReciter(key)) {
+    await ctx.answerCallbackQuery();
+    return;
+  }
+  await setReciter(sub.id, key);
+  await ctx
+    .editMessageReplyMarkup({ reply_markup: buildReciterKeyboard(true, key) })
+    .catch(() => {});
+  await ctx.answerCallbackQuery({ text: COPY.reciterToggledTo(key) });
 });
 
 // ─── Day-picker buttons ─────────────────────────────────────────────
@@ -602,6 +682,26 @@ bot.command('admin_tajweed', async (ctx) => {
   const enabled = arg === 'on';
   await setTajweedEnabled(channel.id, enabled);
   await ctx.reply(COPY.adminTajweedDone(enabled));
+});
+
+// /admin_reciter <off|key>: the channel's page-recitation voice (or off).
+bot.command('admin_reciter', async (ctx) => {
+  const channel = await adminChannel(ctx);
+  if (!channel) return;
+  const arg = commandArg(ctx, 'admin_reciter')?.trim().toLowerCase();
+  if (arg === 'off') {
+    await setWirdAudioEnabled(channel.id, false);
+    await ctx.reply(COPY.adminReciterDone(false, normalizeReciter(channel.reciter)));
+    return;
+  }
+  if (arg && isReciter(arg)) {
+    await setReciter(channel.id, arg);
+    await ctx.reply(COPY.adminReciterDone(true, arg));
+    return;
+  }
+  await ctx.reply(
+    COPY.adminReciterUsage(channel.wirdAudioEnabled, normalizeReciter(channel.reciter)),
+  );
 });
 
 // /admin_time HH:MM: set the channel's daily post time.
@@ -793,6 +893,7 @@ async function setBotCommands() {
       { command: 'today', description: 'قراءة ورد اليوم' },
       { command: 'wird', description: 'حجم الورد اليومي' },
       { command: 'tajweed', description: 'درس التجويد اليومي (تشغيل/إيقاف)' },
+      { command: 'reciter', description: 'تلاوة الصفحة: اختيار القارئ أو الإيقاف' },
       { command: 'format', description: 'طريقة الإرسال: نص أو صورة' },
       { command: 'page', description: 'الانتقال إلى صفحة معيّنة' },
       { command: 'time', description: 'ضبط وقت الإرسال' },

@@ -43,13 +43,18 @@ vi.mock('./database', () => ({
   resumeSubscriber: vi.fn(),
   commitDelivery: h.commitDelivery,
   setTajweedEnabled: vi.fn(),
+  setWirdAudioEnabled: vi.fn(),
+  setReciter: vi.fn(),
   TAJWEED_LESSON_COUNT: 45,
+  LESSONS_PENDING_REVIEW: false,
 }));
 vi.mock('./lib/deliver', () => ({
   buildTodayView: h.buildTodayView,
   sendWird: h.sendWird,
   tajweedLessonView: h.tajweedLessonView,
   sendLesson: h.sendLesson,
+  sendPageAudio: vi.fn(),
+  buildLessonReview: vi.fn(),
   previewWird: vi.fn(),
 }));
 vi.mock('./scheduler', () => ({ runDeliveryOnce: vi.fn() }));

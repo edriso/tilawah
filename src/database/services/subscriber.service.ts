@@ -130,6 +130,23 @@ export function setTajweedEnabled(subscriberId: number, enabled: boolean) {
   });
 }
 
+/** Turn the daily page recitation on or off. On by default. */
+export function setWirdAudioEnabled(subscriberId: number, enabled: boolean) {
+  return prisma.subscriber.update({
+    where: { id: subscriberId },
+    data: { wirdAudioEnabled: enabled },
+  });
+}
+
+/** Set the reciter for the page recitation, and turn the audio on (choosing a
+ *  reciter implies wanting it). Caller validates the key (normalizeReciter). */
+export function setReciter(subscriberId: number, reciter: string) {
+  return prisma.subscriber.update({
+    where: { id: subscriberId },
+    data: { reciter, wirdAudioEnabled: true },
+  });
+}
+
 /**
  * Mark a subscriber unreachable (they blocked the bot, or a send failed with
  * 403). Send loops skip blocked subscribers. Cleared the next time a user

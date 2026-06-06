@@ -76,6 +76,20 @@ export function pagePositionAr(page: number, juz?: number): string {
   return juz ? `${base} (الجزء ${toArabicDigits(juz)})` : base;
 }
 
+/** Arabic name of a reciter key (see src/core/reciter.ts), for buttons,
+ *  captions, and the status line. */
+const RECITER_NAME_AR: Record<string, string> = {
+  abdulbasit: 'عبد الباسط عبد الصمد',
+  husary: 'محمود خليل الحصري',
+  alafasy: 'مشاري العفاسي',
+  sudais: 'عبد الرحمن السديس',
+  minshawi: 'محمد صديق المنشاوي',
+};
+
+export function reciterNameAr(key: string): string {
+  return RECITER_NAME_AR[key] ?? key;
+}
+
 export interface SettingsView {
   deliveryHour: number;
   deliveryMinute: number;
@@ -91,6 +105,9 @@ export interface SettingsView {
   /** Whether the daily tajweed lesson is on. Omitted when a caller does not
    *  track it. */
   tajweedEnabled?: boolean;
+  /** Whether the page recitation is on, and the chosen reciter key. */
+  wirdAudioEnabled?: boolean;
+  reciter?: string;
 }
 
 /** Build the status / settings summary, shared by users and the channel. */
@@ -119,6 +136,11 @@ export function settingsSummary(s: SettingsView, opts: { isChannel?: boolean } =
   }
   if (s.tajweedEnabled !== undefined) {
     lines.push(`• درس التجويد اليومي: ${s.tajweedEnabled ? 'مفعّل ✅' : 'متوقف ⏸️'}`);
+  }
+  if (s.wirdAudioEnabled !== undefined) {
+    lines.push(
+      `• تلاوة الصفحة: ${s.wirdAudioEnabled ? `${reciterNameAr(s.reciter ?? '')} 🎧` : 'متوقفة ⏸️'}`,
+    );
   }
   return lines.join('\n');
 }
@@ -162,6 +184,7 @@ export const COPY = {
     '/today: قراءة ورد اليوم الآن (يُحتسب وردك لهذا اليوم)',
     `/wird: حجم الورد اليومي (١ إلى ٢٠ صفحة)، مثل ${ltr('/wird 5')}`,
     '/tajweed: درس تجويد يومي قبل وردك (تشغيل/إيقاف)',
+    '/reciter: تلاوة صفحتك صوتًا، واختيار القارئ أو الإيقاف',
     '/format: طريقة الإرسال، نصًّا أو صورة من المصحف',
     `/page: الانتقال إلى صفحة معيّنة (١ إلى ٦٠٤)، مثل ${ltr('/page 100')}`,
     '/time: ضبط وقت الإرسال',
@@ -285,6 +308,24 @@ export const COPY = {
   tajweedComingSoon:
     'درس التجويد اليومي قيد الإعداد والمراجعة على يد متخصص، وسيبدأ قريبًا بإذن الله 🌿',
 
+  // ── Page recitation (reciter) ─────────────────────────────────────
+  // Caption under each page's audio clip.
+  pageAudioCaption: (page: number, reciter: string) =>
+    `🎧 تلاوة الصفحة ${toArabicDigits(page)} — ${reciterNameAr(reciter)}`,
+  reciterPrompt: (enabled: boolean, reciter: string) =>
+    [
+      enabled
+        ? `تلاوة صفحتك تصلك الآن بصوت ${reciterNameAr(reciter)} 🎧`
+        : 'تلاوة الصفحة متوقفة الآن ⏸️',
+      'اختر القارئ، أو أوقف التلاوة:',
+    ].join('\n'),
+  reciterUpdated: (reciter: string) =>
+    `تم ✅ ستصلك تلاوة صفحتك بصوت ${reciterNameAr(reciter)} بإذن الله 🎧`,
+  reciterOff: 'تم إيقاف تلاوة الصفحة ⏸️ سيصلك الورد بدون صوت.',
+  // Callback toasts.
+  reciterToggledOff: 'تم إيقاف التلاوة ⏸️',
+  reciterToggledTo: (reciter: string) => `القارئ: ${reciterNameAr(reciter)} ✅`,
+
   // ── Admin / channel ───────────────────────────────────────────────
   adminOnly: 'هذا الأمر للمشرف فقط.',
   noChannel: 'لا توجد قناة مُعدّة. اضبط CHANNEL_CHAT_ID في ملف الإعدادات أولًا.',
@@ -333,6 +374,19 @@ export const COPY = {
     enabled
       ? 'تم ✅ ستنشر القناة درس التجويد قبل الورد كل يوم.'
       : 'تم ⏸️ لن تنشر القناة درس التجويد، الورد فقط.',
+
+  adminReciterUsage: (enabled: boolean, reciter: string) =>
+    [
+      enabled
+        ? `تلاوة القناة الآن بصوت ${reciterNameAr(reciter)} 🎧`
+        : 'تلاوة القناة متوقفة الآن ⏸️',
+      `اكتب ${ltr('/admin_reciter off')} للإيقاف، أو اسم المفتاح:`,
+      `${ltr('abdulbasit / husary / alafasy / sudais / minshawi')}`,
+    ].join('\n'),
+  adminReciterDone: (enabled: boolean, reciter: string) =>
+    enabled
+      ? `تم ✅ ستنشر القناة تلاوة الصفحة بصوت ${reciterNameAr(reciter)} 🎧`
+      : 'تم ⏸️ لن تنشر القناة تلاوة الصفحة.',
 
   adminReviewCaption: (count: number) =>
     [

@@ -16,6 +16,10 @@ extend the project.
   `/format`, the channel admin with `/admin_format`. If an image is missing the
   bot quietly sends that page as text, so a wird always arrives. See
   `docs/DEPLOY.md` for the image source and self-hosting.
+- Sends an audio recitation of each page after the wird (on by default), from a
+  trusted source (everyayah.com). The reciter is chosen with `/reciter` (Abdul
+  Basit by default, plus Husary, Alafasy, As-Sudais, Al-Minshawi) or turned off;
+  each page/reciter clip is fetched once then re-sent by cached file_id.
 - Posts a short daily tajweed lesson right before the wird (on by default), so
   readers learn to recite correctly a rule at a time. Each lesson has a plain
   explanation, an example ayah (verified text from the database), and an optional
@@ -81,7 +85,8 @@ it. Set `USER_WIRD_ENABLED=false` for a channel only deployment. See
 
 All in Arabic. `/today` read today's wird now (counts as today's), `/wird` pages
 per day, `/tajweed` the daily tajweed lesson (read it now, or toggle on/off with
-`/tajweed on|off`), `/format` text or Mushaf-page image, `/page` go to a specific
+`/tajweed on|off`), `/reciter` the page-recitation voice (pick a reciter or off),
+`/format` text or Mushaf-page image, `/page` go to a specific
 page (1 to 604) and read it now, `/time` send time, `/days` send days,
 `/timezone` timezone, `/pause` take a break or come back, `/status` your
 settings, `/help` help.
@@ -92,7 +97,8 @@ Private chat, admins only. `/admin_setpage N` set the last page read (the
 channel resumes at N+1), `/admin_wird N` pages per day, `/admin_time HH:MM`
 post time, `/admin_tz Area/City` timezone, `/admin_pause` pause or resume,
 `/admin_format text|image` how the channel posts (text or Mushaf-page image),
-`/admin_tajweed on|off` the channel's daily tajweed lesson, `/admin_review` get
+`/admin_tajweed on|off` the channel's daily tajweed lesson, `/admin_reciter
+<off|key>` the channel's recitation voice, `/admin_review` get
 the whole tajweed deck as a document to review or forward to a scholar,
 `/admin_status` channel status, `/admin_send` send the batch now.
 

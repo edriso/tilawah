@@ -124,6 +124,22 @@ per-ayah recitation (`TAJWEED_AUDIO_BASE_URL`, fetched with `pnpm data:tajweed`,
 Husary by default), cached by Telegram file_id (`TajweedAudio`) exactly like the
 Mushaf images. Without an audio source, lessons go out as text + the example.
 
+## Daily page recitation
+
+After the wird, the bot sends an audio recitation of each delivered page (on by
+default for users and the channel; `/reciter` switches voice or turns it off,
+`/admin_reciter <off|key>` for the channel). Each subscriber has `reciter`
+(default `abdulbasit`) and `wirdAudioEnabled`. The reciters and the per-page URL
+builder live in `src/core/reciter.ts` (`RECITERS` maps each key to its
+everyayah.com data folder; `pageAudioSource(reciter, page)` builds
+`…/PageMp3s/Page<NNN>.mp3`). The clip is fetched from everyayah (trusted,
+no-copyright) the first time and then re-sent by cached `file_id` (`PageAudio`,
+keyed by page+reciter) — same approach as the Mushaf images, so the full set is
+never stored locally. Sending is best-effort and page-by-page (`sendPageAudio`
+in deliver.ts): a failed clip is skipped and NEVER blocks the wird; it runs
+after the delivery is recorded, for exactly the pages that went out. A juz wird
+therefore sends one audio per page.
+
 ## Channel and users are optional
 
 Config decides what runs (see `.env.example`):
@@ -209,6 +225,11 @@ Commit the new folder under `prisma/migrations/`. Production applies it with
   files are re-export shims.
 - Page and wird math: `src/core/wird.ts`
 - Message building (one message per page): `src/core/format.ts`
+- Page recitation: reciters + per-page URL builder in `src/core/reciter.ts`;
+  the file_id cache in `src/database/services/page-audio.service.ts` (table
+  `page_audio`); the delivery (`sendPageAudio`) and reciter names/captions in
+  `src/lib/deliver.ts` and `src/lib/copy.ts`; the picker in
+  `src/lib/reciter-keyboard.ts`.
 - Tajweed lesson math + formatter: `src/core/tajweed.ts`; the lesson deck:
   `src/database/reference/tajweed-lessons.ts`; the example-audio sender +
   file_id cache: `src/lib/send-audio.ts` + `src/database/services/tajweed-audio.service.ts`;

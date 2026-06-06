@@ -14,9 +14,12 @@ import {
   lessonIndexInRange,
   nextLessonIndex,
   toArabicDigits,
+  pageAudioSource,
+  normalizeReciter,
   WIRD_FORMAT_IMAGE,
   type WirdFormat,
   type PageContent,
+  type ReciterKey,
 } from '../core';
 import {
   listDeliverableSubscribers,
@@ -31,6 +34,8 @@ import {
   cachePageImageId,
   getCachedTajweedAudioId,
   cacheTajweedAudioId,
+  getCachedPageAudioId,
+  cachePageAudioId,
   TAJWEED_LESSONS,
   TAJWEED_LESSON_COUNT,
   LESSONS_PENDING_REVIEW,
@@ -385,6 +390,51 @@ export async function buildLessonReview(): Promise<string> {
   return lines.join('\n');
 }
 
+// ─── Page recitation audio ──────────────────────────────────────────
+
+/**
+ * After the wird, send a recitation clip for each page in the subscriber's
+ * chosen reciter (default Abdul Basit). Best effort and page-by-page: a failed
+ * clip is logged and skipped, never blocking the rest or the wird. The clip is
+ * fetched from the trusted source (everyayah) the first time and then re-sent
+ * by cached file_id. Stops early if the chat turns out to be blocked.
+ */
+export async function sendPageAudio(
+  bot: Bot<Context>,
+  chatId: bigint,
+  pages: PageContent[],
+  reciter: ReciterKey,
+): Promise<void> {
+  for (const page of pages) {
+    try {
+      const cached = await getCachedPageAudioId(page.pageNumber, reciter);
+      let audio: string | InputFile;
+      if (cached) {
+        audio = cached;
+      } else {
+        const src = pageAudioSource(reciter, page.pageNumber);
+        audio = isHttpSource(src) ? src : new InputFile(src);
+      }
+      const { result, fileId } = await sendAudio(
+        bot,
+        chatId,
+        audio,
+        COPY.pageAudioCaption(page.pageNumber, reciter),
+      );
+      if (result === 'blocked') return; // the chat is blocked; stop trying
+      if (result === 'ok' && fileId && fileId !== cached) {
+        await cachePageAudioId(page.pageNumber, reciter, fileId);
+      }
+    } catch (err) {
+      logger.warn('Page recitation failed (wird already sent)', {
+        chatId: String(chatId),
+        page: page.pageNumber,
+        error: String(err),
+      });
+    }
+  }
+}
+
 /**
  * The heart of the bot: find every subscriber whose wird is due right now and
  * send it. Safe to run every minute and safe to run twice for the same
@@ -495,6 +545,17 @@ export async function deliverDueSubscribers(
           lastResult: result,
         });
         if (result === 'blocked' && sub.kind === KIND_USER) await markBlocked(sub.id);
+      }
+
+      // After the wird, send the page recitation for the pages that went out
+      // (best effort; never affects the recorded delivery above).
+      if (sub.wirdAudioEnabled) {
+        await sendPageAudio(
+          bot,
+          sub.chatId,
+          content.slice(0, pagesSent),
+          normalizeReciter(sub.reciter),
+        );
       }
     } catch (err) {
       stats.failed++;

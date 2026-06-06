@@ -20,6 +20,8 @@ const h = vi.hoisted(() => ({
   getAyahText: vi.fn(),
   getCachedTajweedAudioId: vi.fn(),
   cacheTajweedAudioId: vi.fn(),
+  getCachedPageAudioId: vi.fn(),
+  cachePageAudioId: vi.fn(),
   // A tiny fake lesson deck (3 lessons) so the cycle/advance can be asserted.
   // Defined inside hoisted state so the vi.mock factory below can reference it.
   lessons: [
@@ -42,6 +44,8 @@ vi.mock('../database', () => ({
   cachePageImageId: h.cachePageImageId,
   getCachedTajweedAudioId: h.getCachedTajweedAudioId,
   cacheTajweedAudioId: h.cacheTajweedAudioId,
+  getCachedPageAudioId: h.getCachedPageAudioId,
+  cachePageAudioId: h.cachePageAudioId,
   TAJWEED_LESSONS: h.lessons,
   TAJWEED_LESSON_COUNT: h.lessons.length,
   // These tests exercise the LIVE behaviour (deck reviewed). The pending-review
@@ -129,10 +133,12 @@ function sub(over: Record<string, unknown> = {}) {
     activeDays: 127,
     wirdSize: 1,
     currentPage: 1,
-    // Tajweed lesson off by default here so the wird-focused tests keep their
-    // exact send counts; the tajweed tests turn it on explicitly.
+    // Tajweed lesson + page audio off by default here so the wird-focused tests
+    // keep their exact send counts; the relevant tests turn them on explicitly.
     tajweedEnabled: false,
     tajweedLessonIndex: 0,
+    wirdAudioEnabled: false,
+    reciter: 'abdulbasit',
     pausedAt: null,
     blockedAt: null,
     startedAt: null,
@@ -148,6 +154,8 @@ beforeEach(() => {
   h.getAyahText.mockResolvedValue({ surahNameAr: 'البقرة', numberInSurah: 27, text: 'نص الآية' });
   h.getCachedTajweedAudioId.mockResolvedValue(null);
   h.cacheTajweedAudioId.mockResolvedValue({});
+  h.getCachedPageAudioId.mockResolvedValue(null);
+  h.cachePageAudioId.mockResolvedValue({});
   h.sendAudio.mockResolvedValue({ result: 'ok', fileId: 'AUDIO_1' });
   h.getBasmala.mockResolvedValue('بسم الله');
   h.getWird.mockResolvedValue(CONTENT);
@@ -597,5 +605,42 @@ describe('buildLessonReview', () => {
     h.getAyahText.mockResolvedValue(null);
     const doc = await buildLessonReview();
     expect(doc).toContain('غير موجود في قاعدة البيانات');
+  });
+});
+
+describe('deliverDueSubscribers (page recitation)', () => {
+  it('sends a page recitation after the wird in the chosen reciter, and caches it', async () => {
+    h.listDeliverableSubscribers.mockResolvedValue([
+      sub({ wirdFormat: 'text', wirdAudioEnabled: true, reciter: 'husary', currentPage: 1 }),
+    ]);
+    await deliverDueSubscribers(fakeBot, NOW);
+
+    // getWird (mocked) returns page 1; the audio is fetched from everyayah in
+    // Husary's voice and the returned file_id is cached.
+    expect(h.sendAudio).toHaveBeenCalledOnce();
+    expect(h.sendAudio.mock.calls[0][2]).toBe(
+      'https://everyayah.com/data/Husary_128kbps/PageMp3s/Page001.mp3',
+    );
+    expect(h.cachePageAudioId).toHaveBeenCalledWith(1, 'husary', 'AUDIO_1');
+  });
+
+  it('sends no recitation when the subscriber turned it off', async () => {
+    h.listDeliverableSubscribers.mockResolvedValue([
+      sub({ wirdFormat: 'text', wirdAudioEnabled: false }),
+    ]);
+    await deliverDueSubscribers(fakeBot, NOW);
+    expect(h.sendAudio).not.toHaveBeenCalled();
+  });
+
+  it('reuses a cached page-audio file_id and does not re-cache it', async () => {
+    h.listDeliverableSubscribers.mockResolvedValue([
+      sub({ wirdFormat: 'text', wirdAudioEnabled: true, reciter: 'husary', currentPage: 1 }),
+    ]);
+    h.getCachedPageAudioId.mockResolvedValue('CACHED_PAGE');
+    h.sendAudio.mockResolvedValue({ result: 'ok', fileId: 'CACHED_PAGE' });
+    await deliverDueSubscribers(fakeBot, NOW);
+
+    expect(h.sendAudio.mock.calls[0][2]).toBe('CACHED_PAGE'); // sent by file_id
+    expect(h.cachePageAudioId).not.toHaveBeenCalled();
   });
 });
