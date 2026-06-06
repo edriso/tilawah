@@ -1,4 +1,4 @@
-import { loadEnv, hasPagePlaceholder } from './core';
+import { loadEnv, hasPagePlaceholder, hasAyahPlaceholder } from './core';
 
 // Load the single root .env before we read any variable.
 loadEnv();
@@ -60,6 +60,22 @@ function parseImageBaseUrl(raw: string | undefined): string | null {
   return url;
 }
 
+/** Validate the optional tajweed example-audio source template. Empty = no
+ *  audio (lessons go out as text). Like the image source it may be an http(s)
+ *  URL or a local path, and must carry {surah}/{ayah} (or {surah3}/{ayah3})
+ *  placeholders so it can form a real per-ayah source. */
+function parseAudioBaseUrl(raw: string | undefined): string | null {
+  const url = raw?.trim();
+  if (!url) return null;
+  if (!hasAyahPlaceholder(url)) {
+    throw new Error(
+      `TAJWEED_AUDIO_BASE_URL must contain {surah}/{ayah} (or {surah3}/{ayah3}) placeholders ` +
+        `(got "${url}"). Example: https://your-host.example/tajweed/{surah3}{ayah3}.mp3`,
+    );
+  }
+  return url;
+}
+
 export const config = Object.freeze({
   // REQUIRED. Bot token from @BotFather.
   botToken: requireEnv('BOT_TOKEN').trim(),
@@ -75,6 +91,9 @@ export const config = Object.freeze({
   // Template URL for Madani Mushaf page images, or null when the image
   // delivery format is not configured. See parseImageBaseUrl and .env.example.
   mushafImageBaseUrl: parseImageBaseUrl(process.env.MUSHAF_IMAGE_BASE_URL),
+  // Template for per-ayah tajweed example audio, or null when not configured
+  // (lessons then go out without an audio clip). See parseAudioBaseUrl.
+  tajweedAudioBaseUrl: parseAudioBaseUrl(process.env.TAJWEED_AUDIO_BASE_URL),
   isDev: process.env.NODE_ENV !== 'production',
 });
 

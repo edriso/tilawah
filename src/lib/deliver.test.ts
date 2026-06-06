@@ -16,6 +16,17 @@ const h = vi.hoisted(() => ({
   sendMessages: vi.fn(),
   sendPhoto: vi.fn(),
   sendPhotoAlbum: vi.fn(),
+  sendAudio: vi.fn(),
+  getAyahText: vi.fn(),
+  getCachedTajweedAudioId: vi.fn(),
+  cacheTajweedAudioId: vi.fn(),
+  // A tiny fake lesson deck (3 lessons) so the cycle/advance can be asserted.
+  // Defined inside hoisted state so the vi.mock factory below can reference it.
+  lessons: [
+    { titleAr: 'الإقلاب', bodyAr: 'قاعدة الإقلاب.', example: { surah: 2, ayah: 27 } },
+    { titleAr: 'الإظهار', bodyAr: 'قاعدة الإظهار.', example: { surah: 1, ayah: 7 } },
+    { titleAr: 'المد', bodyAr: 'قاعدة المد.', example: { surah: 1, ayah: 2 } },
+  ],
 }));
 
 vi.mock('../database', () => ({
@@ -24,10 +35,18 @@ vi.mock('../database', () => ({
   getDeliveryFor: h.getDeliveryFor,
   getWird: h.getWird,
   getBasmala: h.getBasmala,
+  getAyahText: h.getAyahText,
   commitDelivery: h.commitDelivery,
   markBlocked: h.markBlocked,
   getCachedPageImageIds: h.getCachedPageImageIds,
   cachePageImageId: h.cachePageImageId,
+  getCachedTajweedAudioId: h.getCachedTajweedAudioId,
+  cacheTajweedAudioId: h.cacheTajweedAudioId,
+  TAJWEED_LESSONS: h.lessons,
+  TAJWEED_LESSON_COUNT: h.lessons.length,
+  // These tests exercise the LIVE behaviour (deck reviewed). The pending-review
+  // gate is a plain boolean short-circuit in tajweedLessonView.
+  LESSONS_PENDING_REVIEW: false,
   KIND_USER: 'user',
   KIND_CHANNEL: 'channel',
 }));
@@ -37,10 +56,16 @@ vi.mock('./send-photo', () => ({
   sendPhotoAlbum: h.sendPhotoAlbum,
   MAX_ALBUM_SIZE: 10,
 }));
+vi.mock('./send-audio', () => ({ sendAudio: h.sendAudio }));
 // A page-image source is configured by default so the image tests exercise the
 // real photo path; the text tests don't reach it. The fallback test nulls it.
+// Tajweed audio is off by default (lessons go out as text); one test enables it.
 vi.mock('../config', () => ({
-  config: { userWirdEnabled: true, mushafImageBaseUrl: 'https://x/{page3}.png' },
+  config: {
+    userWirdEnabled: true,
+    mushafImageBaseUrl: 'https://x/{page3}.png',
+    tajweedAudioBaseUrl: null,
+  },
   channelEnabled: () => true,
 }));
 vi.mock('./logger', () => ({
@@ -54,7 +79,10 @@ import { advanceStartPage } from '../core';
 
 // The real config is frozen (readonly); the mock is a plain object we tweak per
 // test, so reach it through a mutable view.
-const mutableConfig = config as { mushafImageBaseUrl: string | null };
+const mutableConfig = config as {
+  mushafImageBaseUrl: string | null;
+  tajweedAudioBaseUrl: string | null;
+};
 
 const NOW = new Date('2026-06-01T12:00:00Z');
 const fakeBot = {} as never;
@@ -101,6 +129,10 @@ function sub(over: Record<string, unknown> = {}) {
     activeDays: 127,
     wirdSize: 1,
     currentPage: 1,
+    // Tajweed lesson off by default here so the wird-focused tests keep their
+    // exact send counts; the tajweed tests turn it on explicitly.
+    tajweedEnabled: false,
+    tajweedLessonIndex: 0,
     pausedAt: null,
     blockedAt: null,
     startedAt: null,
@@ -110,8 +142,13 @@ function sub(over: Record<string, unknown> = {}) {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  // Restore the image source each run, in case a test nulled it.
+  // Restore the sources each run, in case a test changed them.
   mutableConfig.mushafImageBaseUrl = 'https://x/{page3}.png';
+  mutableConfig.tajweedAudioBaseUrl = null;
+  h.getAyahText.mockResolvedValue({ surahNameAr: 'البقرة', numberInSurah: 27, text: 'نص الآية' });
+  h.getCachedTajweedAudioId.mockResolvedValue(null);
+  h.cacheTajweedAudioId.mockResolvedValue({});
+  h.sendAudio.mockResolvedValue({ result: 'ok', fileId: 'AUDIO_1' });
   h.getBasmala.mockResolvedValue('بسم الله');
   h.getWird.mockResolvedValue(CONTENT);
   h.hasDeliveryFor.mockResolvedValue(false);
@@ -482,5 +519,59 @@ describe('deliverDueSubscribers (image format)', () => {
       nextPage: advanceStartPage(1, 10),
     });
     expect(stats).toMatchObject({ due: 1, sent: 1 });
+  });
+});
+
+describe('deliverDueSubscribers (tajweed lesson)', () => {
+  it('sends the lesson BEFORE the wird and advances the lesson on success', async () => {
+    h.listDeliverableSubscribers.mockResolvedValue([
+      sub({ wirdFormat: 'text', tajweedEnabled: true, tajweedLessonIndex: 0 }),
+    ]);
+    const stats = await deliverDueSubscribers(fakeBot, NOW);
+
+    // Two text sends: the lesson FIRST, then the one-page wird.
+    expect(h.sendMessages).toHaveBeenCalledTimes(2);
+    expect(h.sendMessages.mock.calls[0][2][0]).toContain('درس التجويد اليوم'); // lesson is first
+    // The day is committed and the lesson advances 0 -> 1.
+    expect(h.commitDelivery.mock.calls[0][0]).toMatchObject({ nextLessonIndex: 1 });
+    expect(stats).toMatchObject({ due: 1, sent: 1 });
+  });
+
+  it('does NOT advance the lesson when the lesson send fails (wird still goes)', async () => {
+    h.listDeliverableSubscribers.mockResolvedValue([
+      sub({ wirdFormat: 'text', tajweedEnabled: true, tajweedLessonIndex: 0 }),
+    ]);
+    // Lesson text fails, the wird text then succeeds.
+    h.sendMessages.mockResolvedValueOnce('failed').mockResolvedValue('ok');
+
+    await deliverDueSubscribers(fakeBot, NOW);
+
+    // The wird was still committed, but the lesson index did not move.
+    expect(h.commitDelivery).toHaveBeenCalledOnce();
+    expect(h.commitDelivery.mock.calls[0][0].nextLessonIndex).toBeUndefined();
+  });
+
+  it('sends no lesson when the subscriber has it turned off', async () => {
+    h.listDeliverableSubscribers.mockResolvedValue([
+      sub({ wirdFormat: 'text', tajweedEnabled: false }),
+    ]);
+    await deliverDueSubscribers(fakeBot, NOW);
+
+    // Only the wird went out (one text send), and no lesson advance.
+    expect(h.sendMessages).toHaveBeenCalledOnce();
+    expect(h.commitDelivery.mock.calls[0][0].nextLessonIndex).toBeUndefined();
+  });
+
+  it('attaches the example audio when a source is configured, caching its file_id', async () => {
+    mutableConfig.tajweedAudioBaseUrl = 'https://x/{surah3}{ayah3}.mp3';
+    h.listDeliverableSubscribers.mockResolvedValue([
+      sub({ wirdFormat: 'text', tajweedEnabled: true, tajweedLessonIndex: 0 }),
+    ]);
+    await deliverDueSubscribers(fakeBot, NOW);
+
+    // Lesson 0's example is (2, 27): audio fetched from the built URL and cached.
+    expect(h.sendAudio).toHaveBeenCalledOnce();
+    expect(h.sendAudio.mock.calls[0][2]).toBe('https://x/002027.mp3');
+    expect(h.cacheTajweedAudioId).toHaveBeenCalledWith(2, 27, 'AUDIO_1');
   });
 });

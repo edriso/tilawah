@@ -1,5 +1,5 @@
 import { prisma } from '../client';
-import { pagesForWird, type PageContent } from '../../core';
+import { pagesForWird, type PageContent, type LessonExample } from '../../core';
 import { TOTAL_AYAT } from '../reference/ayah-counts';
 import { PAGE_COUNT, JUZ_COUNT } from '../reference/pages';
 
@@ -98,6 +98,21 @@ export async function getPageContents(pageNumbers: number[]): Promise<PageConten
   }
 
   return pageNumbers.map((p) => pageCache.get(p)).filter((p): p is PageContent => p !== undefined);
+}
+
+/** The verified text of one ayah (with its surah's Arabic name), or null if it
+ *  is not seeded. Used to render a tajweed lesson's example from the database,
+ *  so the example text is always the verified Uthmani text, never typed. */
+export async function getAyahText(
+  surahNumber: number,
+  numberInSurah: number,
+): Promise<LessonExample | null> {
+  const row = await prisma.ayah.findUnique({
+    where: { surahNumber_numberInSurah: { surahNumber, numberInSurah } },
+    select: { numberInSurah: true, text: true, surah: { select: { nameAr: true } } },
+  });
+  if (!row) return null;
+  return { numberInSurah: row.numberInSurah, text: row.text, surahNameAr: row.surah.nameAr };
 }
 
 /** The juz a page belongs to (the juz of its first ayah), or null if the page

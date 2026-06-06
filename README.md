@@ -16,6 +16,12 @@ extend the project.
   `/format`, the channel admin with `/admin_format`. If an image is missing the
   bot quietly sends that page as text, so a wird always arrives. See
   `docs/DEPLOY.md` for the image source and self-hosting.
+- Posts a short daily tajweed lesson right before the wird (on by default), so
+  readers learn to recite correctly a rule at a time. Each lesson has a plain
+  explanation, an example ayah (verified text from the database), and an optional
+  recitation clip. The lessons run in order and repeat when finished. Readers
+  toggle it with `/tajweed`, the channel admin with `/admin_tajweed`. The lesson
+  drafts await scholarly review before launch (see `LESSONS_PENDING_REVIEW`).
 - A public channel posts the daily portion to everyone who follows it. An admin
   sets the last page read and the bot continues from the next page.
 - Each user can set how many pages a day (1 to 20), which days, what time, and
@@ -74,10 +80,11 @@ it. Set `USER_WIRD_ENABLED=false` for a channel only deployment. See
 ## User commands
 
 All in Arabic. `/today` read today's wird now (counts as today's), `/wird` pages
-per day, `/format` text or Mushaf-page image, `/page` go to a specific page (1
-to 604) and read it now, `/time` send time, `/days` send days, `/timezone`
-timezone, `/pause` take a break or come back, `/status` your settings, `/help`
-help.
+per day, `/tajweed` the daily tajweed lesson (read it now, or toggle on/off with
+`/tajweed on|off`), `/format` text or Mushaf-page image, `/page` go to a specific
+page (1 to 604) and read it now, `/time` send time, `/days` send days,
+`/timezone` timezone, `/pause` take a break or come back, `/status` your
+settings, `/help` help.
 
 ## Admin commands (channel)
 
@@ -85,7 +92,8 @@ Private chat, admins only. `/admin_setpage N` set the last page read (the
 channel resumes at N+1), `/admin_wird N` pages per day, `/admin_time HH:MM`
 post time, `/admin_tz Area/City` timezone, `/admin_pause` pause or resume,
 `/admin_format text|image` how the channel posts (text or Mushaf-page image),
-`/admin_status` channel status, `/admin_send` send the batch now.
+`/admin_tajweed on|off` the channel's daily tajweed lesson, `/admin_status`
+channel status, `/admin_send` send the batch now.
 
 ## Development
 

@@ -12,8 +12,10 @@ export * from './services/subscriber.service';
 export * from './services/pause.service';
 export * from './services/delivery.service';
 export * from './services/mushaf-image.service';
+export * from './services/tajweed-audio.service';
 
 // Reference data
 export * from './reference/surahs';
 export * from './reference/ayah-counts';
 export * from './reference/pages';
+export * from './reference/tajweed-lessons';

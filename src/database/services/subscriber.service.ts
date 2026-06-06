@@ -121,6 +121,15 @@ export function setTimezone(subscriberId: number, timezone: string) {
   return prisma.subscriber.update({ where: { id: subscriberId }, data: { timezone } });
 }
 
+/** Turn the daily tajweed lesson on or off for a subscriber (or the channel).
+ *  On by default; this lets a reader opt out without affecting the wird. */
+export function setTajweedEnabled(subscriberId: number, enabled: boolean) {
+  return prisma.subscriber.update({
+    where: { id: subscriberId },
+    data: { tajweedEnabled: enabled },
+  });
+}
+
 /**
  * Mark a subscriber unreachable (they blocked the bot, or a send failed with
  * 403). Send loops skip blocked subscribers. Cleared the next time a user

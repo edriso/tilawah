@@ -3,6 +3,7 @@ import {
   activeDaysList,
   nextPageAfter,
   advanceStartPage,
+  nextLessonIndex,
   normalizeWirdFormat,
   isWirdFormat,
   WIRD_FORMAT_IMAGE,
@@ -14,18 +15,29 @@ import {
   setWirdSize,
   setWirdFormat,
   setCurrentPage,
+  setTajweedEnabled,
   toggleActiveDay,
   setDeliveryTime,
   setTimezone,
   pauseSubscriber,
   resumeSubscriber,
   commitDelivery,
+  TAJWEED_LESSON_COUNT,
+  LESSONS_PENDING_REVIEW,
   type Subscriber,
 } from './database';
 import { config, imageWirdAvailable } from './config';
 import { logger } from './lib/logger';
 import { COPY, settingsSummary, formatTimeAr, daysSummaryAr } from './lib/copy';
-import { previewWird, buildTodayView, sendWird, type TodayView } from './lib/deliver';
+import {
+  previewWird,
+  buildTodayView,
+  sendWird,
+  tajweedLessonView,
+  sendLesson,
+  type TodayView,
+} from './lib/deliver';
+import { buildTajweedKeyboard, TAJWEED_TOGGLE } from './lib/tajweed-keyboard';
 import { runDeliveryOnce } from './scheduler';
 import { buildDaysKeyboard, DAY_TOGGLE_PREFIX, DAYS_DONE } from './lib/days-keyboard';
 import { buildTimeKeyboard, TIME_PICK_PREFIX } from './lib/time-keyboard';
@@ -99,6 +111,7 @@ async function statusText(sub: Subscriber, isChannel = false): Promise<string> {
       pausedAt: sub.pausedAt,
       currentJuz,
       wirdFormat: normalizeWirdFormat(sub.wirdFormat),
+      tajweedEnabled: sub.tajweedEnabled,
     },
     { isChannel },
   );
@@ -137,6 +150,18 @@ async function sendTodayView(
   view: TodayView,
   now: Date,
 ): Promise<void> {
+  // The daily tajweed lesson goes out right before the wird, but only when this
+  // view will be claimed as today's delivery (not on a re-show or a preview).
+  let lessonSent = false;
+  let lessonIndex = -1;
+  if (view.claim) {
+    const lesson = await tajweedLessonView(sub);
+    if (lesson) {
+      lessonSent = (await sendLesson(bot, sub.chatId, lesson)) === 'ok';
+      lessonIndex = lesson.index;
+    }
+  }
+
   const { pagesSent } = await sendWird(bot, sub.chatId, view.pages, view.basmala, {
     lead: view.lead,
     format: normalizeWirdFormat(sub.wirdFormat),
@@ -154,6 +179,7 @@ async function sendTodayView(
       startPage: view.claim.startPage,
       pageCount: pagesSent,
       nextPage: advanceStartPage(view.claim.startPage, pagesSent),
+      nextLessonIndex: lessonSent ? nextLessonIndex(lessonIndex, TAJWEED_LESSON_COUNT) : undefined,
       startedAt: sub.startedAt,
       now,
     });
@@ -234,6 +260,36 @@ bot.command('format', async (ctx) => {
   await ctx.reply(COPY.formatPrompt(current, imageWirdAvailable()), {
     reply_markup: buildFormatKeyboard(current, imageWirdAvailable()),
   });
+});
+
+// /tajweed: the daily tajweed micro-lesson, posted right before the wird (on by
+// default). No arg: show today's lesson as a preview + a button to toggle it.
+// "/tajweed on" / "/tajweed off": set it directly.
+bot.command('tajweed', async (ctx) => {
+  const sub = await userSubscriber(ctx);
+  if (!sub) return;
+  // The deck is not live until it has been reviewed; say so rather than expose
+  // a draft or a toggle that does nothing yet.
+  if (LESSONS_PENDING_REVIEW) {
+    await ctx.reply(COPY.tajweedComingSoon);
+    return;
+  }
+  const arg = commandArg(ctx, 'tajweed')?.trim().toLowerCase();
+  if (arg === 'on' || arg === 'off') {
+    const enabled = arg === 'on';
+    await setTajweedEnabled(sub.id, enabled);
+    await ctx.reply(enabled ? COPY.tajweedEnabledMsg : COPY.tajweedDisabledMsg);
+    return;
+  }
+  if (arg) {
+    await ctx.reply(COPY.tajweedUsage(sub.tajweedEnabled));
+    return;
+  }
+  // No arg: header + (when on) a preview of today's lesson + the toggle button.
+  const header = COPY.tajweedStatus(sub.tajweedEnabled);
+  const lesson = sub.tajweedEnabled ? await tajweedLessonView(sub) : null;
+  const body = lesson ? `${header}\n\n${lesson.text}` : header;
+  await ctx.reply(body, { reply_markup: buildTajweedKeyboard(sub.tajweedEnabled) });
 });
 
 // /page: jump to a specific Mushaf page (1..604). With no argument, show the
@@ -357,6 +413,23 @@ bot.callbackQuery(new RegExp(`^${FORMAT_PICK_PREFIX}(text|image)$`), async (ctx)
   await ctx.editMessageReplyMarkup(); // remove the keyboard
   await ctx.reply(COPY.formatUpdated(chosen));
   await ctx.answerCallbackQuery();
+});
+
+// ─── Tajweed-lesson toggle button ───────────────────────────────────
+
+bot.callbackQuery(TAJWEED_TOGGLE, async (ctx) => {
+  const sub = await userFromCallback(ctx);
+  if (!sub) {
+    await ctx.answerCallbackQuery();
+    return;
+  }
+  const enabled = !sub.tajweedEnabled;
+  await setTajweedEnabled(sub.id, enabled);
+  // Redraw the button to its new state; ignore a stale-message edit error.
+  await ctx.editMessageReplyMarkup({ reply_markup: buildTajweedKeyboard(enabled) }).catch(() => {});
+  await ctx.answerCallbackQuery({
+    text: enabled ? COPY.tajweedToggledOn : COPY.tajweedToggledOff,
+  });
 });
 
 // ─── Day-picker buttons ─────────────────────────────────────────────
@@ -514,6 +587,20 @@ bot.command('admin_format', async (ctx) => {
   }
   await setWirdFormat(channel.id, chosen);
   await ctx.reply(COPY.adminFormatDone(chosen));
+});
+
+// /admin_tajweed <on|off>: turn the channel's daily tajweed lesson on or off.
+bot.command('admin_tajweed', async (ctx) => {
+  const channel = await adminChannel(ctx);
+  if (!channel) return;
+  const arg = commandArg(ctx, 'admin_tajweed')?.trim().toLowerCase();
+  if (arg !== 'on' && arg !== 'off') {
+    await ctx.reply(COPY.adminTajweedUsage(channel.tajweedEnabled));
+    return;
+  }
+  const enabled = arg === 'on';
+  await setTajweedEnabled(channel.id, enabled);
+  await ctx.reply(COPY.adminTajweedDone(enabled));
 });
 
 // /admin_time HH:MM: set the channel's daily post time.
@@ -688,6 +775,7 @@ async function setBotCommands() {
     await bot.api.setMyCommands([
       { command: 'today', description: 'قراءة ورد اليوم' },
       { command: 'wird', description: 'حجم الورد اليومي' },
+      { command: 'tajweed', description: 'درس التجويد اليومي (تشغيل/إيقاف)' },
       { command: 'format', description: 'طريقة الإرسال: نص أو صورة' },
       { command: 'page', description: 'الانتقال إلى صفحة معيّنة' },
       { command: 'time', description: 'ضبط وقت الإرسال' },

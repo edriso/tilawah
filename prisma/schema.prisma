@@ -94,6 +94,14 @@ model Subscriber {
   // loops past 604 back to 1. A brand-new subscriber starts at page 1.
   currentPage Int @default(1) @map("current_page")
 
+  // Daily tajweed micro-lesson, posted right before the wird. On by default for
+  // everyone (users and the channel). When off, only the wird is sent.
+  tajweedEnabled     Boolean @default(true) @map("tajweed_enabled")
+  // The NEXT lesson to send, a 0-based index into the seeded lesson deck. After
+  // each lesson it advances by one and wraps back to 0 (the deck repeats), like
+  // currentPage loops the Mushaf. See src/core/tajweed.ts.
+  tajweedLessonIndex Int     @default(0) @map("tajweed_lesson_index")
+
   // Break: null means active. When set, the bot sends nothing and the page
   // does not advance, so resuming continues exactly where they left off.
   pausedAt  DateTime? @map("paused_at")
@@ -160,4 +168,23 @@ model MushafPageImage {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   @@map("mushaf_page_images")
+}
+
+// ─── Tajweed example-audio cache ────────────────────────────────────
+//
+// Same idea as MushafPageImage, but for the per-ayah recitation clips used as
+// the daily tajweed lesson's audio example. Keyed by the (surah, ayah) the clip
+// recites, so a clip is uploaded from the source once and then re-sent by
+// file_id forever. Only as many rows as there are distinct example ayat (~45).
+
+model TajweedAudio {
+  surahNumber   Int      @map("surah_number")
+  numberInSurah Int      @map("number_in_surah")
+  // The Telegram file_id of the sent audio, reused on every later send.
+  fileId        String   @map("file_id") @db.VarChar(255)
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  @@id([surahNumber, numberInSurah])
+  @@map("tajweed_audio")
 }

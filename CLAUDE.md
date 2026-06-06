@@ -99,6 +99,31 @@ records exactly the pages that actually went out and advances by that many, so a
 partial send (e.g. an image source dies mid-wird) rolls the rest to the next run
 instead of re-sending pages the reader already received.
 
+## Daily tajweed lesson
+
+Right BEFORE the wird, the bot posts a short tajweed micro-lesson (on by default
+for users and the channel; `/tajweed` toggles it for a user, `/admin_tajweed
+on|off` for the channel). The deck is authored reference data in
+`src/database/reference/tajweed-lessons.ts`, ordered, drawn from تحفة الأطفال and
+المقدمة الجزرية. It is NOT Quran text: each lesson only NAMES an example by
+`(surah, ayah)`, and the verified Uthmani text is read from the database
+(`getAyahText`) at send time — the golden rule applies to the deck too (a test
+fails if a body/note contains `﴿ ﴾`). The drafts are PENDING scholarly review:
+while `LESSONS_PENDING_REVIEW = true` the lesson is NEVER sent and `/tajweed`
+replies "coming soon" (startup also warns), even though the toggle defaults on —
+`tajweedLessonView` short-circuits. Flip the flag to false after a qualified
+reader has gone through the deck, and it goes live for everyone.
+
+Each subscriber has `tajweedEnabled` and `tajweedLessonIndex`. The lesson is
+best-effort and NEVER blocks the wird; the wird send stays the source of truth
+for blocked/failed. The lesson index advances by one (wrapping to 0 — the deck
+repeats, like the wird loops the Mushaf) ONLY when the lesson actually went out
+AND the day is committed, in the same `commitDelivery` transaction. Lesson text
+is sent first, then (best effort) its example audio clip: an optional self-hosted
+per-ayah recitation (`TAJWEED_AUDIO_BASE_URL`, fetched with `pnpm data:tajweed`,
+Husary by default), cached by Telegram file_id (`TajweedAudio`) exactly like the
+Mushaf images. Without an audio source, lessons go out as text + the example.
+
 ## Channel and users are optional
 
 Config decides what runs (see `.env.example`):
@@ -132,6 +157,7 @@ Quran data is not fully seeded.
 pnpm install
 pnpm data:fetch     # download + verify the Quran text, pages, and juz (once; also committed)
 pnpm data:mushaf    # (optional) download + verify the 604 page images to self-host them
+pnpm data:tajweed   # (optional) download + verify the tajweed example clips to self-host them
 pnpm db:deploy      # apply migrations (create tables)
 pnpm db:seed        # fill the Quran tables
 pnpm dev            # run the bot with reload
@@ -183,6 +209,11 @@ Commit the new folder under `prisma/migrations/`. Production applies it with
   files are re-export shims.
 - Page and wird math: `src/core/wird.ts`
 - Message building (one message per page): `src/core/format.ts`
+- Tajweed lesson math + formatter: `src/core/tajweed.ts`; the lesson deck:
+  `src/database/reference/tajweed-lessons.ts`; the example-audio sender +
+  file_id cache: `src/lib/send-audio.ts` + `src/database/services/tajweed-audio.service.ts`;
+  the delivery wiring (`tajweedLessonView`, `sendLesson`): `src/lib/deliver.ts`;
+  the self-host script: `scripts/fetch-tajweed-audio.ts`.
 - Surah names and revelation: `src/database/reference/surahs.ts`
 - Ayah count oracle: `src/database/reference/ayah-counts.ts`
 - Page and juz constants and anchors: `src/database/reference/pages.ts`

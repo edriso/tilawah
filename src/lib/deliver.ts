@@ -7,8 +7,12 @@ import {
   getLocalContext,
   isDayActive,
   mushafImageSource,
+  tajweedAudioSource,
   isHttpSource,
   normalizeWirdFormat,
+  formatLesson,
+  lessonIndexInRange,
+  nextLessonIndex,
   WIRD_FORMAT_IMAGE,
   type WirdFormat,
   type PageContent,
@@ -18,11 +22,17 @@ import {
   hasDeliveryFor,
   getDeliveryFor,
   getWird,
+  getAyahText,
   getBasmala,
   commitDelivery,
   markBlocked,
   getCachedPageImageIds,
   cachePageImageId,
+  getCachedTajweedAudioId,
+  cacheTajweedAudioId,
+  TAJWEED_LESSONS,
+  TAJWEED_LESSON_COUNT,
+  LESSONS_PENDING_REVIEW,
   KIND_USER,
   KIND_CHANNEL,
   type DeliverableSubscriber,
@@ -30,6 +40,7 @@ import {
 import { config, channelEnabled } from '../config';
 import { sendMessages, type SendResult } from './send';
 import { sendPhoto, sendPhotoAlbum, MAX_ALBUM_SIZE } from './send-photo';
+import { sendAudio } from './send-audio';
 import { COPY } from './copy';
 import { logger } from './logger';
 
@@ -233,6 +244,96 @@ async function sendPagesAsText(
   return { pagesSent, lastResult };
 }
 
+// ─── Daily tajweed lesson ───────────────────────────────────────────
+
+/** The rendered lesson to post before a subscriber's wird. */
+export interface LessonView {
+  /** The lesson's 0-based index in the deck (for advancing the cycle). */
+  index: number;
+  /** Short title, used for the audio clip's caption. */
+  titleAr: string;
+  /** The full lesson message text. */
+  text: string;
+  /** The example ayah, for resolving its audio clip. */
+  example: { surah: number; ayah: number };
+}
+
+/**
+ * Build the lesson at a subscriber's current position, or null when there is
+ * nothing to send: the lesson is turned off, the deck is empty, or the example
+ * ayah is somehow not seeded (logged, and we skip the lesson rather than block
+ * the wird). The example TEXT comes from the verified database, never typed.
+ */
+export async function tajweedLessonView(sub: {
+  tajweedEnabled: boolean;
+  tajweedLessonIndex: number;
+}): Promise<LessonView | null> {
+  // Safety gate: never broadcast the deck while it is still pending scholarly
+  // review, even though the toggle defaults on. Flip LESSONS_PENDING_REVIEW to
+  // false (after review) to go live. This covers both delivery and the /tajweed
+  // preview, since both build the view here.
+  if (LESSONS_PENDING_REVIEW || !sub.tajweedEnabled || TAJWEED_LESSON_COUNT === 0) return null;
+  const index = lessonIndexInRange(sub.tajweedLessonIndex, TAJWEED_LESSON_COUNT);
+  const lesson = TAJWEED_LESSONS[index]!;
+  const example = await getAyahText(lesson.example.surah, lesson.example.ayah);
+  if (!example) {
+    logger.error('Tajweed example ayah not seeded; skipping the lesson', {
+      index,
+      surah: lesson.example.surah,
+      ayah: lesson.example.ayah,
+    });
+    return null;
+  }
+  return {
+    index,
+    titleAr: lesson.titleAr,
+    text: formatLesson(lesson, example),
+    example: lesson.example,
+  };
+}
+
+/**
+ * Send a rendered lesson: the text first, then (best effort) its example audio
+ * clip. The text is the lesson; the audio is a bonus, so an audio failure is
+ * logged and swallowed. Returns the TEXT's result (ok / blocked / failed) so
+ * the caller advances the lesson cycle only on a real send. A blocked/failed
+ * text never blocks the wird — the wird send that follows is the source of
+ * truth for a blocked or unreachable subscriber.
+ */
+export async function sendLesson(
+  bot: Bot<Context>,
+  chatId: bigint,
+  view: LessonView,
+): Promise<SendResult> {
+  const textResult = await sendMessages(bot, chatId, [view.text]);
+  if (textResult !== 'ok') return textResult;
+
+  const baseUrl = config.tajweedAudioBaseUrl;
+  if (baseUrl) {
+    try {
+      const { surah, ayah } = view.example;
+      const cachedId = await getCachedTajweedAudioId(surah, ayah);
+      let audio: string | InputFile;
+      if (cachedId) {
+        audio = cachedId;
+      } else {
+        const src = tajweedAudioSource(baseUrl, surah, ayah);
+        audio = isHttpSource(src) ? src : new InputFile(src);
+      }
+      const { result, fileId } = await sendAudio(bot, chatId, audio, `🔊 مثال: ${view.titleAr}`);
+      if (result === 'ok' && fileId && fileId !== cachedId) {
+        await cacheTajweedAudioId(surah, ayah, fileId);
+      }
+    } catch (err) {
+      logger.warn('Tajweed example audio failed (text lesson already sent)', {
+        chatId: String(chatId),
+        error: String(err),
+      });
+    }
+  }
+  return 'ok';
+}
+
 /**
  * The heart of the bot: find every subscriber whose wird is due right now and
  * send it. Safe to run every minute and safe to run twice for the same
@@ -278,6 +379,13 @@ export async function deliverDueSubscribers(
         logger.error('No wird content to send', { id: sub.id, startPage: sub.currentPage });
         continue;
       }
+      // The daily tajweed lesson goes out right BEFORE the wird (best effort).
+      // A lesson failure never blocks the wird; the wird send below remains the
+      // source of truth for blocked/failed. The lesson cycle only advances when
+      // the lesson actually went out AND the day is committed (below).
+      const lesson = await tajweedLessonView(sub);
+      const lessonSent = lesson ? (await sendLesson(bot, sub.chatId, lesson)) === 'ok' : false;
+
       // Send the wird one page at a time (text or image per the subscriber's
       // chosen format). Tracking how many pages actually went out lets a partial
       // failure advance by exactly that many: the rest roll into the next run
@@ -315,6 +423,8 @@ export async function deliverDueSubscribers(
         startPage: sub.currentPage,
         pageCount: pagesSent,
         nextPage: advanceStartPage(sub.currentPage, pagesSent),
+        nextLessonIndex:
+          lesson && lessonSent ? nextLessonIndex(lesson.index, TAJWEED_LESSON_COUNT) : undefined,
         startedAt: sub.startedAt,
         now,
       });

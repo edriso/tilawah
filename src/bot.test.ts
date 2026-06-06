@@ -13,6 +13,8 @@ const h = vi.hoisted(() => ({
   commitDelivery: vi.fn(),
   buildTodayView: vi.fn(),
   sendWird: vi.fn(),
+  tajweedLessonView: vi.fn(),
+  sendLesson: vi.fn(),
 }));
 
 vi.mock('./config', () => ({
@@ -40,10 +42,14 @@ vi.mock('./database', () => ({
   pauseSubscriber: vi.fn(),
   resumeSubscriber: vi.fn(),
   commitDelivery: h.commitDelivery,
+  setTajweedEnabled: vi.fn(),
+  TAJWEED_LESSON_COUNT: 45,
 }));
 vi.mock('./lib/deliver', () => ({
   buildTodayView: h.buildTodayView,
   sendWird: h.sendWird,
+  tajweedLessonView: h.tajweedLessonView,
+  sendLesson: h.sendLesson,
   previewWird: vi.fn(),
 }));
 vi.mock('./scheduler', () => ({ runDeliveryOnce: vi.fn() }));
@@ -74,6 +80,10 @@ beforeEach(() => {
   // The whole wird went out (pagesSent matches the one page below), so /today
   // and reposition claim the day.
   h.sendWird.mockResolvedValue({ pagesSent: 1, lastResult: 'ok' });
+  // Default: no tajweed lesson (these tests focus on the wird). Individual
+  // tests override tajweedLessonView to exercise the lesson path.
+  h.tajweedLessonView.mockResolvedValue(null);
+  h.sendLesson.mockResolvedValue('ok');
 });
 
 // A one-page view; pagesSent (1) matching pages.length (1) means a free day is
@@ -156,6 +166,39 @@ describe('repositionToPage', () => {
     );
     await repositionToPage(fakeCtx() as never, SUB, 5);
 
+    expect(h.commitDelivery).not.toHaveBeenCalled();
+  });
+
+  it('sends the tajweed lesson before the wird and advances it on a claim', async () => {
+    h.tajweedLessonView.mockResolvedValue({
+      index: 2,
+      titleAr: 'الإقلاب',
+      text: 'lesson text',
+      example: { surah: 2, ayah: 27 },
+    });
+    h.buildTodayView.mockResolvedValue(
+      ONE_PAGE_VIEW({
+        claim: { scheduledFor: '2026-06-01', startPage: 5, pageCount: 1, nextPage: 6 },
+      }),
+    );
+    await repositionToPage(fakeCtx() as never, SUB, 5);
+
+    expect(h.sendLesson).toHaveBeenCalledOnce();
+    // Committed with the lesson advanced from index 2 (TAJWEED_LESSON_COUNT 45 -> 3).
+    expect(h.commitDelivery.mock.calls[0][0]).toMatchObject({ nextLessonIndex: 3 });
+  });
+
+  it('does not advance the lesson on a preview (no claim)', async () => {
+    h.tajweedLessonView.mockResolvedValue({
+      index: 2,
+      titleAr: 'x',
+      text: 't',
+      example: { surah: 2, ayah: 27 },
+    });
+    h.buildTodayView.mockResolvedValue(ONE_PAGE_VIEW({ claim: null, alreadyDelivered: true }));
+    await repositionToPage(fakeCtx() as never, SUB, 50);
+
+    expect(h.sendLesson).not.toHaveBeenCalled();
     expect(h.commitDelivery).not.toHaveBeenCalled();
   });
 });

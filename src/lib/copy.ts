@@ -88,6 +88,9 @@ export interface SettingsView {
   currentJuz?: number;
   /** How the wird is delivered: "text" or "image". */
   wirdFormat?: 'text' | 'image';
+  /** Whether the daily tajweed lesson is on. Omitted when a caller does not
+   *  track it. */
+  tajweedEnabled?: boolean;
 }
 
 /** Build the status / settings summary, shared by users and the channel. */
@@ -113,6 +116,9 @@ export function settingsSummary(s: SettingsView, opts: { isChannel?: boolean } =
   // does not track it.
   if (s.wirdFormat) {
     lines.push(`• طريقة الإرسال: ${s.wirdFormat === 'image' ? 'صورة 🖼️' : 'نص 📝'}`);
+  }
+  if (s.tajweedEnabled !== undefined) {
+    lines.push(`• درس التجويد اليومي: ${s.tajweedEnabled ? 'مفعّل ✅' : 'متوقف ⏸️'}`);
   }
   return lines.join('\n');
 }
@@ -155,6 +161,7 @@ export const COPY = {
     'الأوامر:',
     '/today: قراءة ورد اليوم الآن (يُحتسب وردك لهذا اليوم)',
     `/wird: حجم الورد اليومي (١ إلى ٢٠ صفحة)، مثل ${ltr('/wird 5')}`,
+    '/tajweed: درس تجويد يومي قبل وردك (تشغيل/إيقاف)',
     '/format: طريقة الإرسال، نصًّا أو صورة من المصحف',
     `/page: الانتقال إلى صفحة معيّنة (١ إلى ٦٠٤)، مثل ${ltr('/page 100')}`,
     '/time: ضبط وقت الإرسال',
@@ -256,6 +263,28 @@ export const COPY = {
   // The lead line prefixed to a user's daily wird (and the /today preview).
   wirdLead: '🌿 وردك اليوم',
 
+  // ── Daily tajweed lesson ──────────────────────────────────────────
+  // Header above the lesson preview in /tajweed (no-arg).
+  tajweedStatus: (enabled: boolean) =>
+    enabled
+      ? 'درس التجويد اليومي مفعّل ✅ يصلك قبل وردك كل يوم. وهذا درس اليوم:'
+      : 'درس التجويد اليومي متوقف ⏸️ يمكنك تشغيله ليصلك قبل وردك كل يوم.',
+  tajweedUsage: (enabled: boolean) =>
+    [
+      `درس التجويد اليومي الآن: ${enabled ? 'مفعّل ✅' : 'متوقف ⏸️'}.`,
+      `للتشغيل اكتب ${ltr('/tajweed on')}، وللإيقاف ${ltr('/tajweed off')}،`,
+      'أو استخدم الزر تحت رسالة /tajweed.',
+    ].join('\n'),
+  tajweedEnabledMsg: 'تم تشغيل درس التجويد اليومي ✅ سيصلك قبل وردك كل يوم بإذن الله.',
+  tajweedDisabledMsg: 'تم إيقاف درس التجويد اليومي ⏸️ سيصلك وردك وحده.',
+  tajweedTurnOnBtn: '✅ تشغيل درس التجويد',
+  tajweedTurnOffBtn: '⏸️ إيقاف درس التجويد',
+  tajweedToggledOn: 'تم تشغيل درس التجويد ✅',
+  tajweedToggledOff: 'تم إيقاف درس التجويد ⏸️',
+  // Shown while the lesson deck is still under review (not yet live).
+  tajweedComingSoon:
+    'درس التجويد اليومي قيد الإعداد والمراجعة على يد متخصص، وسيبدأ قريبًا بإذن الله 🌿',
+
   // ── Admin / channel ───────────────────────────────────────────────
   adminOnly: 'هذا الأمر للمشرف فقط.',
   noChannel: 'لا توجد قناة مُعدّة. اضبط CHANNEL_CHAT_ID في ملف الإعدادات أولًا.',
@@ -293,4 +322,15 @@ export const COPY = {
 
   channelPaused: 'تم إيقاف نشر القناة مؤقتًا. للعودة اكتب /admin_pause',
   channelResumed: 'تمت العودة لنشر القناة ✅',
+
+  adminTajweedUsage: (enabled: boolean) =>
+    [
+      `درس التجويد اليومي للقناة الآن: ${enabled ? 'مفعّل ✅' : 'متوقف ⏸️'}.`,
+      `اكتب ${ltr('/admin_tajweed on')} لتفعيله أو ${ltr('/admin_tajweed off')} لإيقافه.`,
+      'يُنشر قبل ورد القناة كل يوم.',
+    ].join('\n'),
+  adminTajweedDone: (enabled: boolean) =>
+    enabled
+      ? 'تم ✅ ستنشر القناة درس التجويد قبل الورد كل يوم.'
+      : 'تم ⏸️ لن تنشر القناة درس التجويد، الورد فقط.',
 };

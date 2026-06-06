@@ -2,7 +2,13 @@ import { config, channelEnabled } from './config';
 import { bot, setBotCommands } from './bot';
 import { startScheduler, stopScheduler, runDeliveryOnce } from './scheduler';
 import { startHealthServer } from './health';
-import { prisma, assertQuranSeeded, ensureChannel } from './database';
+import {
+  prisma,
+  assertQuranSeeded,
+  ensureChannel,
+  LESSONS_PENDING_REVIEW,
+  TAJWEED_LESSON_COUNT,
+} from './database';
 import { logger } from './lib/logger';
 
 // Short tail before a fatal exit so the last log line reaches stdout.
@@ -81,6 +87,18 @@ async function main() {
   // seeded. Better to fail at boot than to send a wrong page.
   await waitForDatabase();
   await assertQuranSeeded();
+
+  // The daily tajweed lesson deck is authored content; warn (don't fail) while
+  // it still awaits a qualified reader's review, so an operator never ships the
+  // drafts to readers unknowingly.
+  if (LESSONS_PENDING_REVIEW) {
+    logger.warn(
+      'Tajweed lessons are PENDING scholarly review — set LESSONS_PENDING_REVIEW=false after review',
+      {
+        lessonCount: TAJWEED_LESSON_COUNT,
+      },
+    );
+  }
 
   await ensureChannelSubscriber();
 

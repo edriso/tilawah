@@ -60,9 +60,14 @@ export async function commitDelivery(params: {
   nextPage: number;
   /** The subscriber's current startedAt, so we stamp it only the first time. */
   startedAt: Date | null;
+  /** When the day's tajweed lesson was sent, the index to advance to (already
+   *  wrapped). Omitted when no lesson was sent, so the lesson position only
+   *  moves on a real lesson send — in the same transaction as the wird. */
+  nextLessonIndex?: number;
   now?: Date;
 }): Promise<CommitResult> {
-  const { subscriberId, scheduledFor, startPage, pageCount, nextPage, startedAt } = params;
+  const { subscriberId, scheduledFor, startPage, pageCount, nextPage, startedAt, nextLessonIndex } =
+    params;
   const now = params.now ?? new Date();
 
   try {
@@ -74,6 +79,8 @@ export async function commitDelivery(params: {
         where: { id: subscriberId },
         data: {
           currentPage: nextPage,
+          // Advance the lesson only when one was sent this delivery.
+          ...(nextLessonIndex !== undefined ? { tajweedLessonIndex: nextLessonIndex } : {}),
           // Stamp the "member since" time on the very first delivery only.
           ...(startedAt === null ? { startedAt: now } : {}),
         },
