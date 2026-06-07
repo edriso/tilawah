@@ -624,6 +624,56 @@ describe('deliverDueSubscribers (page recitation)', () => {
     expect(h.cachePageAudioId).toHaveBeenCalledWith(1, 'husary', 'AUDIO_1');
   });
 
+  it('sends one recitation PER page, in order, for a multi-page wird', async () => {
+    // The case after a user raises their wird size: a juz-sized wird still gets
+    // one audio clip per page, in reading order, each cached under its own page.
+    h.listDeliverableSubscribers.mockResolvedValue([
+      sub({
+        wirdFormat: 'text',
+        wirdSize: 2,
+        wirdAudioEnabled: true,
+        reciter: 'husary',
+        currentPage: 1,
+      }),
+    ]);
+    h.getWird.mockResolvedValue(TWO_PAGES);
+    await deliverDueSubscribers(fakeBot, NOW);
+
+    expect(h.sendAudio).toHaveBeenCalledTimes(2);
+    expect(h.sendAudio.mock.calls[0][2]).toBe(
+      'https://everyayah.com/data/Husary_128kbps/PageMp3s/Page001.mp3',
+    );
+    expect(h.sendAudio.mock.calls[1][2]).toBe(
+      'https://everyayah.com/data/Husary_128kbps/PageMp3s/Page002.mp3',
+    );
+    expect(h.cachePageAudioId).toHaveBeenCalledWith(1, 'husary', 'AUDIO_1');
+    expect(h.cachePageAudioId).toHaveBeenCalledWith(2, 'husary', 'AUDIO_1');
+  });
+
+  it('recites only the pages that actually went out on a partial multi-page wird', async () => {
+    // Page 2 fails to send, so the wird records 1 page — and the recitation must
+    // follow exactly the pages delivered, never the unsent ones.
+    h.listDeliverableSubscribers.mockResolvedValue([
+      sub({
+        wirdFormat: 'text',
+        wirdSize: 2,
+        wirdAudioEnabled: true,
+        reciter: 'husary',
+        currentPage: 1,
+      }),
+    ]);
+    h.getWird.mockResolvedValue(TWO_PAGES);
+    // First sendMessages is the wird's page 1 (ok), second is page 2 (failed).
+    h.sendMessages.mockResolvedValueOnce('ok').mockResolvedValueOnce('failed');
+    await deliverDueSubscribers(fakeBot, NOW);
+
+    expect(h.commitDelivery.mock.calls[0][0]).toMatchObject({ pageCount: 1 });
+    expect(h.sendAudio).toHaveBeenCalledOnce(); // only page 1's recitation
+    expect(h.sendAudio.mock.calls[0][2]).toBe(
+      'https://everyayah.com/data/Husary_128kbps/PageMp3s/Page001.mp3',
+    );
+  });
+
   it('sends no recitation when the subscriber turned it off', async () => {
     h.listDeliverableSubscribers.mockResolvedValue([
       sub({ wirdFormat: 'text', wirdAudioEnabled: false }),
