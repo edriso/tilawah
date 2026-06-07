@@ -18,6 +18,23 @@ export interface AudioSendResult {
   fileId?: string;
 }
 
+export interface AudioSendOptions {
+  /** Plain-text caption (no parse_mode). */
+  caption?: string;
+  /**
+   * Track title shown in Telegram's in-app music player (and on the lock
+   * screen / Bluetooth controls), overriding whatever tag the source file
+   * carries. Telegram groups every audio in a chat into one playlist and
+   * auto-advances through it when a clip ends - behavior the sender cannot
+   * disable. Naming each clip (title + performer) keeps that playlist legible:
+   * when it auto-plays the next page the player shows exactly what is playing
+   * instead of an unlabeled mystery clip.
+   */
+  title?: string;
+  /** Performer shown alongside the title in the music player (the reciter). */
+  performer?: string;
+}
+
 function audioFileId(message: Message): string | undefined {
   return message.audio?.file_id ?? message.voice?.file_id;
 }
@@ -25,7 +42,8 @@ function audioFileId(message: Message): string | undefined {
 /**
  * Send one audio clip to a chat. `audio` is a URL (Telegram fetches it), a
  * cached file_id (Telegram resends it), or an InputFile (the bot uploads a
- * local file). The caption is the plain lesson banner (no parse_mode).
+ * local file). The caption is the plain lesson banner (no parse_mode); the
+ * title/performer name the track in the music player (see AudioSendOptions).
  *
  * Returns the same SendResult as the text/photo senders:
  *   'ok'      - delivered (with the file_id to cache).
@@ -37,9 +55,14 @@ export async function sendAudio(
   bot: Bot<Context>,
   chatId: bigint,
   audio: string | InputFile,
-  caption?: string,
+  opts: AudioSendOptions = {},
 ): Promise<AudioSendResult> {
-  const send = () => bot.api.sendAudio(Number(chatId), audio, caption ? { caption } : {});
+  const other = {
+    ...(opts.caption ? { caption: opts.caption } : {}),
+    ...(opts.title ? { title: opts.title } : {}),
+    ...(opts.performer ? { performer: opts.performer } : {}),
+  };
+  const send = () => bot.api.sendAudio(Number(chatId), audio, other);
   try {
     return { result: 'ok', fileId: audioFileId(await send()) };
   } catch (err) {

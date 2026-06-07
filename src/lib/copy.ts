@@ -307,11 +307,20 @@ export const COPY = {
   // Shown while the lesson deck is still under review (not yet live).
   tajweedComingSoon:
     'درس التجويد اليومي قيد الإعداد والمراجعة على يد متخصص، وسيبدأ قريبًا بإذن الله 🌿',
+  // Caption + music-player title/performer for a lesson's example clip, so the
+  // player names it when Telegram auto-advances the chat's audio playlist.
+  tajweedAudioCaption: (titleAr: string) => `🔊 مثال: ${titleAr}`,
+  tajweedAudioTitle: (titleAr: string) => `مثال: ${titleAr}`,
+  tajweedAudioPerformer: 'دروس التجويد',
 
   // ── Page recitation (reciter) ─────────────────────────────────────
   // Caption under each page's audio clip.
   pageAudioCaption: (page: number, reciter: string) =>
     `🎧 تلاوة الصفحة ${toArabicDigits(page)} — ${reciterNameAr(reciter)}`,
+  // Music-player title for a page clip (the reciter is the performer). Telegram
+  // auto-advances through the chat's audio when one ends; naming the track
+  // keeps the player and lock screen showing which page is playing.
+  pageAudioTitle: (page: number) => `الصفحة ${toArabicDigits(page)}`,
   reciterPrompt: (enabled: boolean, reciter: string) =>
     [
       enabled

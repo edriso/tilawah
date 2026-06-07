@@ -47,7 +47,7 @@ import { config, channelEnabled } from '../config';
 import { sendMessages, type SendResult } from './send';
 import { sendPhoto, sendPhotoAlbum, MAX_ALBUM_SIZE } from './send-photo';
 import { sendAudio } from './send-audio';
-import { COPY } from './copy';
+import { COPY, reciterNameAr } from './copy';
 import { logger } from './logger';
 
 export interface DeliveryStats {
@@ -326,7 +326,11 @@ export async function sendLesson(
         const src = tajweedAudioSource(baseUrl, surah, ayah);
         audio = isHttpSource(src) ? src : new InputFile(src);
       }
-      const { result, fileId } = await sendAudio(bot, chatId, audio, `🔊 مثال: ${view.titleAr}`);
+      const { result, fileId } = await sendAudio(bot, chatId, audio, {
+        caption: COPY.tajweedAudioCaption(view.titleAr),
+        title: COPY.tajweedAudioTitle(view.titleAr),
+        performer: COPY.tajweedAudioPerformer,
+      });
       if (result === 'ok' && fileId && fileId !== cachedId) {
         await cacheTajweedAudioId(surah, ayah, fileId);
       }
@@ -415,12 +419,11 @@ export async function sendPageAudio(
         const src = pageAudioSource(reciter, page.pageNumber);
         audio = isHttpSource(src) ? src : new InputFile(src);
       }
-      const { result, fileId } = await sendAudio(
-        bot,
-        chatId,
-        audio,
-        COPY.pageAudioCaption(page.pageNumber, reciter),
-      );
+      const { result, fileId } = await sendAudio(bot, chatId, audio, {
+        caption: COPY.pageAudioCaption(page.pageNumber, reciter),
+        title: COPY.pageAudioTitle(page.pageNumber),
+        performer: reciterNameAr(reciter),
+      });
       if (result === 'blocked') return; // the chat is blocked; stop trying
       if (result === 'ok' && fileId && fileId !== cached) {
         await cachePageAudioId(page.pageNumber, reciter, fileId);

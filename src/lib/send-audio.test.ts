@@ -29,7 +29,7 @@ function grammyError(code: number, retryAfter?: number): GrammyError {
 describe('sendAudio', () => {
   it('returns ok with the audio file_id', async () => {
     const { bot } = botWith(async () => ({ audio: { file_id: 'AUD' } }));
-    expect(await sendAudio(bot, 1n, 'https://x/1.mp3', 'cap')).toEqual({
+    expect(await sendAudio(bot, 1n, 'https://x/1.mp3', { caption: 'cap' })).toEqual({
       result: 'ok',
       fileId: 'AUD',
     });
@@ -40,10 +40,24 @@ describe('sendAudio', () => {
     expect(await sendAudio(bot, 1n, 'https://x/1.mp3')).toEqual({ result: 'ok', fileId: 'V' });
   });
 
-  it('passes the caption and converts the chat id to a number', async () => {
+  it('passes caption, title, and performer and converts the chat id to a number', async () => {
     const { bot, spy } = botWith(async () => ({ audio: { file_id: 'f' } }));
-    await sendAudio(bot, 5n, 'https://x/1.mp3', 'hello');
-    expect(spy).toHaveBeenCalledWith(5, 'https://x/1.mp3', { caption: 'hello' });
+    await sendAudio(bot, 5n, 'https://x/1.mp3', {
+      caption: 'hello',
+      title: 'الصفحة ٥',
+      performer: 'الحصري',
+    });
+    expect(spy).toHaveBeenCalledWith(5, 'https://x/1.mp3', {
+      caption: 'hello',
+      title: 'الصفحة ٥',
+      performer: 'الحصري',
+    });
+  });
+
+  it('omits options that are not given (no empty caption/title/performer keys)', async () => {
+    const { bot, spy } = botWith(async () => ({ audio: { file_id: 'f' } }));
+    await sendAudio(bot, 5n, 'https://x/1.mp3', { title: 'الصفحة ٥' });
+    expect(spy).toHaveBeenCalledWith(5, 'https://x/1.mp3', { title: 'الصفحة ٥' });
   });
 
   it('maps a 403 to blocked (no retry)', async () => {
