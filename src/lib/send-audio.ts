@@ -22,16 +22,22 @@ export interface AudioSendOptions {
   /** Plain-text caption (no parse_mode). */
   caption?: string;
   /**
-   * Track title shown in Telegram's in-app music player (and on the lock
-   * screen / Bluetooth controls), overriding whatever tag the source file
-   * carries. Telegram groups every audio in a chat into one playlist and
-   * auto-advances through it when a clip ends - behavior the sender cannot
-   * disable. Naming each clip (title + performer) keeps that playlist legible:
-   * when it auto-plays the next page the player shows exactly what is playing
-   * instead of an unlabeled mystery clip.
+   * Track title hint for Telegram's in-app music player (and the lock screen /
+   * Bluetooth controls). Telegram groups every audio in a chat into one
+   * playlist and auto-advances through it when a clip ends - behavior the
+   * sender cannot disable. Naming a clip keeps that playlist legible so an
+   * auto-played next page shows what it is instead of a mystery clip.
+   *
+   * Best-effort, not guaranteed: when the source file already carries ID3 tags,
+   * Telegram tends to display those over the title/performer passed here. The
+   * everyayah page/ayah clips DO carry ID3 (e.g. title "Page 001", artist
+   * "Husary"), so for them this mostly acts as a fallback; it takes full effect
+   * for untagged files. Set it regardless - it never hurts, the caption always
+   * shows, and clients/cases that honor it get an Arabic, reciter-accurate
+   * label instead of the file's generic English tag.
    */
   title?: string;
-  /** Performer shown alongside the title in the music player (the reciter). */
+  /** Performer hint shown with the title (the reciter); same ID3 caveat. */
   performer?: string;
 }
 
