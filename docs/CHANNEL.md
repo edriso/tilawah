@@ -72,6 +72,9 @@ in a private chat with the bot. They act on the channel.
 - `/admin_setpage N` set the last page that was already read (1 to 604). The
   next post starts at page N+1, wrapping from 604 back to 1. Use this to align
   the channel with where your readers are, or to skip ahead or back.
+- `/admin_restart` begin a fresh khatma now: the channel goes back to page 1 and
+  the first tajweed lesson. The page wraps past 604 to 1 on its own, so you only
+  need this to start over early (e.g. at the start of a new month).
 - `/admin_wird N` set how many pages the channel posts per day (1 to 20).
 - `/admin_format text|image` how the channel posts the wird: a picture of the
   Mushaf page (the default) or plain text. Image needs `MUSHAF_IMAGE_BASE_URL`

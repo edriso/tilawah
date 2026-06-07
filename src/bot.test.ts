@@ -36,6 +36,7 @@ vi.mock('./database', () => ({
   setWirdSize: vi.fn(),
   setWirdFormat: vi.fn(),
   setCurrentPage: h.setCurrentPage,
+  restartSubscriber: vi.fn(),
   toggleActiveDay: vi.fn(),
   setDeliveryTime: vi.fn(),
   setTimezone: vi.fn(),

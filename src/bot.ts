@@ -17,6 +17,7 @@ import {
   setWirdSize,
   setWirdFormat,
   setCurrentPage,
+  restartSubscriber,
   setTajweedEnabled,
   setWirdAudioEnabled,
   setReciter,
@@ -624,6 +625,16 @@ bot.command('admin_setpage', async (ctx) => {
   const next = nextPageAfter(lastRead);
   await setCurrentPage(channel.id, next);
   await ctx.reply(COPY.setPageDone(lastRead, next));
+});
+
+// /admin_restart: begin a fresh khatma now — channel back to page 1 and the
+// first tajweed lesson. The position wraps past 604 on its own, so this is the
+// clear way to start over early (e.g. a new month) instead of /admin_setpage 604.
+bot.command('admin_restart', async (ctx) => {
+  const channel = await adminChannel(ctx);
+  if (!channel) return;
+  await restartSubscriber(channel.id);
+  await ctx.reply(COPY.adminRestartDone);
 });
 
 // /admin_wird N: set how many pages the channel posts per day (1..20).

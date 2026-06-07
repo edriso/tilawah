@@ -89,6 +89,22 @@ export function setCurrentPage(subscriberId: number, currentPage: number) {
 }
 
 /**
+ * Restart a subscriber's whole program from the very beginning: back to page 1
+ * of the Mushaf and the first tajweed lesson. Used by the channel admin to begin
+ * a fresh khatma without waiting for the current cycle to wrap past page 604.
+ * The position loops on its own after 604, so this is only for starting over
+ * early (and resets the lesson deck too, so the new khatma reads as a clean
+ * start). Sets the NEXT page/lesson; it does not touch the delivery log, so a
+ * wird already claimed for today still counts.
+ */
+export function restartSubscriber(subscriberId: number) {
+  return prisma.subscriber.update({
+    where: { id: subscriberId },
+    data: { currentPage: 1, tajweedLessonIndex: 0 },
+  });
+}
+
+/**
  * Flip one weekday on/off and return the new mask. The toggle is a single
  * atomic `active_days = active_days ^ bit` UPDATE at the database, so two fast
  * taps on the day picker can never lose each other's change the way an

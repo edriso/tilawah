@@ -336,6 +336,8 @@ export const COPY = {
   setPageDone: (lastRead: number, next: number) =>
     `تم ✅ آخر صفحة مقروءة: ${toArabicDigits(lastRead)}. الإرسال القادم يبدأ من صفحة ${toArabicDigits(next)}.`,
 
+  adminRestartDone: 'تم ✅ بدأنا ختمة جديدة من صفحة ١.',
+
   adminWirdUsage: `اكتب عدد صفحات القناة في اليوم (١ إلى ٢٠)، مثل ${ltr('/admin_wird 1')}`,
   adminWirdInvalid: 'العدد غير صحيح. اكتب رقمًا صحيحًا من ١ إلى ٢٠.',
   adminWirdDone: (pages: number) => `تم ضبط ورد القناة على ${wirdSizeSummaryAr(pages)} في اليوم ✅`,
