@@ -299,6 +299,31 @@ export async function tajweedLessonView(sub: {
 }
 
 /**
+ * Render ANY lesson by its deck index, for the read-only lessons browser. Unlike
+ * tajweedLessonView this is independent of any subscriber: it never reads or
+ * moves a reader's daily lesson position, and it does not check the on/off
+ * toggle (browsing is always allowed). The header reads "الدرس N من M" (not
+ * "today's"). Returns null when the deck is empty or the example ayah is not
+ * seeded. The caller still gates on LESSONS_PENDING_REVIEW.
+ */
+export async function renderLessonAt(index: number): Promise<string | null> {
+  if (TAJWEED_LESSON_COUNT === 0) return null;
+  const i = lessonIndexInRange(index, TAJWEED_LESSON_COUNT);
+  const lesson = TAJWEED_LESSONS[i]!;
+  const example = await getAyahText(lesson.example.surah, lesson.example.ayah);
+  if (!example) {
+    logger.error('Tajweed example ayah not seeded; cannot render browsed lesson', {
+      index: i,
+      surah: lesson.example.surah,
+      ayah: lesson.example.ayah,
+    });
+    return null;
+  }
+  const header = `الدرس ${toArabicDigits(i + 1)} من ${toArabicDigits(TAJWEED_LESSON_COUNT)}`;
+  return formatLesson(lesson, example, header);
+}
+
+/**
  * Send a rendered lesson: the text first, then (best effort) its example audio
  * clip. The text is the lesson; the audio is a bonus, so an audio failure is
  * logged and swallowed. Returns the TEXT's result (ok / blocked / failed) so

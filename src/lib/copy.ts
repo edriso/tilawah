@@ -304,6 +304,13 @@ export const COPY = {
   tajweedTurnOffBtn: '⏸️ إيقاف درس التجويد',
   tajweedToggledOn: 'تم تشغيل درس التجويد ✅',
   tajweedToggledOff: 'تم إيقاف درس التجويد ⏸️',
+  // ── Tajweed lessons browser (the full index, opened from /tajweed) ──
+  // A read-only library of every lesson; tapping one shows it, without touching
+  // the reader's daily lesson position.
+  tajweedBrowseBtn: '📚 كل دروس التجويد',
+  tajweedListHeader: '📚 دروس التجويد — اختر الدرس الذي تحب أن تتعلّمه:',
+  tajweedBackBtn: '« كل الدروس',
+  tajweedLessonUnavailable: 'هذا الدرس غير متاح حاليًا.',
   // Shown while the lesson deck is still under review (not yet live).
   tajweedComingSoon:
     'درس التجويد اليومي قيد الإعداد والمراجعة على يد متخصص، وسيبدأ قريبًا بإذن الله 🌿',

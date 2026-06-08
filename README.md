@@ -28,8 +28,11 @@ extend the project.
 - Posts a short daily tajweed lesson right before the wird (on by default), so
   readers learn to recite correctly a rule at a time. Each lesson has a plain
   explanation, an example ayah (verified text from the database), and an optional
-  recitation clip. The lessons run in order and repeat when finished. Readers
-  toggle it with `/tajweed`, the channel admin with `/admin_tajweed`.
+  recitation clip. The lessons run in order from the first one and repeat when
+  finished. Readers toggle it with `/tajweed`, the channel admin with
+  `/admin_tajweed`. The `/tajweed` message also has a "📚 كل دروس التجويد"
+  button that opens the full lessons library: a paginated list to browse and tap
+  any rule you want to learn now, without changing your daily lesson order.
 - A public channel posts the daily portion to everyone who follows it. An admin
   sets the last page read and the bot continues from the next page.
 - Each user can set how many pages a day (1 to 20), which days, what time, and

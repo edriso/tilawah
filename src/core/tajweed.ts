@@ -70,11 +70,18 @@ export function lessonIndexInRange(index: number, total: number): number {
  *   <example note, if any>
  *   🔗 للاستزادة: <url, if any>
  *
- * The audio example, when available, is sent as a separate clip by the caller.
+ * `header` defaults to "درس التجويد اليوم" for the daily send; the lessons
+ * browser passes its own label (e.g. "الدرس ٥ من ٤٥") so a browsed lesson does
+ * not read as "today's". The audio example, when available, is sent as a
+ * separate clip by the caller.
  */
-export function formatLesson(lesson: TajweedLesson, example: LessonExample): string {
+export function formatLesson(
+  lesson: TajweedLesson,
+  example: LessonExample,
+  header = 'درس التجويد اليوم',
+): string {
   const parts = [
-    `📚 درس التجويد اليوم: ${lesson.titleAr}`,
+    `📚 ${header}: ${lesson.titleAr}`,
     '',
     lesson.bodyAr,
     '',

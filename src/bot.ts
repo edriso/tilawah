@@ -27,6 +27,7 @@ import {
   pauseSubscriber,
   resumeSubscriber,
   commitDelivery,
+  TAJWEED_LESSONS,
   TAJWEED_LESSON_COUNT,
   LESSONS_PENDING_REVIEW,
   type Subscriber,
@@ -42,9 +43,18 @@ import {
   sendLesson,
   sendPageAudio,
   buildLessonReview,
+  renderLessonAt,
   type TodayView,
 } from './lib/deliver';
 import { buildTajweedKeyboard, TAJWEED_TOGGLE } from './lib/tajweed-keyboard';
+import {
+  buildLessonsKeyboard,
+  buildLessonViewKeyboard,
+  LESSONS_OPEN,
+  LESSONS_PAGE_PREFIX,
+  LESSONS_PICK_PREFIX,
+  LESSONS_NOOP,
+} from './lib/tajweed-lessons-keyboard';
 import { buildReciterKeyboard, RECITER_PICK_PREFIX, RECITER_OFF } from './lib/reciter-keyboard';
 import { runDeliveryOnce } from './scheduler';
 import { buildDaysKeyboard, DAY_TOGGLE_PREFIX, DAYS_DONE } from './lib/days-keyboard';
@@ -482,6 +492,87 @@ bot.callbackQuery(TAJWEED_TOGGLE, async (ctx) => {
     text: enabled ? COPY.tajweedToggledOn : COPY.tajweedToggledOff,
   });
 });
+
+// ─── Tajweed lessons browser ────────────────────────────────────────
+//
+// A read-only library of every tajweed lesson, opened from the /tajweed
+// keyboard. Tapping a lesson shows it in place; "back" returns to the same list
+// page. Browsing never touches the reader's daily lesson position, and works
+// whether or not the daily lesson is toggled on. All four handlers no-op while
+// the deck is still pending review (the open button only appears once it is
+// live, but callback data is client-supplied, so re-check).
+
+/** Swallow Telegram's "message is not modified" 400 (a stale/double-tapped
+ *  button re-rendering the same view) and rethrow anything else. */
+function ignoreNotModified(err: unknown): void {
+  const description = (err as { description?: string }).description ?? '';
+  if (!description.includes('message is not modified')) throw err;
+}
+
+// Open the index at page 0, as a NEW message so the /tajweed view (today's
+// lesson + toggle) stays put above it.
+bot.callbackQuery(LESSONS_OPEN, async (ctx) => {
+  const sub = await userFromCallback(ctx);
+  if (!sub) {
+    await ctx.answerCallbackQuery();
+    return;
+  }
+  if (LESSONS_PENDING_REVIEW) {
+    await ctx.answerCallbackQuery({ text: COPY.tajweedComingSoon });
+    return;
+  }
+  await ctx.reply(COPY.tajweedListHeader, {
+    reply_markup: buildLessonsKeyboard(TAJWEED_LESSONS, 0),
+  });
+  await ctx.answerCallbackQuery();
+});
+
+// Show a list page. Also the "back from a lesson" target, so it restores the
+// list header text (not just the keyboard) over a lesson view.
+bot.callbackQuery(new RegExp(`^${LESSONS_PAGE_PREFIX}(\\d+)$`), async (ctx) => {
+  const sub = await userFromCallback(ctx);
+  if (!sub) {
+    await ctx.answerCallbackQuery();
+    return;
+  }
+  if (LESSONS_PENDING_REVIEW) {
+    await ctx.answerCallbackQuery();
+    return;
+  }
+  const page = Number(ctx.match![1]);
+  await ctx
+    .editMessageText(COPY.tajweedListHeader, {
+      reply_markup: buildLessonsKeyboard(TAJWEED_LESSONS, page),
+    })
+    .catch(ignoreNotModified);
+  await ctx.answerCallbackQuery();
+});
+
+// Show one lesson in place, with a "back to the list" button at its page.
+bot.callbackQuery(new RegExp(`^${LESSONS_PICK_PREFIX}(\\d+)$`), async (ctx) => {
+  const sub = await userFromCallback(ctx);
+  if (!sub) {
+    await ctx.answerCallbackQuery();
+    return;
+  }
+  if (LESSONS_PENDING_REVIEW) {
+    await ctx.answerCallbackQuery();
+    return;
+  }
+  const index = Number(ctx.match![1]);
+  const text = await renderLessonAt(index);
+  if (!text) {
+    await ctx.answerCallbackQuery({ text: COPY.tajweedLessonUnavailable });
+    return;
+  }
+  await ctx
+    .editMessageText(text, { reply_markup: buildLessonViewKeyboard(index) })
+    .catch(ignoreNotModified);
+  await ctx.answerCallbackQuery();
+});
+
+// The page indicator does nothing but acknowledge the tap.
+bot.callbackQuery(LESSONS_NOOP, (ctx) => ctx.answerCallbackQuery());
 
 // ─── Reciter-picker buttons ─────────────────────────────────────────
 

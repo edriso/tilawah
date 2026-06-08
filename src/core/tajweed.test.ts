@@ -57,6 +57,16 @@ describe('formatLesson', () => {
     expect(msg).toContain('النون الساكنة قبل الباء.');
   });
 
+  it('defaults the header to "today\'s lesson"', () => {
+    expect(formatLesson(lesson, example)).toContain('📚 درس التجويد اليوم: الإقلاب');
+  });
+
+  it('uses a custom header (the browser passes "lesson N of M", not "today")', () => {
+    const msg = formatLesson(lesson, example, 'الدرس ٢٨ من ٤٥');
+    expect(msg).toContain('📚 الدرس ٢٨ من ٤٥: الإقلاب');
+    expect(msg).not.toContain('اليوم'); // a browsed lesson is not "today's"
+  });
+
   it('omits the note and link lines when absent', () => {
     const msg = formatLesson({ ...lesson, exampleNote: undefined }, example);
     expect(msg).not.toContain('النون الساكنة قبل الباء.');

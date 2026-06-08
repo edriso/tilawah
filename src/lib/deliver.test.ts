@@ -77,7 +77,12 @@ vi.mock('./logger', () => ({
 }));
 
 import { InputFile } from 'grammy';
-import { deliverDueSubscribers, buildTodayView, buildLessonReview } from './deliver';
+import {
+  deliverDueSubscribers,
+  buildTodayView,
+  buildLessonReview,
+  renderLessonAt,
+} from './deliver';
 import { config } from '../config';
 import { advanceStartPage } from '../core';
 
@@ -696,5 +701,29 @@ describe('deliverDueSubscribers (page recitation)', () => {
 
     expect(h.sendAudio.mock.calls[0][2]).toBe('CACHED_PAGE'); // sent by file_id
     expect(h.cachePageAudioId).not.toHaveBeenCalled();
+  });
+});
+
+describe('renderLessonAt (lessons browser)', () => {
+  // The mocked deck has 3 lessons (h.lessons); getAyahText returns a fixture.
+  it('renders a lesson by deck index with a "lesson N of M" header (not "today")', async () => {
+    const text = await renderLessonAt(0);
+    expect(text).toContain('الدرس ١ من ٣: الإقلاب');
+    expect(text).not.toContain('اليوم'); // a browsed lesson is not today's
+    expect(text).toContain('قاعدة الإقلاب.'); // the body
+  });
+
+  it('picks the lesson at the given index', async () => {
+    expect(await renderLessonAt(1)).toContain('الإظهار');
+  });
+
+  it('wraps an out-of-range index into the deck (3 lessons: index 5 -> 2)', async () => {
+    const text = await renderLessonAt(5);
+    expect(text).toContain('الدرس ٣ من ٣: المد');
+  });
+
+  it('returns null when the example ayah is not seeded', async () => {
+    h.getAyahText.mockResolvedValueOnce(null);
+    expect(await renderLessonAt(0)).toBeNull();
   });
 });

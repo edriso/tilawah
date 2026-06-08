@@ -116,15 +116,38 @@ NEVER sent, `/tajweed` replies "coming soon", and startup warns — even though
 the per-reader toggle still defaults on. Flip it back to false once a qualified
 reader has gone through the new material.
 
-Each subscriber has `tajweedEnabled` and `tajweedLessonIndex`. The lesson is
-best-effort and NEVER blocks the wird; the wird send stays the source of truth
-for blocked/failed. The lesson index advances by one (wrapping to 0 — the deck
-repeats, like the wird loops the Mushaf) ONLY when the lesson actually went out
-AND the day is committed, in the same `commitDelivery` transaction. Lesson text
-is sent first, then (best effort) its example audio clip: an optional self-hosted
-per-ayah recitation (`TAJWEED_AUDIO_BASE_URL`, fetched with `pnpm data:tajweed`,
-Husary by default), cached by Telegram file_id (`TajweedAudio`) exactly like the
-Mushaf images. Without an audio source, lessons go out as text + the example.
+Each subscriber has `tajweedEnabled` and `tajweedLessonIndex`. A brand-new
+subscriber starts at `tajweedLessonIndex = 0`, the first lesson of the deck (the
+deck is authored in teaching order: intro, then makharij, sifat, ahkam an-nun,
+ahkam al-mim, the mudud, and waqf). The lesson is best-effort and NEVER blocks
+the wird; the wird send stays the source of truth for blocked/failed. The lesson
+index advances by one (wrapping to 0 — the deck repeats, like the wird loops the
+Mushaf) ONLY when the lesson actually went out AND the day is committed, in the
+same `commitDelivery` transaction. So each reader walks the deck in order from
+lesson 1, one a day. Lesson text is sent first, then (best effort) its example
+audio clip: an optional self-hosted per-ayah recitation (`TAJWEED_AUDIO_BASE_URL`,
+fetched with `pnpm data:tajweed`, Husary by default), cached by Telegram file_id
+(`TajweedAudio`) exactly like the Mushaf images. Without an audio source, lessons
+go out as text + the example.
+
+### Browsing all lessons (the lessons library)
+
+The daily lesson is a slow drip (one a day, in order). A reader who wants a
+specific rule now can open the whole deck: the `/tajweed` message carries a
+"📚 كل دروس التجويد" button that opens a paginated index of every lesson, and
+tapping one shows it in place with a "back to the list" button (the back button
+returns to the page the lesson was on, derived from its index). This is a
+READ-ONLY library: it never reads or moves `tajweedLessonIndex`, and it works
+whether or not the daily lesson is toggled on. It is gated by
+`LESSONS_PENDING_REVIEW` like the daily lesson (every browser handler re-checks
+the flag, since callback data is client-supplied). The index keyboard and its
+pagination live in `src/lib/tajweed-lessons-keyboard.ts` (the ayah surah-picker
+shape: one button per item, a prev/indicator/next nav row); a browsed lesson is
+rendered by `renderLessonAt(index)` in deliver.ts, which reuses `formatLesson`
+with a "الدرس N من M" header (not "today's") so it does not read as the daily
+lesson. The browser is text-only (no audio): Telegram cannot put a clip in an
+edited message, and piling up audio while paging would be noise — the daily
+delivery is where the example clip is heard.
 
 ## Daily page recitation
 
@@ -267,6 +290,10 @@ Commit the new folder under `prisma/migrations/`. Production applies it with
   file_id cache: `src/lib/send-audio.ts` + `src/database/services/tajweed-audio.service.ts`;
   the delivery wiring (`tajweedLessonView`, `sendLesson`): `src/lib/deliver.ts`;
   the self-host script: `scripts/fetch-tajweed-audio.ts`.
+- Tajweed lessons browser (the full library): the paginated index keyboard +
+  page math in `src/lib/tajweed-lessons-keyboard.ts`; the per-lesson renderer
+  `renderLessonAt` in `src/lib/deliver.ts`; the open button on the `/tajweed`
+  keyboard in `src/lib/tajweed-keyboard.ts`; the callback handlers in `bot.ts`.
 - Surah names and revelation: `src/database/reference/surahs.ts`
 - Ayah count oracle: `src/database/reference/ayah-counts.ts`
 - Page and juz constants and anchors: `src/database/reference/pages.ts`
