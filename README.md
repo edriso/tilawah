@@ -19,13 +19,16 @@ extend the project.
 - Sends an audio recitation of each page after the wird (on by default), from a
   trusted source (everyayah.com). The reciter is chosen with `/reciter` (Abdul
   Basit by default, plus Husary, Alafasy, As-Sudais, Al-Minshawi) or turned off;
-  each page/reciter clip is fetched once then re-sent by cached file_id.
+  each page/reciter clip is fetched once then re-sent by cached file_id. The
+  recitation always follows the wird the reader just got, on the scheduled send,
+  `/today`, and `/page` alike: change the page count, the page, or the reciter
+  and the very next send recites the right pages in the right voice (picking a
+  reciter also turns the audio back on).
 - Posts a short daily tajweed lesson right before the wird (on by default), so
   readers learn to recite correctly a rule at a time. Each lesson has a plain
   explanation, an example ayah (verified text from the database), and an optional
   recitation clip. The lessons run in order and repeat when finished. Readers
-  toggle it with `/tajweed`, the channel admin with `/admin_tajweed`. The lesson
-  drafts await scholarly review before launch (see `LESSONS_PENDING_REVIEW`).
+  toggle it with `/tajweed`, the channel admin with `/admin_tajweed`.
 - A public channel posts the daily portion to everyone who follows it. An admin
   sets the last page read and the bot continues from the next page.
 - Each user can set how many pages a day (1 to 20), which days, what time, and

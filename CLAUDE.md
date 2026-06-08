@@ -108,11 +108,13 @@ on|off` for the channel). The deck is authored reference data in
 المقدمة الجزرية. It is NOT Quran text: each lesson only NAMES an example by
 `(surah, ayah)`, and the verified Uthmani text is read from the database
 (`getAyahText`) at send time — the golden rule applies to the deck too (a test
-fails if a body/note contains `﴿ ﴾`). The drafts are PENDING scholarly review:
-while `LESSONS_PENDING_REVIEW = true` the lesson is NEVER sent and `/tajweed`
-replies "coming soon" (startup also warns), even though the toggle defaults on —
-`tajweedLessonView` short-circuits. Flip the flag to false after a qualified
-reader has gone through the deck, and it goes live for everyone.
+fails if a body/note contains `﴿ ﴾`). The deck has been reviewed and is LIVE
+(`LESSONS_PENDING_REVIEW = false`). The flag is a kept safety gate, not dead
+code: set it back to `true` (e.g. while editing the deck or adding lessons that
+need a fresh review) and `tajweedLessonView` short-circuits so the lesson is
+NEVER sent, `/tajweed` replies "coming soon", and startup warns — even though
+the per-reader toggle still defaults on. Flip it back to false once a qualified
+reader has gone through the new material.
 
 Each subscriber has `tajweedEnabled` and `tajweedLessonIndex`. The lesson is
 best-effort and NEVER blocks the wird; the wird send stays the source of truth
@@ -139,6 +141,26 @@ never stored locally. Sending is best-effort and page-by-page (`sendPageAudio`
 in deliver.ts): a failed clip is skipped and NEVER blocks the wird; it runs
 after the delivery is recorded, for exactly the pages that went out. A juz wird
 therefore sends one audio per page.
+
+The recitation follows the wird on EVERY entry point, not just the scheduler:
+the daily send (`deliverDueSubscribers`), `/today`, and the `/page` reposition
+all call `sendPageAudio` the same way (the last two through `sendTodayView` in
+bot.ts), so the audio always matches the wird the reader just got. It reads the
+subscriber's CURRENT settings each time, so a setting change is honoured on the
+very next send with no extra wiring:
+
+- Raise the wird size with `/wird N`: the next wird is N pages, and the
+  recitation is the same N pages, one clip each (the loop in `sendPageAudio`
+  walks every delivered page).
+- Jump with `/page N` (or `/admin_setpage` on the channel): the recitation is
+  for the new page(s), because it sends exactly `content.slice(0, pagesSent)`
+  from the new position, never a stale page.
+- Switch voice with `/reciter <key>`: the clip uses the new reciter's URL, and
+  the `file_id` cache is keyed by `(page, reciter)`, so a changed voice is a
+  cache MISS and fetches the new reciter (it never serves the old voice's
+  cached clip). Picking a reciter also turns the audio back on (`setReciter`
+  sets `wirdAudioEnabled = true`), so a reader who did `/reciter off` and later
+  picks a voice starts hearing it again.
 
 ## Channel and users are optional
 

@@ -15,6 +15,7 @@ const h = vi.hoisted(() => ({
   sendWird: vi.fn(),
   tajweedLessonView: vi.fn(),
   sendLesson: vi.fn(),
+  sendPageAudio: vi.fn(),
 }));
 
 vi.mock('./config', () => ({
@@ -54,7 +55,7 @@ vi.mock('./lib/deliver', () => ({
   sendWird: h.sendWird,
   tajweedLessonView: h.tajweedLessonView,
   sendLesson: h.sendLesson,
-  sendPageAudio: vi.fn(),
+  sendPageAudio: h.sendPageAudio,
   buildLessonReview: vi.fn(),
   previewWird: vi.fn(),
 }));
@@ -67,12 +68,17 @@ import { repositionToPage } from './bot';
 
 const SUB = {
   id: 1,
+  chatId: 123n,
   startedAt: null,
   pausedAt: null,
   currentPage: 1,
   wirdSize: 1,
   timezone: 'UTC',
   activeDays: 127,
+  // Page recitation off by default so the wird-focused tests keep their exact
+  // call counts; the recitation tests below pass a sub with it on.
+  wirdAudioEnabled: false,
+  reciter: 'abdulbasit',
 } as never;
 
 function fakeCtx() {
@@ -206,5 +212,77 @@ describe('repositionToPage', () => {
 
     expect(h.sendLesson).not.toHaveBeenCalled();
     expect(h.commitDelivery).not.toHaveBeenCalled();
+  });
+});
+
+// The page recitation must follow the wird on the /page (reposition) and /today
+// path too, not only the scheduler — and for exactly the pages that went out, in
+// the subscriber's chosen reciter. These guard that wiring in sendTodayView.
+describe('repositionToPage page recitation', () => {
+  // A two-page view (pages 5 and 6) so the slice-to-pagesSent can be asserted.
+  const TWO_PAGE_VIEW = (over: Record<string, unknown> = {}) => ({
+    pages: [
+      { pageNumber: 5, juz: 1, ayat: [] },
+      { pageNumber: 6, juz: 1, ayat: [] },
+    ],
+    basmala: 'بسم الله',
+    lead: '🌿 وردك اليوم',
+    claim: { scheduledFor: '2026-06-01', startPage: 5, pageCount: 2, nextPage: 7 },
+    alreadyDelivered: false,
+    ...over,
+  });
+
+  it('recites the delivered pages in the chosen reciter when audio is on', async () => {
+    h.sendWird.mockResolvedValue({ pagesSent: 2, lastResult: 'ok' });
+    h.buildTodayView.mockResolvedValue(TWO_PAGE_VIEW());
+    const audioSub = { ...(SUB as object), wirdAudioEnabled: true, reciter: 'husary' } as never;
+    await repositionToPage(fakeCtx() as never, audioSub, 5);
+
+    expect(h.sendPageAudio).toHaveBeenCalledTimes(1);
+    const [, chatId, pages, reciter] = h.sendPageAudio.mock.calls[0];
+    expect(chatId).toBe(123n);
+    expect(pages.map((p: { pageNumber: number }) => p.pageNumber)).toEqual([5, 6]);
+    expect(reciter).toBe('husary');
+  });
+
+  it('recites only the pages that actually went out on a partial send', async () => {
+    // 2-page wird, but the send dies after page 5. The recitation must follow
+    // exactly the delivered page, never the unsent one.
+    h.sendWird.mockResolvedValue({ pagesSent: 1, lastResult: 'failed' });
+    h.buildTodayView.mockResolvedValue(TWO_PAGE_VIEW());
+    const audioSub = { ...(SUB as object), wirdAudioEnabled: true, reciter: 'husary' } as never;
+    await repositionToPage(fakeCtx() as never, audioSub, 5);
+
+    expect(h.sendPageAudio).toHaveBeenCalledTimes(1);
+    expect(
+      h.sendPageAudio.mock.calls[0][2].map((p: { pageNumber: number }) => p.pageNumber),
+    ).toEqual([5]);
+  });
+
+  it('falls back to the default reciter for an unknown stored value', async () => {
+    h.sendWird.mockResolvedValue({ pagesSent: 2, lastResult: 'ok' });
+    h.buildTodayView.mockResolvedValue(TWO_PAGE_VIEW());
+    const audioSub = { ...(SUB as object), wirdAudioEnabled: true, reciter: 'bogus' } as never;
+    await repositionToPage(fakeCtx() as never, audioSub, 5);
+
+    expect(h.sendPageAudio.mock.calls[0][3]).toBe('abdulbasit'); // normalizeReciter default
+  });
+
+  it('sends no recitation when the user turned audio off', async () => {
+    h.sendWird.mockResolvedValue({ pagesSent: 2, lastResult: 'ok' });
+    h.buildTodayView.mockResolvedValue(TWO_PAGE_VIEW());
+    const audioSub = { ...(SUB as object), wirdAudioEnabled: false } as never;
+    await repositionToPage(fakeCtx() as never, audioSub, 5);
+
+    expect(h.sendPageAudio).not.toHaveBeenCalled();
+  });
+
+  it('sends no recitation when nothing went out (pagesSent 0)', async () => {
+    h.sendWird.mockResolvedValue({ pagesSent: 0, lastResult: 'failed' });
+    h.buildTodayView.mockResolvedValue(TWO_PAGE_VIEW());
+    const audioSub = { ...(SUB as object), wirdAudioEnabled: true, reciter: 'husary' } as never;
+    await repositionToPage(fakeCtx() as never, audioSub, 5);
+
+    expect(h.sendPageAudio).not.toHaveBeenCalled();
   });
 });
