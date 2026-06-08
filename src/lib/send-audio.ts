@@ -22,6 +22,13 @@ export interface AudioSendOptions {
   /** Plain-text caption (no parse_mode). */
   caption?: string;
   /**
+   * Send without a notification sound (the wird/lesson already notified). The
+   * recitation and the tajweed example clip are quiet companions to the text
+   * that just rang, so a multi-page wird does not buzz once per page. Matches
+   * the ayah bot, whose audio is silent for the same reason.
+   */
+  silent?: boolean;
+  /**
    * Track title hint for Telegram's in-app music player (and the lock screen /
    * Bluetooth controls). Telegram groups every audio in a chat into one
    * playlist and auto-advances through it when a clip ends - behavior the
@@ -65,6 +72,7 @@ export async function sendAudio(
 ): Promise<AudioSendResult> {
   const other = {
     ...(opts.caption ? { caption: opts.caption } : {}),
+    ...(opts.silent ? { disable_notification: true } : {}),
     ...(opts.title ? { title: opts.title } : {}),
     ...(opts.performer ? { performer: opts.performer } : {}),
   };

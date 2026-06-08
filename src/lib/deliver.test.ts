@@ -580,6 +580,8 @@ describe('deliverDueSubscribers (tajweed lesson)', () => {
     // Lesson 0's example is (2, 27): audio fetched from the built URL and cached.
     expect(h.sendAudio).toHaveBeenCalledOnce();
     expect(h.sendAudio.mock.calls[0][2]).toBe('https://x/002027.mp3');
+    // Silent: a quiet companion to the lesson text that just notified.
+    expect(h.sendAudio.mock.calls[0][3]).toMatchObject({ silent: true });
     expect(h.cacheTajweedAudioId).toHaveBeenCalledWith(2, 27, 'AUDIO_1');
   });
 });
@@ -621,6 +623,8 @@ describe('deliverDueSubscribers (page recitation)', () => {
     expect(h.sendAudio.mock.calls[0][2]).toBe(
       'https://everyayah.com/data/Husary_128kbps/PageMp3s/Page001.mp3',
     );
+    // Silent: a quiet companion to the wird that just notified (matches ayah).
+    expect(h.sendAudio.mock.calls[0][3]).toMatchObject({ silent: true });
     expect(h.cachePageAudioId).toHaveBeenCalledWith(1, 'husary', 'AUDIO_1');
   });
 

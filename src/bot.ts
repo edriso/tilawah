@@ -182,22 +182,28 @@ async function sendTodayView(
   // later run; committing the FULL wird here, or nothing at all, would make the
   // scheduler re-send pages the user already received. pagesSent === 0 sends
   // nothing, so there is nothing to claim or advance.
-  if (view.claim && pagesSent > 0) {
-    await commitDelivery({
-      subscriberId: sub.id,
-      scheduledFor: view.claim.scheduledFor,
-      startPage: view.claim.startPage,
-      pageCount: pagesSent,
-      nextPage: advanceStartPage(view.claim.startPage, pagesSent),
-      nextLessonIndex: lessonSent ? nextLessonIndex(lessonIndex, TAJWEED_LESSON_COUNT) : undefined,
-      startedAt: sub.startedAt,
-      now,
-    });
-  }
+  const committed =
+    view.claim && pagesSent > 0
+      ? await commitDelivery({
+          subscriberId: sub.id,
+          scheduledFor: view.claim.scheduledFor,
+          startPage: view.claim.startPage,
+          pageCount: pagesSent,
+          nextPage: advanceStartPage(view.claim.startPage, pagesSent),
+          nextLessonIndex: lessonSent
+            ? nextLessonIndex(lessonIndex, TAJWEED_LESSON_COUNT)
+            : undefined,
+          startedAt: sub.startedAt,
+          now,
+        })
+      : null;
 
-  // After the wird, send the page recitation for the pages that went out
-  // (best effort; never affects the recorded delivery).
-  if (sub.wirdAudioEnabled && pagesSent > 0) {
+  // After the wird, send the page recitation — but only for a real, new
+  // delivery, exactly like the scheduler (deliver.ts) and the ayah bot. A
+  // re-show or a preview (no claim), or the loser of a race with the scheduler
+  // ('duplicate'), shows the wird again but does NOT re-send the audio, so each
+  // page's recitation arrives once, with its delivery, never on every /today.
+  if (sub.wirdAudioEnabled && committed === 'sent') {
     await sendPageAudio(
       bot,
       sub.chatId,

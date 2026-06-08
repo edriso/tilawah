@@ -330,6 +330,7 @@ export async function sendLesson(
         caption: COPY.tajweedAudioCaption(view.titleAr),
         title: COPY.tajweedAudioTitle(view.titleAr),
         performer: COPY.tajweedAudioPerformer,
+        silent: true, // a quiet companion to the lesson text that just notified
       });
       if (result === 'ok' && fileId && fileId !== cachedId) {
         await cacheTajweedAudioId(surah, ayah, fileId);
@@ -423,6 +424,7 @@ export async function sendPageAudio(
         caption: COPY.pageAudioCaption(page.pageNumber, reciter),
         title: COPY.pageAudioTitle(page.pageNumber),
         performer: reciterNameAr(reciter),
+        silent: true, // a quiet companion to the wird that just notified
       });
       if (result === 'blocked') return; // the chat is blocked; stop trying
       if (result === 'ok' && fileId && fileId !== cached) {

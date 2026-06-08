@@ -20,10 +20,11 @@ extend the project.
   trusted source (everyayah.com). The reciter is chosen with `/reciter` (Abdul
   Basit by default, plus Husary, Alafasy, As-Sudais, Al-Minshawi) or turned off;
   each page/reciter clip is fetched once then re-sent by cached file_id. The
-  recitation always follows the wird the reader just got, on the scheduled send,
-  `/today`, and `/page` alike: change the page count, the page, or the reciter
-  and the very next send recites the right pages in the right voice (picking a
-  reciter also turns the audio back on).
+  recitation is silent (no second notification sound), a quiet companion to the
+  wird that already arrived. It always follows the wird the reader just got, on
+  the scheduled send, `/today`, and `/page` alike: change the page count, the
+  page, or the reciter and the very next send recites the right pages in the
+  right voice (picking a reciter also turns the audio back on).
 - Posts a short daily tajweed lesson right before the wird (on by default), so
   readers learn to recite correctly a rule at a time. Each lesson has a plain
   explanation, an example ayah (verified text from the database), and an optional

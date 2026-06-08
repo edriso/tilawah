@@ -142,12 +142,22 @@ in deliver.ts): a failed clip is skipped and NEVER blocks the wird; it runs
 after the delivery is recorded, for exactly the pages that went out. A juz wird
 therefore sends one audio per page.
 
+The recitation is **silent** (`disable_notification`), a quiet companion to the
+wird that just notified, so a multi-page wird does not buzz once per page. This
+matches the ayah bot, whose audio is silent for the same reason. The tajweed
+example clip is silent too (the lesson text is the notification). The `silent`
+flag lives on `sendAudio` (`src/lib/send-audio.ts`).
+
 The recitation follows the wird on EVERY entry point, not just the scheduler:
 the daily send (`deliverDueSubscribers`), `/today`, and the `/page` reposition
 all call `sendPageAudio` the same way (the last two through `sendTodayView` in
-bot.ts), so the audio always matches the wird the reader just got. It reads the
-subscriber's CURRENT settings each time, so a setting change is honoured on the
-very next send with no extra wiring:
+bot.ts), so the audio always matches the wird the reader just got. It is tied to
+a REAL delivery on all of them: the scheduler gates on a `commitDelivery` of
+'sent', and `sendTodayView` does the same, so a `/today` re-show or a `/page`
+preview shows the wird again but does NOT re-send the audio (and the loser of a
+race with the scheduler sends nothing). The recitation reads the subscriber's
+CURRENT settings each time, so a setting change is honoured on the very next
+send with no extra wiring:
 
 - Raise the wird size with `/wird N`: the next wird is N pages, and the
   recitation is the same N pages, one clip each (the loop in `sendPageAudio`

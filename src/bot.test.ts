@@ -285,4 +285,27 @@ describe('repositionToPage page recitation', () => {
 
     expect(h.sendPageAudio).not.toHaveBeenCalled();
   });
+
+  it('sends no recitation on a re-show / preview (no claim)', async () => {
+    // The wird is shown again, but the recitation is tied to a real delivery, so
+    // it does NOT re-send on a preview — matching the ayah bot.
+    h.sendWird.mockResolvedValue({ pagesSent: 2, lastResult: 'ok' });
+    h.buildTodayView.mockResolvedValue(TWO_PAGE_VIEW({ claim: null, alreadyDelivered: true }));
+    const audioSub = { ...(SUB as object), wirdAudioEnabled: true, reciter: 'husary' } as never;
+    await repositionToPage(fakeCtx() as never, audioSub, 5);
+
+    expect(h.sendPageAudio).not.toHaveBeenCalled();
+  });
+
+  it('sends no recitation when the commit loses the race (duplicate)', async () => {
+    // The scheduler delivered the same day first: commitDelivery reports
+    // 'duplicate' and the page did not advance here, so the audio does not fire.
+    h.sendWird.mockResolvedValue({ pagesSent: 2, lastResult: 'ok' });
+    h.commitDelivery.mockResolvedValue('duplicate');
+    h.buildTodayView.mockResolvedValue(TWO_PAGE_VIEW());
+    const audioSub = { ...(SUB as object), wirdAudioEnabled: true, reciter: 'husary' } as never;
+    await repositionToPage(fakeCtx() as never, audioSub, 5);
+
+    expect(h.sendPageAudio).not.toHaveBeenCalled();
+  });
 });
