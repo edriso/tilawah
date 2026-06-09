@@ -42,8 +42,12 @@ Set these env vars on the host (see the single root `.env.example`):
 
 The daily **page recitation** (the reciter audio after each wird) needs no
 config: clips are fetched from everyayah.com and then re-sent from a cache. The
-**tajweed lesson** example clips are committed and baked into the image, so the
-`TAJWEED_AUDIO_BASE_URL` default above works out of the box.
+**tajweed lesson** example clips (`assets/tajweed/*.mp3`, ~8 MB, 34 clips) are
+committed and baked into the image, so the `TAJWEED_AUDIO_BASE_URL` default above
+works out of the box. They are small and are freely shareable Quran recitation,
+so unlike the page images they stay in the repo. They are still regenerable with
+`pnpm data:tajweed` (and `pnpm data:tajweed --check` to re-verify on disk), so a
+lost or updated clip is one command away.
 
 ## Three ways to run it
 
@@ -115,22 +119,24 @@ cache so new images are fetched: `TRUNCATE TABLE mushaf_page_images;`.)
 
 Three ways to serve the verified set:
 
+The images live in the server's shared data tree, OUTSIDE this code checkout, at
+`/opt/bots/data/tilawah/mushaf`. Keeping them out of `/opt/bots/telegram/tilawah`
+means a `git pull` or `reset` during deploy can never touch them. (This matches
+the server convention for big runtime files; see the hetzner-cloud-server guide,
+chapter 4, "Big files a bot needs".)
+
 **A. Download on your laptop, upload to the server (recommended).** You review
 the images locally, then ship the exact bytes; the server never fetches from
 anyone. The bot uploads each page from disk itself (no public URL needed, which
 suits this long-polling bot). On your laptop you already ran `pnpm data:mushaf`
-and checked it; now copy the folder up and bind-mount it:
-
-Deploy the code FIRST (so the bot folder exists on the server and `manifest.json`
-is tracked by git), then upload. `--mkpath` creates the destination folder, and
-`--exclude manifest.json` skips the manifest because it ships with the code from
-git: uploading it before the first `git pull` leaves an untracked file that
-blocks the pull.
+and checked it; now copy the folder up. Because the target is a plain data
+folder (not a git checkout), you can upload everything, manifest included, and
+the order does not matter. `--mkpath` creates the destination folder:
 
 ```bash
 # on your laptop
-rsync -av --mkpath --exclude manifest.json \
-  assets/mushaf/ root@<server>:/opt/bots/telegram/tilawah/assets/mushaf/
+rsync -av --mkpath \
+  assets/mushaf/ root@<server>:/opt/bots/data/tilawah/mushaf/
 ```
 
 In `/opt/bots/docker-compose.yml`, give the `tilawah` service the read-only
@@ -138,37 +144,63 @@ bind mount shown in `compose.example.yml`:
 
 ```yaml
     volumes:
-      - ./telegram/tilawah/assets/mushaf:/app/assets/mushaf:ro
+      - ./data/tilawah/mushaf:/app/assets/mushaf:ro
 ```
 
 Set `MUSHAF_IMAGE_BASE_URL="/app/assets/mushaf/{page3}.jpg"` (a path, not a URL)
-in the bot's `.env`, then `docker compose up -d --build tilawah`. The folder is
-git-ignored, so **deploys never touch it**, and the `file_id` cache (in the
-database) means each page uploads to Telegram only once, so **deploys never
-re-upload** either. Refresh later by re-running `rsync`.
+in the bot's `.env`, then `docker compose up -d tilawah`. The folder is outside
+git, so **deploys never touch it**, and the `file_id` cache (in the database)
+means each page uploads to Telegram only once, so **deploys never re-upload**
+either. Refresh later by re-running `rsync`. Confirm the container sees the
+pages: `docker compose exec tilawah ls assets/mushaf | head` (an EMPTY result
+means the source folder was empty when you started the bot: fill it, then re-up).
 
 **B. Let the server download instead.** If you would rather not upload ~90 MB,
-add a one-off populate service to the compose file (it writes to a named volume
-the bot mounts):
+download straight into the data folder on the server with a throwaway container,
+then bind-mount it the same as A:
 
-```yaml
-  tilawah-mushaf:
-    build: ./telegram/tilawah
-    env_file: ./telegram/tilawah/.env
-    command: sh -c "pnpm data:mushaf --out /app/assets/mushaf"
-    volumes: ["tilawah-mushaf:/app/assets/mushaf"]
-    restart: 'no'
-    profiles: ['mushaf']
-# add to tilawah:  volumes: ["tilawah-mushaf:/app/assets/mushaf:ro"]
-# add top-level:   volumes: { tilawah-mushaf: {} }
+```bash
+mkdir -p /opt/bots/data/tilawah/mushaf
+cd /opt/bots
+docker compose run --rm -v /opt/bots/data/tilawah/mushaf:/out \
+  tilawah sh -c "pnpm data:mushaf --out /out"
 ```
 
-Then `docker compose run --rm --build tilawah-mushaf` once. The server downloads
-from the source, not your laptop, but the result is the same.
+The server downloads from the source, not your laptop, but the result is the
+same folder the `:ro` bind mount serves. Verify it before going live (next
+point): run `pnpm data:mushaf --check --out /out` and eyeball a few pages.
 
 **C. Your own static host (URL).** If you already serve static files (a Netlify
 site, a Caddy `file_server`), upload `assets/mushaf/` there and set
 `MUSHAF_IMAGE_BASE_URL="https://your-host/mushaf/{page3}.jpg"`. No bot change.
+
+## Verify the Quran assets before you go live (required)
+
+This bot sends the holy Quran: page images and recitation audio. A wrong or
+tampered file is far worse than a code bug, and the bot cannot tell good content
+from bad, it just sends what it is given. So treat verification as a required
+gate, not an optional nicety. Both asset sets are regenerable by command, which
+also lets you re-verify them offline at any time:
+
+1. **Page images** (`pnpm data:mushaf`). Download from a TRUSTED source only (the
+   default is the colored Tajweed Hafs Madani set, 604 pages, standard 15-line
+   King Fahd layout). Then:
+   - `pnpm data:mushaf --check` re-checks every page against the tracked
+     `manifest.json` (SHA-256), flagging any swapped or tampered file.
+   - The manifest pins the bytes you reviewed; it does not prove they are
+     correct, so **open and eyeball several pages by eye** the first time.
+   - `pnpm test:image <yourTelegramId> 50` sends a real page to you in Telegram,
+     so you see exactly what a reader would get.
+2. **Tajweed lesson clips** (`pnpm data:tajweed`). `pnpm data:tajweed --check`
+   re-verifies the on-disk clips; **listen to a couple** to confirm the right
+   ayah and clean audio.
+3. **Dry run to yourself first.** Point `CHANNEL_CHAT_ID` at a PRIVATE test
+   channel (or just use a DM with `USER_WIRD_ENABLED=true`) and watch a full
+   wird go out, with the image and the tajweed clip, before you ever point the
+   bot at the public channel.
+
+Only after these pass should you set the live `CHANNEL_CHAT_ID` and start posting
+to real readers.
 
 ## Running with Docker
 
