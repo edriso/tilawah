@@ -195,6 +195,14 @@ send with no extra wiring:
   sets `wirdAudioEnabled = true`), so a reader who did `/reciter off` and later
   picks a voice starts hearing it again.
 
+To let a reader hear a new voice at once, the reciter confirmation (the picker
+pick and `/reciter <key>`) carries a "جرّب على صفحة اليوم" preview button,
+mirroring the ayah bot. Tapping it plays ONE page's recitation in the new voice
+— today's DELIVERED page if there is one, else the current page (`sampleAudioPagesFor`
+resolves it, `sendPageAudio` sends it) — never the whole multi-page wird. It is
+a SILENT peek: it records no delivery and never advances the position, so it can
+be tapped freely and never collides with the daily send.
+
 ## Channel and users are optional
 
 Config decides what runs (see `.env.example`):
@@ -284,7 +292,8 @@ Commit the new folder under `prisma/migrations/`. Production applies it with
   the file_id cache in `src/database/services/page-audio.service.ts` (table
   `page_audio`); the delivery (`sendPageAudio`) and reciter names/captions in
   `src/lib/deliver.ts` and `src/lib/copy.ts`; the picker in
-  `src/lib/reciter-keyboard.ts`.
+  `src/lib/reciter-keyboard.ts`. The "try it on today's page" preview button is
+  `sampleAudioPagesFor` in deliver.ts + the `RECITER_SAMPLE` handler in bot.ts.
 - Tajweed lesson math + formatter: `src/core/tajweed.ts`; the lesson deck:
   `src/database/reference/tajweed-lessons.ts`; the example-audio sender +
   file_id cache: `src/lib/send-audio.ts` + `src/database/services/tajweed-audio.service.ts`;

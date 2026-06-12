@@ -612,6 +612,24 @@ export async function previewWird(sub: {
   return formatWird(content, basmala, COPY.wirdLead);
 }
 
+/**
+ * The single page a reciter preview ("try it on today's page") should sample:
+ * today's first DELIVERED page if there is one (so it matches what they last
+ * received), else the subscriber's current page. Just ONE page, never the whole
+ * wird, so a multi-page reader is not flooded with clips. A pure read — no
+ * delivery, no advance — so the preview button can be tapped freely. Returns []
+ * when no page resolves.
+ */
+export async function sampleAudioPagesFor(
+  sub: { id: number; timezone: string; currentPage: number },
+  now: Date = new Date(),
+): Promise<PageContent[]> {
+  const local = getLocalContext(sub.timezone, now);
+  const delivered = await getDeliveryFor(sub.id, local.date);
+  const startPage = delivered ? delivered.startPage : sub.currentPage;
+  return getWird(startPage, 1);
+}
+
 /** What /today should send the user, and whether to record it as the day's
  *  delivery so the scheduler does not send the same wird again. The caller
  *  renders the pages in the subscriber's chosen format (text or image) via

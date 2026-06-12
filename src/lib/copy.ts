@@ -340,7 +340,13 @@ export const COPY = {
   reciterOff: 'تم إيقاف تلاوة الصفحة ⏸️ سيصلك الورد بدون صوت.',
   // Callback toasts.
   reciterToggledOff: 'تم إيقاف التلاوة ⏸️',
-  reciterToggledTo: (reciter: string) => `القارئ: ${reciterNameAr(reciter)} ✅`,
+  // "Try it on today's page" preview button (on the reciter confirmation) + its
+  // toasts. The preview plays ONE page's recitation in the new voice as a
+  // silent peek: it never records a delivery or advances the position.
+  reciterSampleBtn: '🎧 جرّب على صفحة اليوم',
+  sampleSent: 'أرسلنا عينة على صفحة اليوم 🌿',
+  sampleNoPage: 'ابدأ أولًا بـ /today لتجربة القارئ 🌿',
+  sampleReciterOff: 'التلاوة متوقفة حاليًا',
 
   // ── Admin / channel ───────────────────────────────────────────────
   adminOnly: 'هذا الأمر للمشرف فقط.',

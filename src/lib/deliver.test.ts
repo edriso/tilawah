@@ -82,6 +82,7 @@ import {
   buildTodayView,
   buildLessonReview,
   renderLessonAt,
+  sampleAudioPagesFor,
 } from './deliver';
 import { config } from '../config';
 import { advanceStartPage } from '../core';
@@ -252,6 +253,31 @@ describe('buildTodayView (/today claims today)', () => {
     // Shows the just-set current page, NOT the earlier delivered pages.
     expect(h.getWird).toHaveBeenCalledWith(5, 1);
     expect(h.getWird).not.toHaveBeenCalledWith(10, 2);
+  });
+});
+
+describe('sampleAudioPagesFor (the reciter "try it on today\'s page" preview)', () => {
+  beforeEach(() => {
+    h.getDeliveryFor.mockResolvedValue(null);
+    h.getWird.mockResolvedValue(CONTENT);
+  });
+
+  it("samples today's first DELIVERED page (one page) when there is a delivery", async () => {
+    h.getDeliveryFor.mockResolvedValue({ startPage: 10, pageCount: 3 });
+    const pages = await sampleAudioPagesFor({ id: 1, timezone: 'UTC', currentPage: 5 }, NOW);
+    expect(h.getWird).toHaveBeenCalledWith(10, 1); // delivered start, ONE page
+    expect(pages).toEqual(CONTENT);
+  });
+
+  it('samples the current page (one page) when today is not delivered', async () => {
+    const pages = await sampleAudioPagesFor({ id: 1, timezone: 'UTC', currentPage: 5 }, NOW);
+    expect(h.getWird).toHaveBeenCalledWith(5, 1);
+    expect(pages).toEqual(CONTENT);
+  });
+
+  it('returns [] when no page resolves', async () => {
+    h.getWird.mockResolvedValue([]);
+    expect(await sampleAudioPagesFor({ id: 1, timezone: 'UTC', currentPage: 1 }, NOW)).toEqual([]);
   });
 });
 

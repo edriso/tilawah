@@ -1,4 +1,4 @@
-import { Bot, InputFile, type Context } from 'grammy';
+import { Bot, InlineKeyboard, InputFile, type Context } from 'grammy';
 import {
   activeDaysList,
   nextPageAfter,
@@ -42,6 +42,7 @@ import {
   tajweedLessonView,
   sendLesson,
   sendPageAudio,
+  sampleAudioPagesFor,
   buildLessonReview,
   renderLessonAt,
   type TodayView,
@@ -56,6 +57,10 @@ import {
   LESSONS_NOOP,
 } from './lib/tajweed-lessons-keyboard';
 import { buildReciterKeyboard, RECITER_PICK_PREFIX, RECITER_OFF } from './lib/reciter-keyboard';
+// The "try it on today's page" preview button on a reciter confirmation. A
+// distinct string (no "tilawah:reciter:" colon prefix) so it never matches the
+// reciter-pick handler's `^tilawah:reciter:(.+)$`.
+const RECITER_SAMPLE = 'tilawah:reciter-sample';
 import { runDeliveryOnce } from './scheduler';
 import { buildDaysKeyboard, DAY_TOGGLE_PREFIX, DAYS_DONE } from './lib/days-keyboard';
 import { buildTimeKeyboard, TIME_PICK_PREFIX } from './lib/time-keyboard';
@@ -329,6 +334,16 @@ bot.command('tajweed', async (ctx) => {
   await ctx.reply(body, { reply_markup: buildTajweedKeyboard(sub.tajweedEnabled) });
 });
 
+/** Confirm a just-set reciter with a "try it on today's page" preview button,
+ *  mirroring the ayah bot (the preview rides the confirmation, not a permanent
+ *  control). Shared by /reciter <key> and the picker pick. setReciter has
+ *  already turned audio on, so the button is always meaningful here. */
+async function replyReciterChosen(ctx: Context, key: string): Promise<void> {
+  await ctx.reply(COPY.reciterUpdated(key), {
+    reply_markup: new InlineKeyboard().text(COPY.reciterSampleBtn, RECITER_SAMPLE),
+  });
+}
+
 // /reciter: choose the voice for the daily page recitation, or turn it off.
 // No arg: show the picker (off + reciters). "/reciter off" or "/reciter <key>"
 // set it directly. On by default.
@@ -343,7 +358,7 @@ bot.command('reciter', async (ctx) => {
   }
   if (arg && isReciter(arg)) {
     await setReciter(sub.id, arg);
-    await ctx.reply(COPY.reciterUpdated(arg));
+    await replyReciterChosen(ctx, arg);
     return;
   }
   // No (or unknown) arg: show the picker reflecting the current state.
@@ -605,10 +620,33 @@ bot.callbackQuery(new RegExp(`^${RECITER_PICK_PREFIX}(.+)$`), async (ctx) => {
     return;
   }
   await setReciter(sub.id, key);
-  await ctx
-    .editMessageReplyMarkup({ reply_markup: buildReciterKeyboard(true, key) })
-    .catch(() => {});
-  await ctx.answerCallbackQuery({ text: COPY.reciterToggledTo(key) });
+  await ctx.editMessageReplyMarkup().catch(() => {}); // drop the picker
+  await ctx.answerCallbackQuery();
+  // Confirm with the "try it on today's page" preview button, like the ayah bot.
+  await replyReciterChosen(ctx, key);
+});
+
+// "Try it on today's page": play ONE page's recitation (today's delivered page,
+// else the current page) in the chosen voice, as a silent peek. Never records a
+// delivery or advances the position, so it is safe to tap repeatedly.
+bot.callbackQuery(RECITER_SAMPLE, async (ctx) => {
+  const sub = await userFromCallback(ctx);
+  if (!sub) {
+    await ctx.answerCallbackQuery();
+    return;
+  }
+  if (!sub.wirdAudioEnabled) {
+    await ctx.answerCallbackQuery({ text: COPY.sampleReciterOff });
+    return;
+  }
+  const pages = await sampleAudioPagesFor(sub, new Date());
+  if (pages.length === 0) {
+    await ctx.answerCallbackQuery({ text: COPY.sampleNoPage });
+    return;
+  }
+  await ctx.answerCallbackQuery({ text: COPY.sampleSent });
+  // Best-effort: sendPageAudio swallows its own send errors.
+  await sendPageAudio(bot, sub.chatId, pages, normalizeReciter(sub.reciter));
 });
 
 // ─── Day-picker buttons ─────────────────────────────────────────────

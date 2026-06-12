@@ -24,7 +24,9 @@ extend the project.
   wird that already arrived. It always follows the wird the reader just got, on
   the scheduled send, `/today`, and `/page` alike: change the page count, the
   page, or the reciter and the very next send recites the right pages in the
-  right voice (picking a reciter also turns the audio back on).
+  right voice (picking a reciter also turns the audio back on). After picking a
+  voice, a "جرّب على صفحة اليوم" button lets the reader hear it right away on
+  one page of today's wird (a silent peek that does not re-deliver anything).
 - Posts a short daily tajweed lesson right before the wird (on by default), so
   readers learn to recite correctly a rule at a time. Each lesson has a plain
   explanation, an example ayah (verified text from the database), and an optional
