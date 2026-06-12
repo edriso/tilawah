@@ -43,6 +43,7 @@ import {
   sendLesson,
   sendPageAudio,
   sampleAudioPagesFor,
+  wirdPageNumbersFor,
   buildLessonReview,
   renderLessonAt,
   type TodayView,
@@ -57,6 +58,7 @@ import {
   LESSONS_NOOP,
 } from './lib/tajweed-lessons-keyboard';
 import { buildReciterKeyboard, RECITER_PICK_PREFIX, RECITER_OFF } from './lib/reciter-keyboard';
+import { buildPageTafseerKeyboard } from './lib/tafseer-keyboard';
 // The "try it on today's page" preview button on a reciter confirmation. A
 // distinct string (no "tilawah:reciter:" colon prefix) so it never matches the
 // reciter-pick handler's `^tilawah:reciter:(.+)$`.
@@ -366,6 +368,22 @@ bot.command('reciter', async (ctx) => {
   await ctx.reply(COPY.reciterPrompt(sub.wirdAudioEnabled, current), {
     reply_markup: buildReciterKeyboard(sub.wirdAudioEnabled, current),
   });
+});
+
+// /tafsir: a link to read today's wird pages' tafseer on quran.com (one button
+// per page). On-demand and link-only: a page holds many ayat, so we store no
+// tafseer text — we point the reader at the page where every ayah's tafsir is a
+// tap away. The pages follow the reader's current wird (delivered range if
+// today is delivered, else the current position for the current wird size).
+bot.command('tafsir', async (ctx) => {
+  const sub = await userSubscriber(ctx);
+  if (!sub) return;
+  const pages = await wirdPageNumbersFor(sub, new Date());
+  if (pages.length === 0) {
+    await ctx.reply(COPY.tafsirNoPages);
+    return;
+  }
+  await ctx.reply(COPY.tafsirIntro, { reply_markup: buildPageTafseerKeyboard(pages) });
 });
 
 // /page: jump to a specific Mushaf page (1..604). With no argument, show the
@@ -1040,6 +1058,7 @@ async function setBotCommands() {
       { command: 'wird', description: 'حجم الورد اليومي' },
       { command: 'tajweed', description: 'درس التجويد اليومي (تشغيل/إيقاف)' },
       { command: 'reciter', description: 'تلاوة الصفحة: اختيار القارئ أو الإيقاف' },
+      { command: 'tafsir', description: 'تفسير صفحات وردك (رابط)' },
       { command: 'format', description: 'طريقة الإرسال: نص أو صورة' },
       { command: 'page', description: 'الانتقال إلى صفحة معيّنة' },
       { command: 'time', description: 'ضبط وقت الإرسال' },

@@ -27,6 +27,10 @@ extend the project.
   right voice (picking a reciter also turns the audio back on). After picking a
   voice, a "جرّب على صفحة اليوم" button lets the reader hear it right away on
   one page of today's wird (a silent peek that does not re-deliver anything).
+- `/tafsir` gives a link to read the tafseer of today's wird pages: one button
+  per page opening that Mushaf page on quran.com, where every ayah's tafsir is a
+  tap away. Link-only (no stored text), and it always follows the reader's
+  current wird (size and page).
 - Posts a short daily tajweed lesson right before the wird (on by default), so
   readers learn to recite correctly a rule at a time. Each lesson has a plain
   explanation, an example ayah (verified text from the database), and an optional
@@ -95,6 +99,7 @@ it. Set `USER_WIRD_ENABLED=false` for a channel only deployment. See
 All in Arabic. `/today` read today's wird now (counts as today's), `/wird` pages
 per day, `/tajweed` the daily tajweed lesson (read it now, or toggle on/off with
 `/tajweed on|off`), `/reciter` the page-recitation voice (pick a reciter or off),
+`/tafsir` a link to read today's wird pages' tafseer on quran.com,
 `/format` text or Mushaf-page image, `/page` go to a specific
 page (1 to 604) and read it now, `/time` send time, `/days` send days,
 `/timezone` timezone, `/pause` take a break or come back, `/status` your

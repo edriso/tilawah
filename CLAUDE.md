@@ -203,6 +203,25 @@ resolves it, `sendPageAudio` sends it) — never the whole multi-page wird. It i
 a SILENT peek: it records no delivery and never advances the position, so it can
 be tapped freely and never collides with the daily send.
 
+## Page tafseer (/tafsir)
+
+A page holds many ayat, so we never send tafseer TEXT here. Instead `/tafsir`
+replies a link (one URL button per page of the reader's wird) to that Mushaf
+page on quran.com (`pageTafseerUrl` -> `quran.com/ar/page/N`), where every
+ayah's tafsir (Al-Muyassar, As-Saadi, Ibn Kathir, and more) is one tap away.
+quran.com is the Quran.Foundation site, the same trusted source the ayah bot
+links its tafseer to.
+
+It is on-demand and link-only: no stored text, no schema, no per-delivery
+clutter, so there is nothing to enable or disable (running the command is the
+opt-in). The pages follow the reader's CURRENT wird — `wirdPageNumbersFor`
+returns today's DELIVERED pages if today is delivered, else the current
+position for the current wird size, through `getWird` so the page numbers are
+real (clamped at the end of the Mushaf). So the links stay correct after
+`/wird N` (size change) or `/page N` (position change). The keyboard
+(`src/lib/tafseer-keyboard.ts`) lays the pages out a few per row so even a
+full-juz (20-page) wird stays compact.
+
 ## Channel and users are optional
 
 Config decides what runs (see `.env.example`):
@@ -294,6 +313,9 @@ Commit the new folder under `prisma/migrations/`. Production applies it with
   `src/lib/deliver.ts` and `src/lib/copy.ts`; the picker in
   `src/lib/reciter-keyboard.ts`. The "try it on today's page" preview button is
   `sampleAudioPagesFor` in deliver.ts + the `RECITER_SAMPLE` handler in bot.ts.
+- Page tafseer link (`/tafsir`): the URL builder `pageTafseerUrl` in
+  `src/core/tafseer.ts`, the page resolver `wirdPageNumbersFor` in deliver.ts,
+  the keyboard in `src/lib/tafseer-keyboard.ts`, the command in bot.ts.
 - Tajweed lesson math + formatter: `src/core/tajweed.ts`; the lesson deck:
   `src/database/reference/tajweed-lessons.ts`; the example-audio sender +
   file_id cache: `src/lib/send-audio.ts` + `src/database/services/tajweed-audio.service.ts`;

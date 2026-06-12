@@ -185,6 +185,7 @@ export const COPY = {
     `/wird: حجم الورد اليومي (١ إلى ٢٠ صفحة)، مثل ${ltr('/wird 5')}`,
     '/tajweed: درس تجويد يومي قبل وردك (تشغيل/إيقاف)',
     '/reciter: تلاوة صفحتك صوتًا، واختيار القارئ أو الإيقاف',
+    '/tafsir: رابط لقراءة تفسير صفحات وردك على الموقع',
     '/format: طريقة الإرسال، نصًّا أو صورة من المصحف',
     `/page: الانتقال إلى صفحة معيّنة (١ إلى ٦٠٤)، مثل ${ltr('/page 100')}`,
     '/time: ضبط وقت الإرسال',
@@ -347,6 +348,14 @@ export const COPY = {
   sampleSent: 'أرسلنا عينة على صفحة اليوم 🌿',
   sampleNoPage: 'ابدأ أولًا بـ /today لتجربة القارئ 🌿',
   sampleReciterOff: 'التلاوة متوقفة حاليًا',
+
+  // ── Page tafseer (/tafsir) ────────────────────────────────────────
+  // A link, not stored text: a tilawah page holds many ayat, so we point the
+  // reader at the exact page on quran.com (a trusted source) where every ayah's
+  // tafsir is one tap away. The buttons below cover today's wird pages.
+  tafsirIntro:
+    'تفسير صفحات وردك 📖\nافتح الصفحة على الموقع، ثم اضغط على أي آية لقراءة تفسيرها (الميسر، السعدي، ابن كثير، وغيرها).',
+  tafsirNoPages: 'لم نتمكّن من تحديد صفحات وردك الآن. جرّب /today أولًا 🌿',
 
   // ── Admin / channel ───────────────────────────────────────────────
   adminOnly: 'هذا الأمر للمشرف فقط.',

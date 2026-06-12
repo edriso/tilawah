@@ -83,6 +83,7 @@ import {
   buildLessonReview,
   renderLessonAt,
   sampleAudioPagesFor,
+  wirdPageNumbersFor,
 } from './deliver';
 import { config } from '../config';
 import { advanceStartPage } from '../core';
@@ -278,6 +279,49 @@ describe('sampleAudioPagesFor (the reciter "try it on today\'s page" preview)', 
   it('returns [] when no page resolves', async () => {
     h.getWird.mockResolvedValue([]);
     expect(await sampleAudioPagesFor({ id: 1, timezone: 'UTC', currentPage: 1 }, NOW)).toEqual([]);
+  });
+});
+
+describe('wirdPageNumbersFor (the /tafsir page links)', () => {
+  beforeEach(() => {
+    h.getDeliveryFor.mockResolvedValue(null);
+    h.getWird.mockResolvedValue(TWO_PAGES); // pages 1 and 2
+  });
+
+  it("uses today's DELIVERED range when there is a delivery", async () => {
+    h.getDeliveryFor.mockResolvedValue({ startPage: 10, pageCount: 2 });
+    const pages = await wirdPageNumbersFor(
+      { id: 1, timezone: 'UTC', currentPage: 5, wirdSize: 2 },
+      NOW,
+    );
+    expect(h.getWird).toHaveBeenCalledWith(10, 2); // delivered start + count
+    expect(pages).toEqual([1, 2]); // the page numbers getWird returned
+  });
+
+  it('uses the current position + current wird size when not delivered', async () => {
+    const pages = await wirdPageNumbersFor(
+      { id: 1, timezone: 'UTC', currentPage: 5, wirdSize: 2 },
+      NOW,
+    );
+    expect(h.getWird).toHaveBeenCalledWith(5, 2);
+    expect(pages).toEqual([1, 2]);
+  });
+
+  it('reflects a changed wird size (not delivered yet)', async () => {
+    h.getWird.mockResolvedValue(manyPages(7));
+    const pages = await wirdPageNumbersFor(
+      { id: 1, timezone: 'UTC', currentPage: 1, wirdSize: 7 },
+      NOW,
+    );
+    expect(h.getWird).toHaveBeenCalledWith(1, 7);
+    expect(pages).toEqual([1, 2, 3, 4, 5, 6, 7]);
+  });
+
+  it('returns [] when no pages resolve', async () => {
+    h.getWird.mockResolvedValue([]);
+    expect(
+      await wirdPageNumbersFor({ id: 1, timezone: 'UTC', currentPage: 1, wirdSize: 1 }, NOW),
+    ).toEqual([]);
   });
 });
 

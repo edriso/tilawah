@@ -630,6 +630,27 @@ export async function sampleAudioPagesFor(
   return getWird(startPage, 1);
 }
 
+/**
+ * The page numbers of the reader's wird, for the /tafsir link(s): today's
+ * DELIVERED pages if there is a delivery (so the links match what they read
+ * today), else the current position's wird (`currentPage` for `wirdSize`
+ * pages). Goes through getWird so the numbers are the REAL pages (clamped at
+ * the end of the Mushaf), and so a changed wird size or page is always
+ * reflected. A pure read — no delivery, no advance. Returns [] when none.
+ */
+export async function wirdPageNumbersFor(
+  sub: { id: number; timezone: string; currentPage: number; wirdSize: number },
+  now: Date = new Date(),
+): Promise<number[]> {
+  const local = getLocalContext(sub.timezone, now);
+  const delivered = await getDeliveryFor(sub.id, local.date);
+  const [startPage, count] = delivered
+    ? [delivered.startPage, delivered.pageCount]
+    : [sub.currentPage, sub.wirdSize];
+  const pages = await getWird(startPage, count);
+  return pages.map((p) => p.pageNumber);
+}
+
 /** What /today should send the user, and whether to record it as the day's
  *  delivery so the scheduler does not send the same wird again. The caller
  *  renders the pages in the subscriber's chosen format (text or image) via
