@@ -12,7 +12,8 @@ describe('buildPageTafseerKeyboard', () => {
     expect(btns).toHaveLength(3);
     expect(btns[0].url).toBe('https://quran.com/ar/page/2');
     expect(btns[2].url).toBe('https://quran.com/ar/page/4');
-    // Page number shown in Arabic-Indic digits.
+    // A clear "صفحة N" label with the page number in Arabic-Indic digits.
+    expect(btns[1].text).toContain('صفحة');
     expect(btns[1].text).toContain('٣');
   });
 
