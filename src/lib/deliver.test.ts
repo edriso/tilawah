@@ -298,6 +298,16 @@ describe('wirdPageNumbersFor (the /tafsir page links)', () => {
     expect(pages).toEqual([1, 2]); // the page numbers getWird returned
   });
 
+  it("ignores a wird-size / page change made AFTER today's delivery (uses the delivered range)", async () => {
+    // Delivered 1 page from page 10 this morning; the reader has since done
+    // /wird 10 and /page 50. /tafsir must still cover what they got TODAY (the
+    // delivered page), not the new, not-yet-delivered wird.
+    h.getDeliveryFor.mockResolvedValue({ startPage: 10, pageCount: 1 });
+    h.getWird.mockResolvedValue(CONTENT); // one page
+    await wirdPageNumbersFor({ id: 1, timezone: 'UTC', currentPage: 50, wirdSize: 10 }, NOW);
+    expect(h.getWird).toHaveBeenCalledWith(10, 1); // delivered range, NOT 50 / 10
+  });
+
   it('uses the current position + current wird size when not delivered', async () => {
     const pages = await wirdPageNumbersFor(
       { id: 1, timezone: 'UTC', currentPage: 5, wirdSize: 2 },
