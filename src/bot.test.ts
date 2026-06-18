@@ -11,6 +11,7 @@ const h = vi.hoisted(() => ({
   setCurrentPage: vi.fn(),
   getJuzForPage: vi.fn(),
   commitDelivery: vi.fn(),
+  growDelivery: vi.fn(),
   buildTodayView: vi.fn(),
   sendWird: vi.fn(),
   tajweedLessonView: vi.fn(),
@@ -44,6 +45,7 @@ vi.mock('./database', () => ({
   pauseSubscriber: vi.fn(),
   resumeSubscriber: vi.fn(),
   commitDelivery: h.commitDelivery,
+  growDelivery: h.growDelivery,
   setTajweedEnabled: vi.fn(),
   setWirdAudioEnabled: vi.fn(),
   setReciter: vi.fn(),
@@ -56,6 +58,7 @@ vi.mock('./lib/deliver', () => ({
   tajweedLessonView: h.tajweedLessonView,
   sendLesson: h.sendLesson,
   sendPageAudio: h.sendPageAudio,
+  deliveredCountToday: vi.fn(),
   buildLessonReview: vi.fn(),
   previewWird: vi.fn(),
 }));
@@ -64,7 +67,8 @@ vi.mock('./lib/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
-import { repositionToPage } from './bot';
+import { repositionToPage, sendTodayView } from './bot';
+import { advanceStartPage } from './core';
 
 const SUB = {
   id: 1,
@@ -89,6 +93,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   h.getJuzForPage.mockResolvedValue(5);
   h.commitDelivery.mockResolvedValue('sent');
+  h.growDelivery.mockResolvedValue(undefined);
   // The whole wird went out (pagesSent matches the one page below), so /today
   // and reposition claim the day.
   h.sendWird.mockResolvedValue({ pagesSent: 1, lastResult: 'ok' });
@@ -305,6 +310,99 @@ describe('repositionToPage page recitation', () => {
     h.buildTodayView.mockResolvedValue(TWO_PAGE_VIEW());
     const audioSub = { ...(SUB as object), wirdAudioEnabled: true, reciter: 'husary' } as never;
     await repositionToPage(fakeCtx() as never, audioSub, 5);
+
+    expect(h.sendPageAudio).not.toHaveBeenCalled();
+  });
+});
+
+// sendTodayView GROWS today's record (instead of creating one) when the view is
+// a top-up: the reader raised their wird size on a day already delivered, so the
+// remaining pages go out now and the position advances by exactly what was sent.
+describe('sendTodayView top-up', () => {
+  // A two-page top-up view: the rest of today (pages 11, 12) at the new size,
+  // sent from the already-advanced position (startPage 11).
+  const TOP_UP_VIEW = (over: Record<string, unknown> = {}) => ({
+    pages: [
+      { pageNumber: 11, juz: 1, ayat: [] },
+      { pageNumber: 12, juz: 1, ayat: [] },
+    ],
+    basmala: 'بسم الله',
+    lead: '🌿 وردك اليوم',
+    claim: null,
+    topUp: { scheduledFor: '2026-06-01', startPage: 11 },
+    alreadyDelivered: true,
+    ...over,
+  });
+
+  it('grows the day and advances by the pages sent, never creating a new delivery', async () => {
+    h.sendWird.mockResolvedValue({ pagesSent: 2, lastResult: 'ok' });
+    await sendTodayView(fakeCtx() as never, SUB, TOP_UP_VIEW() as never, new Date('2026-06-01'));
+
+    expect(h.growDelivery).toHaveBeenCalledWith(
+      expect.objectContaining({
+        subscriberId: 1,
+        scheduledFor: '2026-06-01',
+        addPages: 2,
+        nextPage: advanceStartPage(11, 2),
+      }),
+    );
+    expect(h.commitDelivery).not.toHaveBeenCalled(); // a top-up never creates a row
+  });
+
+  it('grows by ONLY the pages that went out on a partial top-up', async () => {
+    h.sendWird.mockResolvedValue({ pagesSent: 1, lastResult: 'failed' }); // page 12 fails
+    await sendTodayView(fakeCtx() as never, SUB, TOP_UP_VIEW() as never, new Date('2026-06-01'));
+
+    expect(h.growDelivery).toHaveBeenCalledWith(
+      expect.objectContaining({ addPages: 1, nextPage: advanceStartPage(11, 1) }),
+    );
+  });
+
+  it('does NOT grow when nothing went out (pagesSent 0)', async () => {
+    h.sendWird.mockResolvedValue({ pagesSent: 0, lastResult: 'failed' });
+    await sendTodayView(fakeCtx() as never, SUB, TOP_UP_VIEW() as never, new Date('2026-06-01'));
+
+    expect(h.growDelivery).not.toHaveBeenCalled();
+  });
+
+  it('never re-sends the daily tajweed lesson on a top-up (it went out earlier today)', async () => {
+    h.tajweedLessonView.mockResolvedValue({
+      index: 2,
+      titleAr: 'الإقلاب',
+      text: 'lesson',
+      example: { surah: 2, ayah: 27 },
+    });
+    h.sendWird.mockResolvedValue({ pagesSent: 2, lastResult: 'ok' });
+    await sendTodayView(fakeCtx() as never, SUB, TOP_UP_VIEW() as never, new Date('2026-06-01'));
+
+    expect(h.sendLesson).not.toHaveBeenCalled();
+  });
+
+  it('recites the topped-up pages when audio is on', async () => {
+    h.sendWird.mockResolvedValue({ pagesSent: 2, lastResult: 'ok' });
+    const audioSub = { ...(SUB as object), wirdAudioEnabled: true, reciter: 'husary' } as never;
+    await sendTodayView(
+      fakeCtx() as never,
+      audioSub,
+      TOP_UP_VIEW() as never,
+      new Date('2026-06-01'),
+    );
+
+    expect(h.sendPageAudio).toHaveBeenCalledTimes(1);
+    const [, , pages, reciter] = h.sendPageAudio.mock.calls[0];
+    expect(pages.map((p: { pageNumber: number }) => p.pageNumber)).toEqual([11, 12]);
+    expect(reciter).toBe('husary');
+  });
+
+  it('sends no recitation when the top-up sent nothing', async () => {
+    h.sendWird.mockResolvedValue({ pagesSent: 0, lastResult: 'failed' });
+    const audioSub = { ...(SUB as object), wirdAudioEnabled: true, reciter: 'husary' } as never;
+    await sendTodayView(
+      fakeCtx() as never,
+      audioSub,
+      TOP_UP_VIEW() as never,
+      new Date('2026-06-01'),
+    );
 
     expect(h.sendPageAudio).not.toHaveBeenCalled();
   });

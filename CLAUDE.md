@@ -99,6 +99,30 @@ records exactly the pages that actually went out and advances by that many, so a
 partial send (e.g. an image source dies mid-wird) rolls the rest to the next run
 instead of re-sending pages the reader already received.
 
+### Topping up today after raising the wird size
+
+"Today's wird" tracks the reader's CURRENT pace, not a frozen snapshot. If they
+RAISE their wird size on a day already delivered (a small wird went out, then
+`/wird 20`), `/today` does not just re-show the old, smaller wird — it TOPS UP:
+it sends the pages still owed for today (from the already-advanced position,
+sized to the difference) and `growDelivery` grows that day's record and advances
+the position by exactly what went out, in one transaction. So the day reflects
+the bigger size, and we never re-send a page the reader already read. The daily
+tajweed lesson is NOT re-sent on a top-up (it went out with the first delivery);
+the page recitation follows the topped-up pages like any real delivery.
+
+This is the `topUp` branch of `buildTodayView` (mutually exclusive with `claim`)
+plus `growDelivery` in the delivery service. Lowering the size, or an unchanged
+size, just re-shows what was delivered (there is nothing more owed today). A
+reposition (`/page`) is a jump, not "read more of today", so it skips the top-up
+and previews the new position. `/wird` itself adds a one-line hint pointing to
+`/today` when the new size can top up today (`deliveredCountToday` decides this),
+so the reader is never left wondering why the bigger wird has not appeared. The
+change only reaches "today" through these interactive paths; tomorrow's
+scheduled send already uses the current size as a matter of course. Two readers'
+feedback drove this: raising the size and seeing only the original single page
+read as a bug.
+
 ## Daily tajweed lesson
 
 Right BEFORE the wird, the bot posts a short tajweed micro-lesson (on by default
@@ -176,15 +200,17 @@ the daily send (`deliverDueSubscribers`), `/today`, and the `/page` reposition
 all call `sendPageAudio` the same way (the last two through `sendTodayView` in
 bot.ts), so the audio always matches the wird the reader just got. It is tied to
 a REAL delivery on all of them: the scheduler gates on a `commitDelivery` of
-'sent', and `sendTodayView` does the same, so a `/today` re-show or a `/page`
-preview shows the wird again but does NOT re-send the audio (and the loser of a
-race with the scheduler sends nothing). The recitation reads the subscriber's
-CURRENT settings each time, so a setting change is honoured on the very next
-send with no extra wiring:
+'sent', and `sendTodayView` gates on a `commitDelivery` (a claim) OR a
+`growDelivery` (a top-up), so a `/today` re-show or a `/page` preview shows the
+wird again but does NOT re-send the audio (and the loser of a race with the
+scheduler sends nothing). A top-up recites only the pages it just added. The
+recitation reads the subscriber's CURRENT settings each time, so a setting
+change is honoured on the very next send with no extra wiring:
 
 - Raise the wird size with `/wird N`: the next wird is N pages, and the
   recitation is the same N pages, one clip each (the loop in `sendPageAudio`
-  walks every delivered page).
+  walks every delivered page). On a day already delivered, raising the size tops
+  up today (see "Topping up today" above) and recites only the added pages.
 - Jump with `/page N` (or `/admin_setpage` on the channel): the recitation is
   for the new page(s), because it sends exactly `content.slice(0, pagesSent)`
   from the new position, never a stale page.
@@ -336,6 +362,11 @@ Commit the new folder under `prisma/migrations/`. Production applies it with
   number); a 1-page wird is a plain photo. If an album fails it falls back to
   per-page, and a failed photo falls back to text, so a bad page never costs the
   rest of the wird. The position advances by exactly the pages actually sent.
+- Today's wird + the top-up: `buildTodayView` (`claim` vs `topUp` vs re-show) and
+  `deliveredCountToday` in `src/lib/deliver.ts`; `sendTodayView` (the shared
+  renderer for `/today` and `/page`) and `setWirdSizeAndReply` (the `/wird`
+  top-up hint) in `bot.ts`; `commitDelivery` (create) and `growDelivery` (grow)
+  in `src/database/services/delivery.service.ts`.
 - Delivery format (Mushaf-page image vs text): `src/core/mushaf-image.ts` (the
   format flag and the page-image source builder), `src/lib/send-photo.ts` (the
   photo + album senders), the `wirdFormat` column and the `mushaf_page_images`

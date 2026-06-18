@@ -92,3 +92,36 @@ export async function commitDelivery(params: {
     throw err;
   }
 }
+
+/**
+ * Grow an already-recorded day's delivery by `addPages` pages and advance the
+ * subscriber to `nextPage`, in one transaction. Used to "top up" today's wird
+ * when the reader RAISED their wird size on a day already delivered: the extra
+ * pages are sent, today's record grows to match, and the position advances by
+ * exactly what went out. Call this ONLY after those pages were actually sent,
+ * for the same reason as commitDelivery — a failed send must never advance.
+ *
+ * Unlike commitDelivery this UPDATEs an existing row, so it never collides with
+ * the unique (subscriber, scheduledFor) index: the scheduler already skips a
+ * day that has a delivery, so there is no batch to race with here.
+ */
+export async function growDelivery(params: {
+  subscriberId: number;
+  scheduledFor: string;
+  /** How many extra pages were sent in the top-up (added to pageCount). */
+  addPages: number;
+  /** The page the subscriber should be on next (already wrapped if needed). */
+  nextPage: number;
+}): Promise<void> {
+  const { subscriberId, scheduledFor, addPages, nextPage } = params;
+  await prisma.$transaction([
+    prisma.deliveryLog.update({
+      where: { subscriberId_scheduledFor: { subscriberId, scheduledFor } },
+      data: { pageCount: { increment: addPages } },
+    }),
+    prisma.subscriber.update({
+      where: { id: subscriberId },
+      data: { currentPage: nextPage },
+    }),
+  ]);
+}

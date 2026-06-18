@@ -204,6 +204,15 @@ export const COPY = {
   // Shown above the wird when /today re-shows a wird already delivered today.
   todayAlready: 'لقد وصلك ورد اليوم بالفعل، وهذا هو 🌿',
 
+  // Shown above the wird when /today "tops up" an already-delivered day after
+  // the reader raised their wird size: the rest of today's pages, at the new
+  // size, follow immediately.
+  todayToppedUp: 'زاد حجم وردك، وهذه بقيّة صفحات اليوم 🌿',
+
+  // Appended to the /wird confirmation when raising the size on a day already
+  // delivered: the extra pages can be read NOW via /today, not just tomorrow.
+  todayTopUpHint: `وقد وصلك ورد اليوم بحجمه السابق، فاكتب ${ltr('/today')} لقراءة بقيّة صفحات اليوم الآن 🌿`,
+
   // Shown for a stray text message that is not a command and not an expected
   // number reply (after /page or /wird).
   unknownText: 'لم أفهم رسالتك 🤔\nاكتب /help لرؤية الأوامر، أو /page لتغيير صفحتك.',

@@ -10,6 +10,7 @@ const h = vi.hoisted(() => ({
   getWird: vi.fn(),
   getBasmala: vi.fn(),
   commitDelivery: vi.fn(),
+  growDelivery: vi.fn(),
   markBlocked: vi.fn(),
   getCachedPageImageIds: vi.fn(),
   cachePageImageId: vi.fn(),
@@ -39,6 +40,7 @@ vi.mock('../database', () => ({
   getBasmala: h.getBasmala,
   getAyahText: h.getAyahText,
   commitDelivery: h.commitDelivery,
+  growDelivery: h.growDelivery,
   markBlocked: h.markBlocked,
   getCachedPageImageIds: h.getCachedPageImageIds,
   cachePageImageId: h.cachePageImageId,
@@ -84,6 +86,7 @@ import {
   renderLessonAt,
   sampleAudioPagesFor,
   wirdPageNumbersFor,
+  deliveredCountToday,
 } from './deliver';
 import { config } from '../config';
 import { advanceStartPage } from '../core';
@@ -213,6 +216,59 @@ describe('buildTodayView (/today claims today)', () => {
     expect(h.getWird).toHaveBeenCalledWith(10, 2);
   });
 
+  it('tops up an already-delivered day when the wird size was RAISED', async () => {
+    // This morning delivered 1 page (from page 10), advancing the reader to page
+    // 11. They then did /wird 5. /today must send the 4 pages still owed for
+    // today (from page 11), as a top-up — NOT re-show the single delivered page.
+    h.getDeliveryFor.mockResolvedValue({ startPage: 10, pageCount: 1 });
+    h.getWird.mockResolvedValue(manyPages(4));
+    const view = await buildTodayView(todaySub({ currentPage: 11, wirdSize: 5 }), NOW);
+
+    expect(view.topUp).toEqual({ scheduledFor: '2026-06-01', startPage: 11 });
+    expect(view.claim).toBeNull();
+    expect(view.alreadyDelivered).toBe(true);
+    // The remaining pages come from the current position, sized to the delta.
+    expect(h.getWird).toHaveBeenCalledWith(11, 4); // 5 - 1 already delivered
+    expect(view.pages).toHaveLength(4);
+  });
+
+  it('does NOT top up when the size is unchanged or smaller (re-shows the delivered wird)', async () => {
+    // Delivered 3 pages today; the reader has since LOWERED to 2. There is
+    // nothing more to send today, so /today re-shows exactly what was delivered.
+    h.getDeliveryFor.mockResolvedValue({ startPage: 10, pageCount: 3 });
+    const view = await buildTodayView(todaySub({ currentPage: 13, wirdSize: 2 }), NOW);
+
+    expect(view.topUp).toBeNull();
+    expect(view.claim).toBeNull();
+    expect(view.alreadyDelivered).toBe(true);
+    expect(h.getWird).toHaveBeenCalledWith(10, 3); // the delivered range, re-shown
+  });
+
+  it('falls back to a re-show when a raised size yields no extra pages', async () => {
+    // Size raised, but getWird returns nothing for the delta (a data fault); we
+    // must not return an empty top-up — re-show the delivered wird instead.
+    h.getDeliveryFor.mockResolvedValue({ startPage: 10, pageCount: 1 });
+    h.getWird.mockResolvedValueOnce([]).mockResolvedValue(CONTENT);
+    const view = await buildTodayView(todaySub({ currentPage: 11, wirdSize: 5 }), NOW);
+
+    expect(view.topUp).toBeNull();
+    expect(view.alreadyDelivered).toBe(true);
+    expect(h.getWird).toHaveBeenNthCalledWith(1, 11, 4); // tried the top-up delta
+    expect(h.getWird).toHaveBeenNthCalledWith(2, 10, 1); // then re-shows delivered
+  });
+
+  it('reposition skips the top-up and shows the new page (preview), even with a raised size', async () => {
+    // /page is a jump, not "read more of today": on an already-delivered day it
+    // previews the new position at the current size and never tops up or claims.
+    h.getDeliveryFor.mockResolvedValue({ startPage: 10, pageCount: 1 });
+    const view = await buildTodayView(todaySub({ currentPage: 11, wirdSize: 5 }), NOW, {
+      reposition: true,
+    });
+    expect(view.topUp).toBeNull();
+    expect(view.claim).toBeNull();
+    expect(h.getWird).toHaveBeenCalledWith(11, 5); // the new position, current size
+  });
+
   it('is a pure peek on an off day (no claim)', async () => {
     // activeDays = 2 is Tuesday only, so Monday (NOW) is off.
     const view = await buildTodayView(todaySub({ activeDays: 2 }), NOW);
@@ -254,6 +310,18 @@ describe('buildTodayView (/today claims today)', () => {
     // Shows the just-set current page, NOT the earlier delivered pages.
     expect(h.getWird).toHaveBeenCalledWith(5, 1);
     expect(h.getWird).not.toHaveBeenCalledWith(10, 2);
+  });
+});
+
+describe('deliveredCountToday (does raising the size top up today?)', () => {
+  it("returns today's delivered page count when there is a delivery", async () => {
+    h.getDeliveryFor.mockResolvedValue({ startPage: 10, pageCount: 3 });
+    expect(await deliveredCountToday({ id: 1, timezone: 'UTC' }, NOW)).toBe(3);
+  });
+
+  it('returns null when today is not delivered yet', async () => {
+    h.getDeliveryFor.mockResolvedValue(null);
+    expect(await deliveredCountToday({ id: 1, timezone: 'UTC' }, NOW)).toBeNull();
   });
 });
 

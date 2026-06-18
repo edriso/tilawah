@@ -651,6 +651,21 @@ export async function wirdPageNumbersFor(
   return pages.map((p) => p.pageNumber);
 }
 
+/**
+ * How many pages today's delivery covers for this subscriber, or null when
+ * today has not been delivered yet. Lets a caller tell whether raising the wird
+ * size can top up today (a same-day read, when the new size is bigger) versus
+ * only applying from tomorrow. A pure read — no delivery, no advance.
+ */
+export async function deliveredCountToday(
+  sub: { id: number; timezone: string },
+  now: Date = new Date(),
+): Promise<number | null> {
+  const local = getLocalContext(sub.timezone, now);
+  const delivered = await getDeliveryFor(sub.id, local.date);
+  return delivered ? delivered.pageCount : null;
+}
+
 /** What /today should send the user, and whether to record it as the day's
  *  delivery so the scheduler does not send the same wird again. The caller
  *  renders the pages in the subscriber's chosen format (text or image) via
@@ -670,6 +685,15 @@ export interface TodayView {
    * today was already delivered (re-show only).
    */
   claim: { scheduledFor: string; startPage: number; pageCount: number; nextPage: number } | null;
+  /**
+   * Set when this view TOPS UP an already-delivered day to a newly-raised wird
+   * size: `pages` holds ONLY the remaining (not-yet-sent) pages. The caller
+   * sends them, then grows today's record and advances the position by exactly
+   * what went out (mirroring a partial send), so the day reflects the bigger
+   * size without ever re-sending pages the reader already received. Null when
+   * this is not a top-up. Mutually exclusive with `claim`.
+   */
+  topUp: { scheduledFor: string; startPage: number } | null;
   /** True when today's wird was already delivered and this is a re-show. */
   alreadyDelivered: boolean;
 }
@@ -705,16 +729,35 @@ export async function buildTodayView(
   const scheduledFor = local.date;
   const delivered = await getDeliveryFor(sub.id, scheduledFor);
 
-  // /today on an already-delivered day re-shows exactly what was delivered. A
-  // reposition (/page) instead always shows the NEW page the user just set, so
-  // it skips this re-show and renders the current position below.
+  // /today on an already-delivered day. If the reader has since RAISED their
+  // wird size, top up: send the pages still owed for today so the day reflects
+  // the new size. The position already sits past the delivered pages (the day's
+  // delivery advanced it), so the next `delta` pages from currentPage are
+  // exactly the ones not yet sent. Otherwise (same/smaller size) re-show exactly
+  // what was delivered. A reposition (/page) always shows the NEW page the user
+  // just set, so it skips both and renders the current position below.
   if (delivered && !opts.reposition) {
+    const delta = sub.wirdSize - delivered.pageCount;
+    if (delta > 0) {
+      const more = await getWird(sub.currentPage, delta);
+      if (more.length > 0) {
+        return {
+          pages: more,
+          basmala,
+          lead: COPY.wirdLead,
+          claim: null,
+          topUp: { scheduledFor, startPage: sub.currentPage },
+          alreadyDelivered: true,
+        };
+      }
+    }
     const content = await getWird(delivered.startPage, delivered.pageCount);
     return {
       pages: content,
       basmala,
       lead: COPY.wirdLead,
       claim: null,
+      topUp: null,
       alreadyDelivered: true,
     };
   }
@@ -727,6 +770,7 @@ export async function buildTodayView(
       basmala,
       lead: COPY.wirdLead,
       claim: null,
+      topUp: null,
       alreadyDelivered: delivered !== null,
     };
   }
@@ -750,6 +794,7 @@ export async function buildTodayView(
     basmala,
     lead: COPY.wirdLead,
     claim,
+    topUp: null,
     alreadyDelivered: delivered !== null,
   };
 }

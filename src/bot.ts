@@ -27,6 +27,7 @@ import {
   pauseSubscriber,
   resumeSubscriber,
   commitDelivery,
+  growDelivery,
   TAJWEED_LESSONS,
   TAJWEED_LESSON_COUNT,
   LESSONS_PENDING_REVIEW,
@@ -44,6 +45,7 @@ import {
   sendPageAudio,
   sampleAudioPagesFor,
   wirdPageNumbersFor,
+  deliveredCountToday,
   buildLessonReview,
   renderLessonAt,
   type TodayView,
@@ -171,14 +173,15 @@ bot.command('status', async (ctx) => {
  * (subscriber, date) index makes it safe even if the scheduler races at the
  * same minute (see scheduler.ts).
  */
-async function sendTodayView(
+export async function sendTodayView(
   ctx: Context,
   sub: Subscriber,
   view: TodayView,
   now: Date,
 ): Promise<void> {
   // The daily tajweed lesson goes out right before the wird, but only when this
-  // view will be claimed as today's delivery (not on a re-show or a preview).
+  // view will be claimed as today's delivery — not on a re-show, a preview, or a
+  // top-up (a top-up's lesson already went out with the original delivery).
   let lessonSent = false;
   let lessonIndex = -1;
   if (view.claim) {
@@ -196,31 +199,42 @@ async function sendTodayView(
   // Record exactly what went out, advancing by pagesSent — mirroring the
   // scheduler (deliver.ts). On a partial send (e.g. an image source dies mid-
   // wird) this records the pages that actually arrived and rolls the rest to a
-  // later run; committing the FULL wird here, or nothing at all, would make the
+  // later run; recording the FULL wird here, or nothing at all, would make the
   // scheduler re-send pages the user already received. pagesSent === 0 sends
-  // nothing, so there is nothing to claim or advance.
-  const committed =
-    view.claim && pagesSent > 0
-      ? await commitDelivery({
-          subscriberId: sub.id,
-          scheduledFor: view.claim.scheduledFor,
-          startPage: view.claim.startPage,
-          pageCount: pagesSent,
-          nextPage: advanceStartPage(view.claim.startPage, pagesSent),
-          nextLessonIndex: lessonSent
-            ? nextLessonIndex(lessonIndex, TAJWEED_LESSON_COUNT)
-            : undefined,
-          startedAt: sub.startedAt,
-          now,
-        })
-      : null;
+  // nothing, so there is nothing to record or advance.
+  //
+  // A claim CREATES today's delivery (a free day pulled early); a top-up GROWS
+  // an existing one (the reader raised their size on a day already delivered).
+  // Either way the position moves by exactly the pages that went out.
+  let recorded = false;
+  if (view.claim && pagesSent > 0) {
+    const committed = await commitDelivery({
+      subscriberId: sub.id,
+      scheduledFor: view.claim.scheduledFor,
+      startPage: view.claim.startPage,
+      pageCount: pagesSent,
+      nextPage: advanceStartPage(view.claim.startPage, pagesSent),
+      nextLessonIndex: lessonSent ? nextLessonIndex(lessonIndex, TAJWEED_LESSON_COUNT) : undefined,
+      startedAt: sub.startedAt,
+      now,
+    });
+    recorded = committed === 'sent';
+  } else if (view.topUp && pagesSent > 0) {
+    await growDelivery({
+      subscriberId: sub.id,
+      scheduledFor: view.topUp.scheduledFor,
+      addPages: pagesSent,
+      nextPage: advanceStartPage(view.topUp.startPage, pagesSent),
+    });
+    recorded = true;
+  }
 
-  // After the wird, send the page recitation — but only for a real, new
-  // delivery, exactly like the scheduler (deliver.ts) and the ayah bot. A
-  // re-show or a preview (no claim), or the loser of a race with the scheduler
-  // ('duplicate'), shows the wird again but does NOT re-send the audio, so each
-  // page's recitation arrives once, with its delivery, never on every /today.
-  if (sub.wirdAudioEnabled && committed === 'sent') {
+  // After the wird, send the page recitation — but only for a real delivery
+  // (a claim or a top-up that actually advanced), exactly like the scheduler
+  // (deliver.ts) and the ayah bot. A re-show or a preview (no claim/top-up), or
+  // the loser of a race with the scheduler ('duplicate'), shows the wird again
+  // but does NOT re-send the audio, so each page's recitation arrives once.
+  if (sub.wirdAudioEnabled && recorded) {
     await sendPageAudio(
       bot,
       sub.chatId,
@@ -271,10 +285,29 @@ bot.command('today', async (ctx) => {
     await ctx.reply(COPY.notReady);
     return;
   }
-  if (view.alreadyDelivered) await ctx.reply(COPY.todayAlready);
+  // A top-up (the reader raised their size today) leads with "here is the rest
+  // of today"; a plain re-show says "you already got today's wird".
+  if (view.topUp) await ctx.reply(COPY.todayToppedUp);
+  else if (view.alreadyDelivered) await ctx.reply(COPY.todayAlready);
   await sendTodayView(ctx, sub, view, now);
   if (sub.pausedAt) await ctx.reply(COPY.pausedHint);
 });
+
+/**
+ * Persist a new wird size and confirm it. When the reader RAISED their size on
+ * a day whose (smaller) wird already went out, add a hint that the extra pages
+ * are available NOW via /today (a top-up) — rather than leaving them to wonder
+ * why /today still shows the old, smaller wird. Shared by /wird, the picker, and
+ * the bare-number reply so all three explain the same thing.
+ */
+async function setWirdSizeAndReply(ctx: Context, sub: Subscriber, size: number): Promise<void> {
+  await setWirdSize(sub.id, size);
+  const deliveredToday = await deliveredCountToday(sub, new Date());
+  const canTopUpToday = deliveredToday !== null && size > deliveredToday;
+  await ctx.reply(
+    canTopUpToday ? `${COPY.wirdUpdated(size)}\n\n${COPY.todayTopUpHint}` : COPY.wirdUpdated(size),
+  );
+}
 
 // /wird: with an argument set the size directly; with none, offer buttons.
 bot.command('wird', async (ctx) => {
@@ -291,8 +324,7 @@ bot.command('wird', async (ctx) => {
     await ctx.reply(COPY.wirdInvalid);
     return;
   }
-  await setWirdSize(sub.id, size);
-  await ctx.reply(COPY.wirdUpdated(size));
+  await setWirdSizeAndReply(ctx, sub, size);
 });
 
 // /format: choose how the wird arrives, text or a picture of the Mushaf page.
@@ -481,9 +513,8 @@ bot.callbackQuery(new RegExp(`^${WIRD_PICK_PREFIX}(\\d+)$`), async (ctx) => {
     await ctx.answerCallbackQuery();
     return;
   }
-  await setWirdSize(sub.id, size);
   await ctx.editMessageReplyMarkup(); // remove the keyboard
-  await ctx.reply(COPY.wirdUpdated(size));
+  await setWirdSizeAndReply(ctx, sub, size);
   await ctx.answerCallbackQuery();
 });
 
@@ -1030,8 +1061,7 @@ bot.on('message:text', async (ctx) => {
       await ctx.reply(COPY.wirdInvalid);
       return;
     }
-    await setWirdSize(sub.id, size);
-    await ctx.reply(COPY.wirdUpdated(size));
+    await setWirdSizeAndReply(ctx, sub, size);
     return;
   }
 
