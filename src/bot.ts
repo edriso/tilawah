@@ -27,7 +27,8 @@ import {
   pauseSubscriber,
   resumeSubscriber,
   commitDelivery,
-  growDelivery,
+  confirmRead,
+  getLatestUnconfirmedDelivery,
   TAJWEED_LESSONS,
   TAJWEED_LESSON_COUNT,
   LESSONS_PENDING_REVIEW,
@@ -45,9 +46,12 @@ import {
   sendPageAudio,
   sampleAudioPagesFor,
   wirdPageNumbersFor,
-  deliveredCountToday,
+  sendConfirmPrompt,
+  sendMissedDaysNudge,
+  sendWirdNow,
   buildLessonReview,
   renderLessonAt,
+  READ_CONFIRM,
   type TodayView,
 } from './lib/deliver';
 import { buildTajweedKeyboard, TAJWEED_TOGGLE } from './lib/tajweed-keyboard';
@@ -166,12 +170,15 @@ bot.command('status', async (ctx) => {
 });
 
 /**
- * Reply a TodayView's wird and, if it carries a claim, record it as today's
+ * Reply a TodayView's wird and, if it carries a `record`, record it as today's
  * delivery so the scheduler does not send the same wird again. Shared by /today
- * and the reposition flow (/page). The claim is committed only AFTER the
- * messages are shown, so a failed reply leaves the day unclaimed; the unique
- * (subscriber, date) index makes it safe even if the scheduler races at the
- * same minute (see scheduler.ts).
+ * and the reposition flow (/page).
+ *
+ * Read-gated: recording does NOT move the position (a user advances only on a
+ * confirmed read), so the wird repeats until confirmed. The record is committed
+ * only AFTER the messages are shown; the unique (subscriber, date) index makes
+ * it safe even if the scheduler races at the same minute. The "read ✓ / next"
+ * button rides every shown wird (unless paused) so the reader can advance.
  */
 export async function sendTodayView(
   ctx: Context,
@@ -179,12 +186,16 @@ export async function sendTodayView(
   view: TodayView,
   now: Date,
 ): Promise<void> {
+  // Lead with a gentle "you have not read for N days" note + an encouragement
+  // ayah when the wird has been repeating unread (best effort, never blocks).
+  await sendMissedDaysNudge(bot, sub.chatId, sub.id, sub.timezone, now);
+
   // The daily tajweed lesson goes out right before the wird, but only when this
-  // view will be claimed as today's delivery — not on a re-show, a preview, or a
-  // top-up (a top-up's lesson already went out with the original delivery).
+  // view will be RECORDED as today's delivery (a daily drip tied to the recorded
+  // send) — not on a re-show or a paused/off-day peek.
   let lessonSent = false;
   let lessonIndex = -1;
-  if (view.claim) {
+  if (view.record) {
     const lesson = await tajweedLessonView(sub);
     if (lesson) {
       lessonSent = (await sendLesson(bot, sub.chatId, lesson)) === 'ok';
@@ -196,44 +207,26 @@ export async function sendTodayView(
     lead: view.lead,
     format: normalizeWirdFormat(sub.wirdFormat),
   });
-  // Record exactly what went out, advancing by pagesSent — mirroring the
-  // scheduler (deliver.ts). On a partial send (e.g. an image source dies mid-
-  // wird) this records the pages that actually arrived and rolls the rest to a
-  // later run; recording the FULL wird here, or nothing at all, would make the
-  // scheduler re-send pages the user already received. pagesSent === 0 sends
-  // nothing, so there is nothing to record or advance.
-  //
-  // A claim CREATES today's delivery (a free day pulled early); a top-up GROWS
-  // an existing one (the reader raised their size on a day already delivered).
-  // Either way the position moves by exactly the pages that went out.
+
+  // Record today's delivery (no advance — the position moves on a confirmed
+  // read), mirroring the scheduler. Only on a free day (view.record) with at
+  // least one page actually out. 'duplicate' means the scheduler beat us to it.
   let recorded = false;
-  if (view.claim && pagesSent > 0) {
+  if (view.record && pagesSent > 0) {
     const committed = await commitDelivery({
       subscriberId: sub.id,
-      scheduledFor: view.claim.scheduledFor,
-      startPage: view.claim.startPage,
+      scheduledFor: view.record.scheduledFor,
+      startPage: view.record.startPage,
       pageCount: pagesSent,
-      nextPage: advanceStartPage(view.claim.startPage, pagesSent),
       nextLessonIndex: lessonSent ? nextLessonIndex(lessonIndex, TAJWEED_LESSON_COUNT) : undefined,
       startedAt: sub.startedAt,
       now,
     });
     recorded = committed === 'sent';
-  } else if (view.topUp && pagesSent > 0) {
-    await growDelivery({
-      subscriberId: sub.id,
-      scheduledFor: view.topUp.scheduledFor,
-      addPages: pagesSent,
-      nextPage: advanceStartPage(view.topUp.startPage, pagesSent),
-    });
-    recorded = true;
   }
 
-  // After the wird, send the page recitation — but only for a real delivery
-  // (a claim or a top-up that actually advanced), exactly like the scheduler
-  // (deliver.ts) and the ayah bot. A re-show or a preview (no claim/top-up), or
-  // the loser of a race with the scheduler ('duplicate'), shows the wird again
-  // but does NOT re-send the audio, so each page's recitation arrives once.
+  // Page recitation only for a fresh delivery (not a re-show), exactly like the
+  // scheduler and the ayah bot, so each page's clip arrives once.
   if (sub.wirdAudioEnabled && recorded) {
     await sendPageAudio(
       bot,
@@ -242,32 +235,31 @@ export async function sendTodayView(
       normalizeReciter(sub.reciter),
     );
   }
+
+  // The "read ✓ / next" button rides every shown wird so the reader can confirm
+  // and advance — unless paused (a resting reader is not nudged onward).
+  if (!sub.pausedAt && pagesSent > 0) await sendConfirmPrompt(bot, sub.chatId);
 }
 
 /**
- * Move a subscriber to `page`, then auto-send the wird at the new page (like
- * /today): when today is still free it counts as today's delivery (so the
- * scheduler does not also send it) and the position advances past this page;
- * otherwise (already delivered today, an off day, or paused) it is shown as a
- * preview and the position stays here, to arrive at the next scheduled time.
- * Shared by `/page N` and the bare-number reply to a /page prompt.
+ * Move a subscriber to `page` and show the wird there (like /today). Read-gated:
+ * this is a jump, not an advance — it sets the current page and shows that wird
+ * with the "read ✓" button; confirming (or /next) is what moves on. If today is
+ * still free the show counts as today's delivery (so the scheduler does not also
+ * send it), without advancing. Shared by `/page N` and the bare-number reply.
  */
 export async function repositionToPage(ctx: Context, sub: Subscriber, page: number): Promise<void> {
   await setCurrentPage(sub.id, page);
   const now = new Date();
-  const view = await buildTodayView({ ...sub, currentPage: page }, now, { reposition: true });
+  const view = await buildTodayView({ ...sub, currentPage: page }, now);
   if (view.pages.length === 0) {
     logger.warn('reposition produced no wird', { subscriberId: sub.id, page });
     await ctx.reply(COPY.notReady);
     return;
   }
   const juz = (await getJuzForPage(page)) ?? undefined;
-  await ctx.reply(
-    view.claim
-      ? COPY.pageSetClaimed(page, view.claim.nextPage, juz)
-      : COPY.pageSetPreview(page, juz),
-  );
-  await sendTodayView(ctx, sub, view, now);
+  await ctx.reply(COPY.pageSet(page, juz));
+  await sendTodayView(ctx, { ...sub, currentPage: page }, view, now);
   if (sub.pausedAt) await ctx.reply(COPY.pausedHint);
 }
 
@@ -285,31 +277,42 @@ bot.command('today', async (ctx) => {
     await ctx.reply(COPY.notReady);
     return;
   }
-  // A top-up (the reader raised their size today) leads with "here is the rest
-  // of today"; a plain re-show says "you already got today's wird".
-  if (view.topUp) await ctx.reply(COPY.todayToppedUp);
-  else if (view.alreadyDelivered) await ctx.reply(COPY.todayAlready);
+  // A re-show (today already delivered, still unread) says so before the wird;
+  // sendTodayView adds the gentle "N days" nudge when one applies.
+  if (view.alreadyDelivered) await ctx.reply(COPY.todayAlready);
   await sendTodayView(ctx, sub, view, now);
   if (sub.pausedAt) await ctx.reply(COPY.pausedHint);
 });
 
 /**
- * Persist a new wird size and confirm it. When the reader RAISED their size on
- * a day whose (smaller) wird already went out, add a hint that the extra pages
- * are available NOW via /today (a top-up) — rather than leaving them to wonder
- * why /today still shows the old, smaller wird. Shared by /wird, the picker, and
- * the bare-number reply so all three explain the same thing.
+ * Confirm the current wird as read and show the NEXT portion now. Advances
+ * exactly one wird: by the pages last actually sent if we know them, else the
+ * current size; confirmRead is the idempotent compare-and-set that also marks
+ * any unread days read. Exported for testing; /next is a thin wrapper.
  */
-async function setWirdSizeAndReply(ctx: Context, sub: Subscriber, size: number): Promise<void> {
-  await setWirdSize(sub.id, size);
-  const deliveredToday = await deliveredCountToday(sub, new Date());
-  const canTopUpToday = deliveredToday !== null && size > deliveredToday;
-  await ctx.reply(
-    canTopUpToday ? `${COPY.wirdUpdated(size)}\n\n${COPY.todayTopUpHint}` : COPY.wirdUpdated(size),
-  );
+export async function advanceAndShowNext(ctx: Context, sub: Subscriber, now: Date): Promise<void> {
+  const latest = await getLatestUnconfirmedDelivery(sub.id);
+  const size = latest ? latest.pageCount : sub.wirdSize;
+  const nextPage = advanceStartPage(sub.currentPage, size);
+  await confirmRead(sub.id, sub.currentPage, nextPage, now);
+  const sent = await sendWirdNow(bot, { ...sub, currentPage: nextPage }, COPY.nextLead);
+  if (sent === 0) await ctx.reply(COPY.notReady);
+  if (sub.pausedAt) await ctx.reply(COPY.pausedHint);
 }
 
+// /next: confirm the current wird as read and show the NEXT portion now — for a
+// reader who finished early and wants more, or who is catching up. Each /next
+// advances exactly one wird (repeat it to read several in a sitting); the daily
+// "read ✓" button does the same, one tap at a time.
+bot.command('next', async (ctx) => {
+  const sub = await userSubscriber(ctx);
+  if (!sub) return;
+  await advanceAndShowNext(ctx, sub, new Date());
+});
+
 // /wird: with an argument set the size directly; with none, offer buttons.
+// A size change is reflected on the very next render (the wird is always the
+// live portion at the current page), so there is nothing else to do here.
 bot.command('wird', async (ctx) => {
   const sub = await userSubscriber(ctx);
   if (!sub) return;
@@ -324,7 +327,8 @@ bot.command('wird', async (ctx) => {
     await ctx.reply(COPY.wirdInvalid);
     return;
   }
-  await setWirdSizeAndReply(ctx, sub, size);
+  await setWirdSize(sub.id, size);
+  await ctx.reply(COPY.wirdUpdated(size));
 });
 
 // /format: choose how the wird arrives, text or a picture of the Mushaf page.
@@ -513,9 +517,52 @@ bot.callbackQuery(new RegExp(`^${WIRD_PICK_PREFIX}(\\d+)$`), async (ctx) => {
     await ctx.answerCallbackQuery();
     return;
   }
+  await setWirdSize(sub.id, size);
   await ctx.editMessageReplyMarkup(); // remove the keyboard
-  await setWirdSizeAndReply(ctx, sub, size);
+  await ctx.reply(COPY.wirdUpdated(size));
   await ctx.answerCallbackQuery();
+});
+
+// ─── Read-confirmation button ("read ✓ / next") ─────────────────────
+//
+// Advances the reader one wird and marks the day(s) read. Idempotent: it works
+// off the LATEST unconfirmed delivery and confirmRead is a compare-and-set on
+// the current page, so a double tap or an old button from an earlier day moves
+// no one twice — it just reports "already recorded ✓". The tapped message's
+// button is removed on either outcome (best practice: do not leave it live).
+/**
+ * Handle a "read ✓ / next" tap: advance one wird and acknowledge. Idempotent —
+ * works off the latest unconfirmed delivery and confirmRead's compare-and-set —
+ * so a double tap or a stale button from an earlier day is a harmless no-op. The
+ * tapped button is removed either way. Exported for testing.
+ */
+export async function handleReadConfirm(ctx: Context, sub: Subscriber): Promise<void> {
+  const latest = await getLatestUnconfirmedDelivery(sub.id);
+  if (!latest) {
+    // Nothing outstanding (already confirmed, or a stale button). No-op.
+    await ctx.editMessageReplyMarkup().catch(() => {});
+    await ctx.answerCallbackQuery({ text: COPY.readAlready });
+    return;
+  }
+  const nextPage = advanceStartPage(sub.currentPage, latest.pageCount);
+  const result = await confirmRead(sub.id, sub.currentPage, nextPage, new Date());
+  await ctx.editMessageReplyMarkup().catch(() => {}); // drop the button either way
+  if (result === 'advanced') {
+    const juz = (await getJuzForPage(nextPage)) ?? undefined;
+    await ctx.answerCallbackQuery();
+    await ctx.reply(COPY.readConfirmed(nextPage, juz));
+  } else {
+    await ctx.answerCallbackQuery({ text: COPY.readAlready });
+  }
+}
+
+bot.callbackQuery(READ_CONFIRM, async (ctx) => {
+  const sub = await userFromCallback(ctx);
+  if (!sub) {
+    await ctx.answerCallbackQuery();
+    return;
+  }
+  await handleReadConfirm(ctx, sub);
 });
 
 // ─── Format-picker buttons ──────────────────────────────────────────
@@ -1061,7 +1108,8 @@ bot.on('message:text', async (ctx) => {
       await ctx.reply(COPY.wirdInvalid);
       return;
     }
-    await setWirdSizeAndReply(ctx, sub, size);
+    await setWirdSize(sub.id, size);
+    await ctx.reply(COPY.wirdUpdated(size));
     return;
   }
 
@@ -1085,6 +1133,7 @@ async function setBotCommands() {
   if (config.userWirdEnabled) {
     await bot.api.setMyCommands([
       { command: 'today', description: 'قراءة ورد اليوم' },
+      { command: 'next', description: 'تأكيد القراءة والانتقال إلى الورد التالي' },
       { command: 'wird', description: 'حجم الورد اليومي' },
       { command: 'tajweed', description: 'درس التجويد اليومي (تشغيل/إيقاف)' },
       { command: 'reciter', description: 'تلاوة الصفحة: اختيار القارئ أو الإيقاف' },

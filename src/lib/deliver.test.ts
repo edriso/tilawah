@@ -10,7 +10,7 @@ const h = vi.hoisted(() => ({
   getWird: vi.fn(),
   getBasmala: vi.fn(),
   commitDelivery: vi.fn(),
-  growDelivery: vi.fn(),
+  countUnreadDeliveriesBefore: vi.fn(),
   markBlocked: vi.fn(),
   getCachedPageImageIds: vi.fn(),
   cachePageImageId: vi.fn(),
@@ -40,7 +40,7 @@ vi.mock('../database', () => ({
   getBasmala: h.getBasmala,
   getAyahText: h.getAyahText,
   commitDelivery: h.commitDelivery,
-  growDelivery: h.growDelivery,
+  countUnreadDeliveriesBefore: h.countUnreadDeliveriesBefore,
   markBlocked: h.markBlocked,
   getCachedPageImageIds: h.getCachedPageImageIds,
   cachePageImageId: h.cachePageImageId,
@@ -48,6 +48,8 @@ vi.mock('../database', () => ({
   cacheTajweedAudioId: h.cacheTajweedAudioId,
   getCachedPageAudioId: h.getCachedPageAudioId,
   cachePageAudioId: h.cachePageAudioId,
+  // A fixed encouragement reference; getAyahText (mocked) resolves its text.
+  pickQuranVirtue: () => ({ surah: 2, ayah: 27 }),
   TAJWEED_LESSONS: h.lessons,
   TAJWEED_LESSON_COUNT: h.lessons.length,
   // These tests exercise the LIVE behaviour (deck reviewed). The pending-review
@@ -86,7 +88,6 @@ import {
   renderLessonAt,
   sampleAudioPagesFor,
   wirdPageNumbersFor,
-  deliveredCountToday,
 } from './deliver';
 import { config } from '../config';
 import { advanceStartPage } from '../core';
@@ -99,7 +100,10 @@ const mutableConfig = config as {
 };
 
 const NOW = new Date('2026-06-01T12:00:00Z');
-const fakeBot = {} as never;
+// The read-confirm prompt is sent via bot.api.sendMessage (not the mocked
+// send wrapper), so the fake bot needs an api stub we can assert on.
+const apiSendMessage = vi.fn().mockResolvedValue({});
+const fakeBot = { api: { sendMessage: apiSendMessage } } as never;
 const CONTENT = [
   {
     pageNumber: 1,
@@ -171,7 +175,9 @@ beforeEach(() => {
   h.getWird.mockResolvedValue(CONTENT);
   h.hasDeliveryFor.mockResolvedValue(false);
   h.getDeliveryFor.mockResolvedValue(null);
+  h.countUnreadDeliveriesBefore.mockResolvedValue(0); // not behind by default
   h.commitDelivery.mockResolvedValue('sent');
+  apiSendMessage.mockClear();
   h.sendMessages.mockResolvedValue('ok');
   h.getCachedPageImageIds.mockResolvedValue(new Map());
   h.cachePageImageId.mockResolvedValue({});
@@ -184,7 +190,7 @@ beforeEach(() => {
 });
 
 // NOW (2026-06-01, UTC) is a Monday, ISO weekday 1.
-describe('buildTodayView (/today claims today)', () => {
+describe('buildTodayView (read-gated: shows the live wird, never advances)', () => {
   const todaySub = (over: Record<string, unknown> = {}) => ({
     id: 1,
     timezone: 'UTC',
@@ -195,133 +201,58 @@ describe('buildTodayView (/today claims today)', () => {
     ...over,
   });
 
-  it('claims today on an active, unpaused, not-yet-delivered day', async () => {
+  it('records today on an active, unpaused, not-yet-delivered day (NO advance)', async () => {
     const view = await buildTodayView(todaySub(), NOW);
     expect(view.alreadyDelivered).toBe(false);
     expect(view.pages.length).toBeGreaterThan(0);
-    expect(view.claim).toEqual({
+    // The record has no nextPage: a user advances only on a confirmed read.
+    expect(view.record).toEqual({
       scheduledFor: '2026-06-01',
       startPage: 5,
       pageCount: 1, // mocked getWird returns one page
-      nextPage: advanceStartPage(5, 1),
     });
+    expect(view.record).not.toHaveProperty('nextPage');
   });
 
-  it('re-shows the delivered wird and does NOT claim again', async () => {
-    h.getDeliveryFor.mockResolvedValue({ startPage: 10, pageCount: 2 });
+  it('re-shows the LIVE wird at the current page and does NOT record again', async () => {
+    h.getDeliveryFor.mockResolvedValue({ startPage: 5, pageCount: 1 });
     const view = await buildTodayView(todaySub(), NOW);
     expect(view.alreadyDelivered).toBe(true);
-    expect(view.claim).toBeNull();
-    // Re-shows exactly the delivered pages (from the log), not currentPage.
-    expect(h.getWird).toHaveBeenCalledWith(10, 2);
+    expect(view.record).toBeNull();
+    // The position never moved, so the live wird IS the unread one (current page).
+    expect(h.getWird).toHaveBeenCalledWith(5, 1);
   });
 
-  it('tops up an already-delivered day when the wird size was RAISED', async () => {
-    // This morning delivered 1 page (from page 10), advancing the reader to page
-    // 11. They then did /wird 5. /today must send the 4 pages still owed for
-    // today (from page 11), as a top-up — NOT re-show the single delivered page.
-    h.getDeliveryFor.mockResolvedValue({ startPage: 10, pageCount: 1 });
-    h.getWird.mockResolvedValue(manyPages(4));
-    const view = await buildTodayView(todaySub({ currentPage: 11, wirdSize: 5 }), NOW);
-
-    expect(view.topUp).toEqual({ scheduledFor: '2026-06-01', startPage: 11 });
-    expect(view.claim).toBeNull();
-    expect(view.alreadyDelivered).toBe(true);
-    // The remaining pages come from the current position, sized to the delta.
-    expect(h.getWird).toHaveBeenCalledWith(11, 4); // 5 - 1 already delivered
-    expect(view.pages).toHaveLength(4);
+  it('reflects a raised wird size at once, even after today was delivered', async () => {
+    // The original bug: raise the size, /today still showed the small wird.
+    // Read-gated fixes it for free — the wird is always live at the current page.
+    h.getDeliveryFor.mockResolvedValue({ startPage: 5, pageCount: 1 });
+    h.getWird.mockResolvedValue(manyPages(5));
+    const view = await buildTodayView(todaySub({ wirdSize: 5 }), NOW);
+    expect(view.record).toBeNull(); // already delivered, so not re-recorded
+    expect(h.getWird).toHaveBeenCalledWith(5, 5); // the bigger, live wird
+    expect(view.pages).toHaveLength(5);
   });
 
-  it('does NOT top up when the size is unchanged or smaller (re-shows the delivered wird)', async () => {
-    // Delivered 3 pages today; the reader has since LOWERED to 2. There is
-    // nothing more to send today, so /today re-shows exactly what was delivered.
-    h.getDeliveryFor.mockResolvedValue({ startPage: 10, pageCount: 3 });
-    const view = await buildTodayView(todaySub({ currentPage: 13, wirdSize: 2 }), NOW);
-
-    expect(view.topUp).toBeNull();
-    expect(view.claim).toBeNull();
-    expect(view.alreadyDelivered).toBe(true);
-    expect(h.getWird).toHaveBeenCalledWith(10, 3); // the delivered range, re-shown
-  });
-
-  it('falls back to a re-show when a raised size yields no extra pages', async () => {
-    // Size raised, but getWird returns nothing for the delta (a data fault); we
-    // must not return an empty top-up — re-show the delivered wird instead.
-    h.getDeliveryFor.mockResolvedValue({ startPage: 10, pageCount: 1 });
-    h.getWird.mockResolvedValueOnce([]).mockResolvedValue(CONTENT);
-    const view = await buildTodayView(todaySub({ currentPage: 11, wirdSize: 5 }), NOW);
-
-    expect(view.topUp).toBeNull();
-    expect(view.alreadyDelivered).toBe(true);
-    expect(h.getWird).toHaveBeenNthCalledWith(1, 11, 4); // tried the top-up delta
-    expect(h.getWird).toHaveBeenNthCalledWith(2, 10, 1); // then re-shows delivered
-  });
-
-  it('reposition skips the top-up and shows the new page (preview), even with a raised size', async () => {
-    // /page is a jump, not "read more of today": on an already-delivered day it
-    // previews the new position at the current size and never tops up or claims.
-    h.getDeliveryFor.mockResolvedValue({ startPage: 10, pageCount: 1 });
-    const view = await buildTodayView(todaySub({ currentPage: 11, wirdSize: 5 }), NOW, {
-      reposition: true,
-    });
-    expect(view.topUp).toBeNull();
-    expect(view.claim).toBeNull();
-    expect(h.getWird).toHaveBeenCalledWith(11, 5); // the new position, current size
-  });
-
-  it('is a pure peek on an off day (no claim)', async () => {
+  it('is a pure peek on an off day (no record)', async () => {
     // activeDays = 2 is Tuesday only, so Monday (NOW) is off.
     const view = await buildTodayView(todaySub({ activeDays: 2 }), NOW);
     expect(view.pages.length).toBeGreaterThan(0);
-    expect(view.claim).toBeNull();
+    expect(view.record).toBeNull();
     expect(view.alreadyDelivered).toBe(false);
   });
 
-  it('is a pure peek while paused (no claim)', async () => {
+  it('is a pure peek while paused (no record)', async () => {
     const view = await buildTodayView(todaySub({ pausedAt: new Date() }), NOW);
     expect(view.pages.length).toBeGreaterThan(0);
-    expect(view.claim).toBeNull();
+    expect(view.record).toBeNull();
   });
 
-  it('returns no messages (and no claim) when content cannot be built', async () => {
+  it('returns no messages (and no record) when content cannot be built', async () => {
     h.getWird.mockResolvedValue([]);
     const view = await buildTodayView(todaySub(), NOW);
     expect(view.pages).toEqual([]);
-    expect(view.claim).toBeNull();
-  });
-
-  it('reposition shows the new page and claims when today is still free', async () => {
-    const view = await buildTodayView(todaySub({ currentPage: 5 }), NOW, { reposition: true });
-    expect(view.pages.length).toBeGreaterThan(0);
-    expect(view.claim).toEqual({
-      scheduledFor: '2026-06-01',
-      startPage: 5,
-      pageCount: 1,
-      nextPage: advanceStartPage(5, 1),
-    });
-    expect(h.getWird).toHaveBeenCalledWith(5, 1);
-  });
-
-  it('reposition on an already-delivered day shows the NEW page (preview), no claim', async () => {
-    h.getDeliveryFor.mockResolvedValue({ startPage: 10, pageCount: 2 });
-    const view = await buildTodayView(todaySub({ currentPage: 5 }), NOW, { reposition: true });
-    expect(view.claim).toBeNull();
-    expect(view.pages.length).toBeGreaterThan(0);
-    // Shows the just-set current page, NOT the earlier delivered pages.
-    expect(h.getWird).toHaveBeenCalledWith(5, 1);
-    expect(h.getWird).not.toHaveBeenCalledWith(10, 2);
-  });
-});
-
-describe('deliveredCountToday (does raising the size top up today?)', () => {
-  it("returns today's delivered page count when there is a delivery", async () => {
-    h.getDeliveryFor.mockResolvedValue({ startPage: 10, pageCount: 3 });
-    expect(await deliveredCountToday({ id: 1, timezone: 'UTC' }, NOW)).toBe(3);
-  });
-
-  it('returns null when today is not delivered yet', async () => {
-    h.getDeliveryFor.mockResolvedValue(null);
-    expect(await deliveredCountToday({ id: 1, timezone: 'UTC' }, NOW)).toBeNull();
+    expect(view.record).toBeNull();
   });
 });
 
@@ -464,28 +395,71 @@ describe('deliverDueSubscribers', () => {
     expect(stats.failed).toBe(1);
   });
 
-  it('on a partial multi-page wird, advances only by the pages actually sent', async () => {
+  it('a USER records the day but does NOT advance the position (no nextPage)', async () => {
+    h.listDeliverableSubscribers.mockResolvedValue([sub({ kind: 'user', currentPage: 5 })]);
+    await deliverDueSubscribers(fakeBot, NOW);
+    expect(h.commitDelivery).toHaveBeenCalledOnce();
+    const arg = h.commitDelivery.mock.calls[0][0];
+    expect(arg).toMatchObject({ startPage: 5, pageCount: 1 });
+    expect(arg.nextPage).toBeUndefined(); // the wird repeats until a confirmed read
+  });
+
+  it('a CHANNEL advances on send (nextPage set), the broadcast pace', async () => {
+    h.listDeliverableSubscribers.mockResolvedValue([sub({ kind: 'channel', currentPage: 5 })]);
+    await deliverDueSubscribers(fakeBot, NOW);
+    expect(h.commitDelivery.mock.calls[0][0]).toMatchObject({
+      startPage: 5,
+      pageCount: 1,
+      nextPage: advanceStartPage(5, 1),
+    });
+  });
+
+  it('a USER records only the pages that went out on a partial send (still no advance)', async () => {
     h.listDeliverableSubscribers.mockResolvedValue([sub({ wirdSize: 2 })]);
     h.getWird.mockResolvedValue(TWO_PAGES);
     h.sendMessages.mockResolvedValueOnce('ok').mockResolvedValueOnce('failed'); // page 2 fails
     const stats = await deliverDueSubscribers(fakeBot, NOW);
-    expect(h.sendMessages).toHaveBeenCalledTimes(2);
-    // Records one page and moves the position forward by one (page 1 -> 2), so
-    // page 2 is retried next run with no duplicate of page 1.
-    expect(h.commitDelivery).toHaveBeenCalledOnce();
-    expect(h.commitDelivery.mock.calls[0][0]).toMatchObject({ pageCount: 1, nextPage: 2 });
+    expect(h.commitDelivery.mock.calls[0][0]).toMatchObject({ pageCount: 1 });
+    expect(h.commitDelivery.mock.calls[0][0].nextPage).toBeUndefined();
     expect(stats).toMatchObject({ due: 1, sent: 1, failed: 0 });
   });
 
-  it('marks a user blocked mid-wird but still commits the pages that went out', async () => {
+  it('marks a user blocked mid-wird but still records the pages that went out', async () => {
     h.listDeliverableSubscribers.mockResolvedValue([sub({ wirdSize: 2 })]);
     h.getWird.mockResolvedValue(TWO_PAGES);
     h.sendMessages.mockResolvedValueOnce('ok').mockResolvedValueOnce('blocked'); // blocked on page 2
     const stats = await deliverDueSubscribers(fakeBot, NOW);
     expect(h.commitDelivery).toHaveBeenCalledOnce();
-    expect(h.commitDelivery.mock.calls[0][0]).toMatchObject({ pageCount: 1, nextPage: 2 });
+    expect(h.commitDelivery.mock.calls[0][0]).toMatchObject({ pageCount: 1 });
     expect(h.markBlocked).toHaveBeenCalledWith(1);
     expect(stats).toMatchObject({ due: 1, sent: 1 });
+  });
+
+  it('sends the read-confirm prompt to a USER but not a CHANNEL', async () => {
+    h.listDeliverableSubscribers.mockResolvedValue([sub({ kind: 'user' })]);
+    await deliverDueSubscribers(fakeBot, NOW);
+    expect(apiSendMessage).toHaveBeenCalledTimes(1); // the confirm prompt
+    apiSendMessage.mockClear();
+    h.listDeliverableSubscribers.mockResolvedValue([sub({ kind: 'channel' })]);
+    await deliverDueSubscribers(fakeBot, NOW);
+    expect(apiSendMessage).not.toHaveBeenCalled(); // a broadcast gets no button
+  });
+
+  it('leads a repeating unread wird with the missed-days nudge (encouragement ayah)', async () => {
+    h.countUnreadDeliveriesBefore.mockResolvedValue(2); // two missed days
+    h.listDeliverableSubscribers.mockResolvedValue([sub({ kind: 'user' })]);
+    await deliverDueSubscribers(fakeBot, NOW);
+    // The encouragement ayah's text is fetched from the DB (picked virtue 2:27).
+    expect(h.getAyahText).toHaveBeenCalledWith(2, 27);
+    // The nudge text (with the ayah) goes out before the wird, as a text message.
+    expect(h.sendMessages.mock.calls[0][2][0]).toContain('نص الآية');
+  });
+
+  it('sends no nudge when the reader is not behind', async () => {
+    h.countUnreadDeliveriesBefore.mockResolvedValue(0);
+    h.listDeliverableSubscribers.mockResolvedValue([sub({ kind: 'user' })]);
+    await deliverDueSubscribers(fakeBot, NOW);
+    expect(h.getAyahText).not.toHaveBeenCalled();
   });
 
   it('keeps going when one subscriber throws', async () => {
@@ -580,7 +554,7 @@ describe('deliverDueSubscribers (image format)', () => {
 
   it('sends a multi-page image wird as ONE album, in order, lead on the first item only', async () => {
     h.listDeliverableSubscribers.mockResolvedValue([
-      sub({ wirdFormat: 'image', wirdSize: 2, currentPage: 1 }),
+      sub({ kind: 'channel', wirdFormat: 'image', wirdSize: 2, currentPage: 1 }),
     ]);
     h.getWird.mockResolvedValue(TWO_PAGES);
 
@@ -605,7 +579,7 @@ describe('deliverDueSubscribers (image format)', () => {
 
   it('falls back to per-page (image then text) when the album send fails, and still completes', async () => {
     h.listDeliverableSubscribers.mockResolvedValue([
-      sub({ wirdFormat: 'image', wirdSize: 2, currentPage: 1 }),
+      sub({ kind: 'channel', wirdFormat: 'image', wirdSize: 2, currentPage: 1 }),
     ]);
     h.getWird.mockResolvedValue(TWO_PAGES);
     h.sendPhotoAlbum.mockResolvedValue({ result: 'failed', fileIds: [] }); // album fails
@@ -629,7 +603,7 @@ describe('deliverDueSubscribers (image format)', () => {
   it('splits a >10-page image wird into multiple albums (lead on the first album only)', async () => {
     // wirdSize 12 > MAX_ALBUM_SIZE (10): the wird is sent as two albums, 10 + 2.
     h.listDeliverableSubscribers.mockResolvedValue([
-      sub({ wirdFormat: 'image', wirdSize: 12, currentPage: 1 }),
+      sub({ kind: 'channel', wirdFormat: 'image', wirdSize: 12, currentPage: 1 }),
     ]);
     h.getWird.mockResolvedValue(manyPages(12));
 
@@ -657,7 +631,7 @@ describe('deliverDueSubscribers (image format)', () => {
 
   it('advances by only the pages sent when a later album AND its text fallback fail', async () => {
     h.listDeliverableSubscribers.mockResolvedValue([
-      sub({ wirdFormat: 'image', wirdSize: 12, currentPage: 1 }),
+      sub({ kind: 'channel', wirdFormat: 'image', wirdSize: 12, currentPage: 1 }),
     ]);
     h.getWird.mockResolvedValue(manyPages(12));
     // First album (10 pages) ok; the second album fails, and its per-page

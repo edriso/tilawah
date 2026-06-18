@@ -20,3 +20,4 @@ export * from './reference/surahs';
 export * from './reference/ayah-counts';
 export * from './reference/pages';
 export * from './reference/tajweed-lessons';
+export * from './reference/quran-virtues';

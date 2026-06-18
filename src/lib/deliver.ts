@@ -1,4 +1,4 @@
-import { InputFile, type Bot, type Context } from 'grammy';
+import { InlineKeyboard, InputFile, type Bot, type Context } from 'grammy';
 import {
   dueLocalDate,
   advanceStartPage,
@@ -25,6 +25,7 @@ import {
   listDeliverableSubscribers,
   hasDeliveryFor,
   getDeliveryFor,
+  countUnreadDeliveriesBefore,
   getWird,
   getAyahText,
   getBasmala,
@@ -36,6 +37,7 @@ import {
   cacheTajweedAudioId,
   getCachedPageAudioId,
   cachePageAudioId,
+  pickQuranVirtue,
   TAJWEED_LESSONS,
   TAJWEED_LESSON_COUNT,
   LESSONS_PENDING_REVIEW,
@@ -49,6 +51,12 @@ import { sendPhoto, sendPhotoAlbum, MAX_ALBUM_SIZE } from './send-photo';
 import { sendAudio } from './send-audio';
 import { COPY, reciterNameAr } from './copy';
 import { logger } from './logger';
+
+/** Callback data for the "read ✓ / next" button under a user's wird. A bare
+ *  constant (no per-message payload): the latest unconfirmed delivery is the
+ *  source of truth, and the confirm is an idempotent compare-and-set, so every
+ *  day's button carries the same data and old buttons are harmless. */
+export const READ_CONFIRM = 'tilawah:read';
 
 export interface DeliveryStats {
   due: number;
@@ -465,6 +473,100 @@ export async function sendPageAudio(
   }
 }
 
+// ─── Read confirmation (the "read ✓ / next" button) ─────────────────
+
+/**
+ * Send the small "did you finish your wird?" prompt that carries the
+ * "read ✓ — next" button (USERS only; the channel never advances on a read).
+ * Best effort: it is the call to action, not the wird, so a failure is logged
+ * and swallowed — the reader can still confirm with /next.
+ */
+export async function sendConfirmPrompt(bot: Bot<Context>, chatId: bigint): Promise<void> {
+  try {
+    await bot.api.sendMessage(Number(chatId), COPY.confirmPrompt, {
+      reply_markup: new InlineKeyboard().text(COPY.readButton, READ_CONFIRM),
+    });
+  } catch (err) {
+    logger.warn('Could not send the read-confirmation prompt', {
+      chatId: String(chatId),
+      error: String(err),
+    });
+  }
+}
+
+/**
+ * When a user's wird has gone unread for one or more days, send a gentle
+ * "you have not read for N days" note with a rotating ayah about the virtue of
+ * the Qur'an (its text read from the verified database, never typed). Best
+ * effort and never blocks the wird. Does nothing when nothing has been missed.
+ */
+export async function sendMissedDaysNudge(
+  bot: Bot<Context>,
+  chatId: bigint,
+  subscriberId: number,
+  timezone: string,
+  now: Date,
+): Promise<void> {
+  try {
+    const { date: today } = getLocalContext(timezone, now);
+    const missed = await countUnreadDeliveriesBefore(subscriberId, today);
+    if (missed === 0) return;
+    const virtue = pickQuranVirtue(missed);
+    const ayah = await getAyahText(virtue.surah, virtue.ayah);
+    if (!ayah) {
+      // The encouragement ayah should always be seeded; if not, skip the ayah
+      // rather than block the wird. (reference.test.ts guards the references.)
+      logger.error('Encouragement ayah not seeded; skipping the nudge', { ...virtue });
+      return;
+    }
+    await sendMessages(bot, chatId, [COPY.missedDaysMessage(missed, ayah)]);
+  } catch (err) {
+    logger.warn('Could not send the missed-days nudge', {
+      chatId: String(chatId),
+      error: String(err),
+    });
+  }
+}
+
+/**
+ * Send a subscriber's CURRENT wird right now (its pages + the recitation),
+ * format-aware, WITHOUT recording a delivery or attaching a confirm button.
+ * Used by /next, which has already advanced the position and is just showing
+ * the new portion for a reader who wants to read ahead. Returns the number of
+ * pages that went out (0 when nothing could be prepared/sent).
+ */
+export async function sendWirdNow(
+  bot: Bot<Context>,
+  sub: {
+    chatId: bigint;
+    currentPage: number;
+    wirdSize: number;
+    wirdFormat: string;
+    wirdAudioEnabled: boolean;
+    reciter: string;
+  },
+  lead: string,
+): Promise<number> {
+  const [content, basmala] = await Promise.all([
+    getWird(sub.currentPage, sub.wirdSize),
+    getBasmala(),
+  ]);
+  if (content.length === 0) return 0;
+  const { pagesSent } = await sendWird(bot, sub.chatId, content, basmala, {
+    lead,
+    format: normalizeWirdFormat(sub.wirdFormat),
+  });
+  if (sub.wirdAudioEnabled && pagesSent > 0) {
+    await sendPageAudio(
+      bot,
+      sub.chatId,
+      content.slice(0, pagesSent),
+      normalizeReciter(sub.reciter),
+    );
+  }
+  return pagesSent;
+}
+
 /**
  * The heart of the bot: find every subscriber whose wird is due right now and
  * send it. Safe to run every minute and safe to run twice for the same
@@ -473,11 +575,15 @@ export async function sendPageAudio(
  *   - a (subscriber, local date) record makes it send at most once per local
  *     day, even on a restart catch-up or a double cron fire.
  *   - one subscriber failing is caught and never stops the rest.
- *   - the page advances only by the pages that were actually sent (the wird
- *     goes out one page at a time), so a partial failure neither skips pages
- *     nor re-sends pages that already arrived; the rest roll to the next run.
  *
- * The channel is just another subscriber, so it flows through this same loop.
+ * The position advances differently per kind:
+ *   - CHANNEL: advance-on-send (a broadcast, the admin sets the pace). The
+ *     record carries nextPage, so the position moves with the post; a partial
+ *     send advances only by the pages that went out.
+ *   - USER: advance-on-READ. The send records the day but does NOT move the
+ *     position (no nextPage), and a "read ✓" button rides the wird. The wird
+ *     therefore repeats unchanged each day until the reader confirms, so a
+ *     missed day never skips pages. A repeat carries a gentle "N days" nudge.
  */
 export async function deliverDueSubscribers(
   bot: Bot<Context>,
@@ -510,10 +616,19 @@ export async function deliverDueSubscribers(
         logger.error('No wird content to send', { id: sub.id, startPage: sub.currentPage });
         continue;
       }
+      // For a USER whose wird is repeating unread, lead with a gentle
+      // "you have not read for N days" note + an encouragement ayah (best
+      // effort). The channel does not advance-on-read, so it never repeats.
+      if (sub.kind === KIND_USER) {
+        await sendMissedDaysNudge(bot, sub.chatId, sub.id, sub.timezone, now);
+      }
+
       // The daily tajweed lesson goes out right BEFORE the wird (best effort).
       // A lesson failure never blocks the wird; the wird send below remains the
       // source of truth for blocked/failed. The lesson cycle only advances when
-      // the lesson actually went out AND the day is committed (below).
+      // the lesson actually went out AND the day is committed (below). The
+      // lesson is a daily drip: it advances every send, even when the wird
+      // repeats unread.
       const lesson = await tajweedLessonView(sub);
       const lessonSent = lesson ? (await sendLesson(bot, sub.chatId, lesson)) === 'ok' : false;
 
@@ -546,14 +661,17 @@ export async function deliverDueSubscribers(
         continue;
       }
 
-      // At least one page went out: record exactly how many and advance by that
-      // many, in one transaction.
+      // At least one page went out: record the day. The CHANNEL advances on the
+      // send (nextPage); a USER does NOT (nextPage omitted) — its position moves
+      // only on a confirmed read, so its wird repeats until then. The lesson
+      // advances for both (a daily drip).
       const committed = await commitDelivery({
         subscriberId: sub.id,
         scheduledFor,
         startPage: sub.currentPage,
         pageCount: pagesSent,
-        nextPage: advanceStartPage(sub.currentPage, pagesSent),
+        nextPage:
+          sub.kind === KIND_CHANNEL ? advanceStartPage(sub.currentPage, pagesSent) : undefined,
         nextLessonIndex:
           lesson && lessonSent ? nextLessonIndex(lesson.index, TAJWEED_LESSON_COUNT) : undefined,
         startedAt: sub.startedAt,
@@ -566,9 +684,11 @@ export async function deliverDueSubscribers(
       stats.sent++;
 
       if (pagesSent < content.length) {
-        // A partial wird: the unsent pages go out on the next run from the
-        // advanced position. If a USER blocked us mid-wird, stop future sends.
-        logger.warn('Partial wird sent; remaining pages roll to the next run', {
+        // A partial wird. For the channel the unsent pages roll to the next run
+        // from the advanced position; for a user the whole wird simply repeats
+        // next time (the position did not move). If a USER blocked us mid-wird,
+        // stop future sends.
+        logger.warn('Partial wird sent', {
           id: sub.id,
           sent: pagesSent,
           requested: content.length,
@@ -587,6 +707,10 @@ export async function deliverDueSubscribers(
           normalizeReciter(sub.reciter),
         );
       }
+
+      // Finally, the "read ✓ / next" button (USERS only): tapping it advances
+      // the position and marks the day read. The channel never gets it.
+      if (sub.kind === KIND_USER) await sendConfirmPrompt(bot, sub.chatId);
     } catch (err) {
       stats.failed++;
       logger.error('Delivery failed for subscriber', { id: sub.id, error: String(err) });
@@ -651,25 +775,11 @@ export async function wirdPageNumbersFor(
   return pages.map((p) => p.pageNumber);
 }
 
-/**
- * How many pages today's delivery covers for this subscriber, or null when
- * today has not been delivered yet. Lets a caller tell whether raising the wird
- * size can top up today (a same-day read, when the new size is bigger) versus
- * only applying from tomorrow. A pure read — no delivery, no advance.
- */
-export async function deliveredCountToday(
-  sub: { id: number; timezone: string },
-  now: Date = new Date(),
-): Promise<number | null> {
-  const local = getLocalContext(sub.timezone, now);
-  const delivered = await getDeliveryFor(sub.id, local.date);
-  return delivered ? delivered.pageCount : null;
-}
-
-/** What /today should send the user, and whether to record it as the day's
- *  delivery so the scheduler does not send the same wird again. The caller
- *  renders the pages in the subscriber's chosen format (text or image) via
- *  sendWird, so the view itself stays format-agnostic. */
+/** What /today (and /page) shows, and whether to record it as today's delivery
+ *  so the scheduler does not send the same wird again. The caller renders the
+ *  pages in the subscriber's chosen format via sendWird, so the view itself
+ *  stays format-agnostic. A user's position never moves on a view — only on a
+ *  confirmed read — so the wird is always the LIVE portion at the current page. */
 export interface TodayView {
   /** The wird's pages, in reading order, or empty when nothing can be prepared. */
   pages: PageContent[];
@@ -678,22 +788,13 @@ export interface TodayView {
   /** The lead line for the first page (e.g. "🌿 وردك اليوم"). */
   lead: string;
   /**
-   * Set when this view should be COMMITTED as today's delivery (the user pulled
-   * their wird before the scheduled send). The caller records it after the
-   * pages are actually shown, so the scheduler skips the day. Null on an off
-   * day or while paused (nothing is scheduled to dedupe against), and null when
-   * today was already delivered (re-show only).
+   * Set when this view should be RECORDED as today's delivery (today is free:
+   * an active day, not paused, not already delivered). The caller records it
+   * after the pages are shown, so the scheduler skips the day. Recording does
+   * NOT move the position (a user advances only on a confirmed read). Null on a
+   * re-show, an off day, or while paused.
    */
-  claim: { scheduledFor: string; startPage: number; pageCount: number; nextPage: number } | null;
-  /**
-   * Set when this view TOPS UP an already-delivered day to a newly-raised wird
-   * size: `pages` holds ONLY the remaining (not-yet-sent) pages. The caller
-   * sends them, then grows today's record and advances the position by exactly
-   * what went out (mirroring a partial send), so the day reflects the bigger
-   * size without ever re-sending pages the reader already received. Null when
-   * this is not a top-up. Mutually exclusive with `claim`.
-   */
-  topUp: { scheduledFor: string; startPage: number } | null;
+  record: { scheduledFor: string; startPage: number; pageCount: number } | null;
   /** True when today's wird was already delivered and this is a re-show. */
   alreadyDelivered: boolean;
 }
@@ -709,92 +810,47 @@ export interface TodaySubscriber {
 }
 
 /**
- * Decide what /today shows and whether it counts as today's delivery.
+ * Decide what /today (and /page) shows and whether it counts as today's
+ * delivery.
  *
- * /today is "give me today's wird now". If the user pulls it on an active day
- * before the scheduled send, that pull IS today's delivery: we show the wird
- * and the caller records it (so the 06:00 scheduler does not send it again).
- * If today was already delivered (by an earlier /today or the scheduler), we
- * re-show exactly what was delivered without advancing. On an off day or while
- * paused there is no scheduled send to dedupe against, so /today stays a pure
- * peek that never advances.
+ * The wird is always the LIVE portion at the reader's current page and size:
+ * a view never moves the position (only a confirmed read does), so raising the
+ * size or jumping with /page is reflected at once, and re-showing an
+ * already-delivered day shows the same unread wird. When today is still free
+ * (active day, not paused, not yet delivered), the caller RECORDS today's
+ * delivery so the scheduler does not also send it — but does not advance.
  */
-export async function buildTodayView(
-  sub: TodaySubscriber,
-  now: Date,
-  opts: { reposition?: boolean } = {},
-): Promise<TodayView> {
+export async function buildTodayView(sub: TodaySubscriber, now: Date): Promise<TodayView> {
   const basmala = await getBasmala();
   const local = getLocalContext(sub.timezone, now);
   const scheduledFor = local.date;
   const delivered = await getDeliveryFor(sub.id, scheduledFor);
 
-  // /today on an already-delivered day. If the reader has since RAISED their
-  // wird size, top up: send the pages still owed for today so the day reflects
-  // the new size. The position already sits past the delivered pages (the day's
-  // delivery advanced it), so the next `delta` pages from currentPage are
-  // exactly the ones not yet sent. Otherwise (same/smaller size) re-show exactly
-  // what was delivered. A reposition (/page) always shows the NEW page the user
-  // just set, so it skips both and renders the current position below.
-  if (delivered && !opts.reposition) {
-    const delta = sub.wirdSize - delivered.pageCount;
-    if (delta > 0) {
-      const more = await getWird(sub.currentPage, delta);
-      if (more.length > 0) {
-        return {
-          pages: more,
-          basmala,
-          lead: COPY.wirdLead,
-          claim: null,
-          topUp: { scheduledFor, startPage: sub.currentPage },
-          alreadyDelivered: true,
-        };
-      }
-    }
-    const content = await getWird(delivered.startPage, delivered.pageCount);
-    return {
-      pages: content,
-      basmala,
-      lead: COPY.wirdLead,
-      claim: null,
-      topUp: null,
-      alreadyDelivered: true,
-    };
-  }
-
-  // Show the current position's wird.
   const content = await getWird(sub.currentPage, sub.wirdSize);
   if (content.length === 0) {
     return {
       pages: [],
       basmala,
       lead: COPY.wirdLead,
-      claim: null,
-      topUp: null,
+      record: null,
       alreadyDelivered: delivered !== null,
     };
   }
 
-  // Claim it as today's delivery only when today is genuinely free: not already
-  // delivered, an active day, and not paused. A reposition on an
-  // already-delivered (or off / paused) day just shows the new wird as a
-  // preview and leaves today's record and the position untouched.
-  const claimable =
+  // Record today only when it is genuinely free: not already delivered, an
+  // active day, and not paused. Recording does NOT move the position — the user
+  // advances on a confirmed read. A re-show, off day, or paused day has nothing
+  // to record.
+  const recordable =
     delivered === null && sub.pausedAt === null && isDayActive(sub.activeDays, local.isoWeekday);
-  const claim = claimable
-    ? {
-        scheduledFor,
-        startPage: sub.currentPage,
-        pageCount: content.length,
-        nextPage: advanceStartPage(sub.currentPage, content.length),
-      }
+  const record = recordable
+    ? { scheduledFor, startPage: sub.currentPage, pageCount: content.length }
     : null;
   return {
     pages: content,
     basmala,
     lead: COPY.wirdLead,
-    claim,
-    topUp: null,
+    record,
     alreadyDelivered: delivered !== null,
   };
 }

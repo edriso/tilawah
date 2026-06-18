@@ -70,6 +70,18 @@ export function wirdSizeSummaryAr(pages: number): string {
   return `${toArabicDigits(pages)} صفحة`;
 }
 
+/**
+ * A count of days in correct Arabic number-noun agreement: "يوم واحد" (1),
+ * "يومان" (2), "N أيام" (3-10), "N يومًا" (11+). Used by the gentle "you have
+ * not read for N days" nudge.
+ */
+export function daysCountAr(days: number): string {
+  if (days === 1) return 'يوم واحد';
+  if (days === 2) return 'يومين';
+  if (days <= 10) return `${toArabicDigits(days)} أيام`;
+  return `${toArabicDigits(days)} يومًا`;
+}
+
 /** "صفحة ٢٥ (الجزء ٢)" or "صفحة ٢٥" when the juz is unknown. */
 export function pagePositionAr(page: number, juz?: number): string {
   const base = `صفحة ${toArabicDigits(page)}`;
@@ -181,7 +193,8 @@ export const COPY = {
     'بوت "تلاوة" يرسل لك وردًا يوميًا من القرآن الكريم.',
     '',
     'الأوامر:',
-    '/today: قراءة ورد اليوم الآن (يُحتسب وردك لهذا اليوم)',
+    '/today: قراءة ورد اليوم الآن',
+    '/next: تأكيد قراءة وردك والانتقال إلى التالي (لقراءة المزيد أو تدارك يوم فائت)',
     `/wird: حجم الورد اليومي (١ إلى ٢٠ صفحة)، مثل ${ltr('/wird 5')}`,
     '/tajweed: درس تجويد يومي قبل وردك (تشغيل/إيقاف)',
     '/reciter: تلاوة صفحتك صوتًا، واختيار القارئ أو الإيقاف',
@@ -204,14 +217,33 @@ export const COPY = {
   // Shown above the wird when /today re-shows a wird already delivered today.
   todayAlready: 'لقد وصلك ورد اليوم بالفعل، وهذا هو 🌿',
 
-  // Shown above the wird when /today "tops up" an already-delivered day after
-  // the reader raised their wird size: the rest of today's pages, at the new
-  // size, follow immediately.
-  todayToppedUp: 'زاد حجم وردك، وهذه بقيّة صفحات اليوم 🌿',
-
-  // Appended to the /wird confirmation when raising the size on a day already
-  // delivered: the extra pages can be read NOW via /today, not just tomorrow.
-  todayTopUpHint: `وقد وصلك ورد اليوم بحجمه السابق، فاكتب ${ltr('/today')} لقراءة بقيّة صفحات اليوم الآن 🌿`,
+  // ── Reading confirmation (the "read ✓" button) ───────────────────
+  // The button under each user wird, and the small prompt that carries it.
+  readButton: '✅ قرأتُ وردي — التالي',
+  confirmPrompt: 'إذا أتممت قراءة وردك، اضغط الزر لأنتقل بك إلى الصفحة التالية 🌿',
+  // Shown after a confirmed read advances the reader. Mentions /next so a reader
+  // who wants more knows how to keep going now.
+  readConfirmed: (page: number, juz?: number) =>
+    `بارك الله فيك ✓\nانتقلتَ إلى ${pagePositionAr(page, juz)}.\nيصلك وردك التالي في موعده، أو اكتب ${ltr('/next')} لقراءة المزيد الآن 🌿`,
+  // Toast when an old/already-used "read" button is tapped (the position has
+  // already moved on). Kept gentle: their reading is recorded, nothing is wrong.
+  readAlready: 'سجّلنا قراءتك ✓',
+  // The lead line for the wird shown by /next (the NEXT portion, on demand).
+  nextLead: '🌿 وردك التالي',
+  // The gentle "you have not read for N days" message shown when a wird repeats
+  // unread, followed by an ayah on the virtue of the Qur'an (text from the DB).
+  // No parse_mode anywhere, so the ayah's characters are safe.
+  missedDaysMessage: (
+    days: number,
+    ayah: { text: string; surahNameAr: string; numberInSurah: number; note?: string },
+  ) =>
+    [
+      `لم تقرأ وردك منذ ${daysCountAr(days)} 🌿`,
+      'لا حرج، عُد متى شئت ووردك بانتظارك من حيث توقفت.',
+      '',
+      ayah.text,
+      `[سورة ${ayah.surahNameAr} — آية ${toArabicDigits(ayah.numberInSurah)}]`,
+    ].join('\n'),
 
   // Shown for a stray text message that is not a command and not an expected
   // number reply (after /page or /wird).
@@ -259,14 +291,10 @@ export const COPY = {
       `أو اكتبه مع الأمر مباشرة، مثل ${ltr('/page 100')}`,
     ].join('\n'),
   pageInvalid: `رقم الصفحة غير صحيح. اكتب رقمًا من ١ إلى ٦٠٤، مثل ${ltr('/page 100')}`,
-  // After /page on a free day: the new page counts as today's wird, and the
-  // position has advanced past it (so /status shows the NEXT page).
-  pageSetClaimed: (page: number, nextPage: number, juz?: number) =>
-    `ضبطنا موضعك على ${pagePositionAr(page, juz)}، وهذا ورد اليوم 🌿\nويبدأ وردك القادم من صفحة ${toArabicDigits(nextPage)} بإذن الله.`,
-  // After /page when today is already delivered, an off day, or paused: the new
-  // wird is shown as a preview and will arrive at the next scheduled time.
-  pageSetPreview: (page: number, juz?: number) =>
-    `تم ضبط موضعك على ${pagePositionAr(page, juz)} ✅\nوسيصلك وردك من هنا في موعدك القادم.`,
+  // After /page: the position is set to the new page and that wird is shown.
+  // Read-gated, so nothing advances yet — the reader moves on by confirming.
+  pageSet: (page: number, juz?: number) =>
+    `ضبطنا موضعك على ${pagePositionAr(page, juz)} ✅\nوهذا وردك من هنا 🌿`,
 
   // ── Pause / resume (single toggle) ────────────────────────────────
   paused: 'تم إيقاف الإرسال مؤقتًا، وسيبقى موضعك محفوظًا 🌿\nوعندما تريد العودة اكتب /pause',

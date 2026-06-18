@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { ALL_DAYS, NO_DAYS, maskFromDays } from '../core';
 import {
   wirdSizeSummaryAr,
+  daysCountAr,
   daysSummaryAr,
   formatTimeAr,
   pagePositionAr,
@@ -28,6 +29,35 @@ describe('wirdSizeSummaryAr (Arabic number-noun agreement)', () => {
   });
 });
 
+describe('daysCountAr (Arabic number-noun agreement for days)', () => {
+  it('uses the right form for 1, 2, 3-10, and 11+', () => {
+    expect(daysCountAr(1)).toBe('يوم واحد');
+    expect(daysCountAr(2)).toBe('يومين');
+    expect(daysCountAr(3)).toBe('٣ أيام');
+    expect(daysCountAr(11)).toBe('١١ يومًا');
+  });
+});
+
+describe('read-confirmation copy', () => {
+  it('confirmed message names the new page (and juz) and points to /next', () => {
+    const msg = COPY.readConfirmed(15, 1);
+    expect(msg).toContain('صفحة ١٥ (الجزء ١)');
+    expect(msg).toContain('/next');
+  });
+
+  it('missed-days message states the days and embeds the ayah + reference', () => {
+    const msg = COPY.missedDaysMessage(3, {
+      text: 'نص الآية',
+      surahNameAr: 'فاطر',
+      numberInSurah: 29,
+    });
+    expect(msg).toContain('٣ أيام');
+    expect(msg).toContain('نص الآية');
+    expect(msg).toContain('سورة فاطر');
+    expect(msg).toContain('٢٩');
+  });
+});
+
 describe('page copy (the /page command)', () => {
   it('prompt shows the current position and how to change it', () => {
     const msg = COPY.pagePrompt(2, 1);
@@ -36,11 +66,8 @@ describe('page copy (the /page command)', () => {
     expect(msg).toContain('/page 100');
   });
 
-  it('page-set messages name the new position (and the next page when claimed)', () => {
-    const claimed = COPY.pageSetClaimed(100, 101, 5);
-    expect(claimed).toContain('صفحة ١٠٠ (الجزء ٥)');
-    expect(claimed).toContain('١٠١'); // the next page after today's wird
-    expect(COPY.pageSetPreview(100, 5)).toContain('صفحة ١٠٠ (الجزء ٥)');
+  it('page-set message names the new position', () => {
+    expect(COPY.pageSet(100, 5)).toContain('صفحة ١٠٠ (الجزء ٥)');
   });
 
   it('invalid message states the allowed range', () => {

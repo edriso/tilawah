@@ -40,14 +40,23 @@ export function getDeliveryFor(subscriberId: number, scheduledFor: string) {
 export type CommitResult = 'sent' | 'duplicate';
 
 /**
- * Record a successful delivery and move the subscriber forward to the next
- * page, all in one transaction. Call this ONLY after the wird was actually
- * sent, so a failed send never advances the page (the reader would silently
- * skip pages otherwise).
+ * Record a successful delivery, all in one transaction. Call this ONLY after
+ * the wird was actually sent.
+ *
+ * `nextPage` decides whether the POSITION moves:
+ *   - The CHANNEL (advance-on-send) passes `nextPage`, so its position advances
+ *     with the send, exactly as before.
+ *   - A USER (advance-on-read) OMITS `nextPage`, so the row is recorded but the
+ *     position stays put. The user's position only moves later, on a confirmed
+ *     read (`confirmRead`). The wird therefore repeats each day until confirmed,
+ *     so a missed day never skips pages.
+ *
+ * The tajweed lesson advances on every real send (a daily drip), for both, so
+ * `nextLessonIndex` is independent of `nextPage`.
  *
  * The unique (subscriber, scheduledFor) index is the idempotency lock: if a
  * second call races in for the same local day, the insert fails and we report
- * 'duplicate' without advancing twice.
+ * 'duplicate' without recording twice.
  */
 export async function commitDelivery(params: {
   subscriberId: number;
@@ -56,8 +65,9 @@ export async function commitDelivery(params: {
   startPage: number;
   /** How many pages were sent. */
   pageCount: number;
-  /** The page the subscriber should be on next (already wrapped if needed). */
-  nextPage: number;
+  /** The page to move to (already wrapped). Provided by the CHANNEL to advance
+   *  on send; OMITTED by a USER, whose position advances only on a read. */
+  nextPage?: number;
   /** The subscriber's current startedAt, so we stamp it only the first time. */
   startedAt: Date | null;
   /** When the day's tajweed lesson was sent, the index to advance to (already
@@ -78,7 +88,9 @@ export async function commitDelivery(params: {
       prisma.subscriber.update({
         where: { id: subscriberId },
         data: {
-          currentPage: nextPage,
+          // Advance the position only when asked (the channel); a user's position
+          // moves on a confirmed read, not on the send.
+          ...(nextPage !== undefined ? { currentPage: nextPage } : {}),
           // Advance the lesson only when one was sent this delivery.
           ...(nextLessonIndex !== undefined ? { tajweedLessonIndex: nextLessonIndex } : {}),
           // Stamp the "member since" time on the very first delivery only.
@@ -93,35 +105,66 @@ export async function commitDelivery(params: {
   }
 }
 
+export type ConfirmResult = 'advanced' | 'already';
+
 /**
- * Grow an already-recorded day's delivery by `addPages` pages and advance the
- * subscriber to `nextPage`, in one transaction. Used to "top up" today's wird
- * when the reader RAISED their wird size on a day already delivered: the extra
- * pages are sent, today's record grows to match, and the position advances by
- * exactly what went out. Call this ONLY after those pages were actually sent,
- * for the same reason as commitDelivery — a failed send must never advance.
+ * Confirm that a USER read the wird that starts at `fromPage`, moving them to
+ * `nextPage` and marking every still-unread "sent" row read — all in one
+ * transaction. Used by the "read ✓" button and /next.
  *
- * Unlike commitDelivery this UPDATEs an existing row, so it never collides with
- * the unique (subscriber, scheduledFor) index: the scheduler already skips a
- * day that has a delivery, so there is no batch to race with here.
+ * The position move is an atomic compare-and-set: `updateMany` only matches
+ * while `currentPage` is still `fromPage`, so a double tap or a stale button
+ * from an earlier day moves no one twice — the second call matches no row and
+ * returns 'already'. This is what makes old buttons left in the chat harmless.
  */
-export async function growDelivery(params: {
-  subscriberId: number;
-  scheduledFor: string;
-  /** How many extra pages were sent in the top-up (added to pageCount). */
-  addPages: number;
-  /** The page the subscriber should be on next (already wrapped if needed). */
-  nextPage: number;
-}): Promise<void> {
-  const { subscriberId, scheduledFor, addPages, nextPage } = params;
-  await prisma.$transaction([
-    prisma.deliveryLog.update({
-      where: { subscriberId_scheduledFor: { subscriberId, scheduledFor } },
-      data: { pageCount: { increment: addPages } },
-    }),
-    prisma.subscriber.update({
-      where: { id: subscriberId },
-      data: { currentPage: nextPage },
-    }),
-  ]);
+export async function confirmRead(
+  subscriberId: number,
+  fromPage: number,
+  nextPage: number,
+  now: Date = new Date(),
+): Promise<ConfirmResult> {
+  // Compare-and-set: advance only if still parked at fromPage.
+  const moved = await prisma.subscriber.updateMany({
+    where: { id: subscriberId, currentPage: fromPage },
+    data: { currentPage: nextPage },
+  });
+  if (moved.count === 0) return 'already';
+  // Mark this and any earlier unread days read, so the "days not read" count
+  // resets to zero. (All unconfirmed rows are for the same fromPage wird.)
+  await prisma.deliveryLog.updateMany({
+    where: { subscriberId, status: 'sent', confirmedAt: null },
+    data: { confirmedAt: now },
+  });
+  return 'advanced';
+}
+
+/**
+ * The most recent still-unread "sent" delivery for this subscriber, or null.
+ * The source of truth for the "read ✓" button: its startPage IS the user's
+ * current page (the position only moves on confirm), and its pageCount is how
+ * far to advance. Null means there is nothing to confirm (already read, or the
+ * wird has not gone out yet).
+ */
+export function getLatestUnconfirmedDelivery(subscriberId: number) {
+  return prisma.deliveryLog.findFirst({
+    where: { subscriberId, status: 'sent', confirmedAt: null },
+    orderBy: { scheduledFor: 'desc' },
+    select: { startPage: true, pageCount: true },
+  });
+}
+
+/**
+ * How many days BEFORE `today` this subscriber was sent a wird and has not yet
+ * confirmed reading it — the gentle "you haven't read for N days" number. Today
+ * is excluded so the count reflects past misses, not the wird just shown.
+ */
+export function countUnreadDeliveriesBefore(subscriberId: number, today: string): Promise<number> {
+  return prisma.deliveryLog.count({
+    where: {
+      subscriberId,
+      status: 'sent',
+      confirmedAt: null,
+      scheduledFor: { lt: today },
+    },
+  });
 }
