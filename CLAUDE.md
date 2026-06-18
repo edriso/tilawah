@@ -115,7 +115,10 @@ skipped past:
 
 - Every user wird (the daily send, `/today`, `/page`) is followed by a small
   prompt carrying a **"read ✓ — next"** button (`READ_CONFIRM`,
-  `sendConfirmPrompt`). The channel never gets it.
+  `sendConfirmPrompt`), sent SILENTLY (the wird already notified; the prompt is
+  its quiet companion, like the recitation — one buzz per day). It is one button
+  for the whole wird, however many pages, so a juz-sized day is one tap. The
+  channel never gets it.
 - Tapping it advances ONE wird and marks the day(s) read (`confirmRead`, an
   atomic compare-and-set on `currentPage`). It is **idempotent**: it works off
   the latest unconfirmed delivery, so a double tap or an old button left in the
@@ -147,9 +150,12 @@ old size; the read-gated model fixes that for free.)
 
 ## Daily tajweed lesson
 
-Right BEFORE the wird, the bot posts a short tajweed micro-lesson (on by default
-for users and the channel; `/tajweed` toggles it for a user, `/admin_tajweed
-on|off` for the channel). The deck is authored reference data in
+Right BEFORE the wird, the bot can post a short tajweed micro-lesson. It is OFF
+by default (the `tajweedEnabled` column defaults to false), so the wird stays the
+focus and the lesson is a deliberate opt-in: a user turns it on with `/tajweed`
+(or `/tajweed on`), the channel admin with `/admin_tajweed on`. (The existing
+channel row, created before this default flipped, keeps whatever it was set to;
+only NEW subscribers default off.) The deck is authored reference data in
 `src/database/reference/tajweed-lessons.ts`, ordered, drawn from تحفة الأطفال and
 المقدمة الجزرية. It is NOT Quran text: each lesson only NAMES an example by
 `(surah, ayah)`, and the verified Uthmani text is read from the database
@@ -158,12 +164,12 @@ fails if a body/note contains `﴿ ﴾`). The deck has been reviewed and is LIVE
 (`LESSONS_PENDING_REVIEW = false`). The flag is a kept safety gate, not dead
 code: set it back to `true` (e.g. while editing the deck or adding lessons that
 need a fresh review) and `tajweedLessonView` short-circuits so the lesson is
-NEVER sent, `/tajweed` replies "coming soon", and startup warns — even though
-the per-reader toggle still defaults on. Flip it back to false once a qualified
-reader has gone through the new material.
+NEVER sent, `/tajweed` replies "coming soon", and startup warns — independent of
+the per-reader toggle. Flip it back to false once a qualified reader has gone
+through the new material.
 
-Each subscriber has `tajweedEnabled` and `tajweedLessonIndex`. A brand-new
-subscriber starts at `tajweedLessonIndex = 0`, the first lesson of the deck (the
+Each subscriber has `tajweedEnabled` (off by default) and `tajweedLessonIndex`.
+A subscriber who turns the lesson on starts at `tajweedLessonIndex = 0`, the first lesson of the deck (the
 deck is authored in teaching order: intro, then makharij, sifat, ahkam an-nun,
 ahkam al-mim, the mudud, and waqf). The lesson is best-effort and NEVER blocks
 the wird; the wird send stays the source of truth for blocked/failed. The lesson

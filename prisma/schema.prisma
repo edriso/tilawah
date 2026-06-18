@@ -100,9 +100,10 @@ model Subscriber {
   wirdAudioEnabled Boolean @default(true) @map("wird_audio_enabled")
   reciter          String  @default("abdulbasit") @map("reciter") @db.VarChar(16)
 
-  // Daily tajweed micro-lesson, posted right before the wird. On by default for
-  // everyone (users and the channel). When off, only the wird is sent.
-  tajweedEnabled     Boolean @default(true) @map("tajweed_enabled")
+  // Daily tajweed micro-lesson, posted right before the wird. OFF by default;
+  // a reader opts in with /tajweed on (the channel admin with /admin_tajweed
+  // on), so the wird stays the focus and the lesson is a deliberate choice.
+  tajweedEnabled     Boolean @default(false) @map("tajweed_enabled")
   // The NEXT lesson to send, a 0-based index into the seeded lesson deck. After
   // each lesson it advances by one and wraps back to 0 (the deck repeats), like
   // currentPage loops the Mushaf. See src/core/tajweed.ts.

@@ -849,3 +849,39 @@ describe('renderLessonAt (lessons browser)', () => {
     expect(await renderLessonAt(0)).toBeNull();
   });
 });
+
+describe('deliverDueSubscribers (a large, juz-sized wird and the confirm prompt)', () => {
+  it('a USER 20-page wird: 20 pages out, one recitation each, ONE silent confirm prompt, no advance', async () => {
+    h.listDeliverableSubscribers.mockResolvedValue([
+      sub({
+        wirdFormat: 'text',
+        wirdSize: 20,
+        currentPage: 1,
+        wirdAudioEnabled: true,
+        reciter: 'husary',
+      }),
+    ]);
+    h.getWird.mockResolvedValue(manyPages(20));
+    const stats = await deliverDueSubscribers(fakeBot, NOW);
+
+    expect(h.sendMessages).toHaveBeenCalledTimes(20); // one text message per page
+    expect(h.sendAudio).toHaveBeenCalledTimes(20); // one silent clip per page
+    // Recorded once, all 20 pages; the position does NOT advance (read-gated),
+    // so the whole juz repeats until the reader confirms.
+    expect(h.commitDelivery).toHaveBeenCalledOnce();
+    expect(h.commitDelivery.mock.calls[0][0]).toMatchObject({ pageCount: 20 });
+    expect(h.commitDelivery.mock.calls[0][0].nextPage).toBeUndefined();
+    expect(stats).toMatchObject({ due: 1, sent: 1 });
+  });
+
+  it('the confirm prompt is exactly one message, sent silently (one buzz per day)', async () => {
+    h.listDeliverableSubscribers.mockResolvedValue([
+      sub({ wirdFormat: 'text', wirdSize: 20, currentPage: 1 }),
+    ]);
+    h.getWird.mockResolvedValue(manyPages(20));
+    await deliverDueSubscribers(fakeBot, NOW);
+
+    expect(apiSendMessage).toHaveBeenCalledTimes(1); // one button for the whole wird
+    expect(apiSendMessage.mock.calls[0][2]).toMatchObject({ disable_notification: true });
+  });
+});

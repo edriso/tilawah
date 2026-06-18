@@ -485,6 +485,9 @@ export async function sendConfirmPrompt(bot: Bot<Context>, chatId: bigint): Prom
   try {
     await bot.api.sendMessage(Number(chatId), COPY.confirmPrompt, {
       reply_markup: new InlineKeyboard().text(COPY.readButton, READ_CONFIRM),
+      // Silent: the wird itself already notified; this is its quiet companion,
+      // like the recitation, so a reader is buzzed once per day, not twice.
+      disable_notification: true,
     });
   } catch (err) {
     logger.warn('Could not send the read-confirmation prompt', {

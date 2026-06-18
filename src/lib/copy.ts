@@ -220,7 +220,7 @@ export const COPY = {
   // ── Reading confirmation (the "read ✓" button) ───────────────────
   // The button under each user wird, and the small prompt that carries it.
   readButton: '✅ قرأتُ وردي — التالي',
-  confirmPrompt: 'إذا أتممت قراءة وردك، اضغط الزر لأنتقل بك إلى الصفحة التالية 🌿',
+  confirmPrompt: 'إذا أتممت قراءة وردك، فاضغط الزر لأنتقل بك إلى وردك التالي 🌿',
   // Shown after a confirmed read advances the reader. Mentions /next so a reader
   // who wants more knows how to keep going now.
   readConfirmed: (page: number, juz?: number) =>

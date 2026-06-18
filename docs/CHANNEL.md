@@ -16,10 +16,11 @@ bot at `@TilawahDailyBot`.
 - It posts one Mushaf page per day by default, in order: page 1, then 2, then
   3, all the way to page 604, then it starts again at page 1. So it moves
   forward through the whole Quran and loops forever.
-- Each day's post has three parts, all on by default: a short tajweed lesson
-  first (one rule a day), then the page itself (a picture of the Mushaf page),
-  then an audio recitation of that page (Abdul Basit by default). An admin can
-  turn the lesson or the recitation off, or change the reciter (see below).
+- Each day's post is the page itself (a picture of the Mushaf page) and an
+  audio recitation of that page (Abdul Basit by default). An optional short
+  tajweed lesson (one rule a day) can lead the post; it is OFF by default, so
+  an admin turns it on with `/admin_tajweed on`. An admin can also turn the
+  recitation off or change the reciter (see below).
 - The page count per day, the post time, the days, and the timezone are all
   set by an admin (see the commands below). Nothing is posted while the
   channel is paused.
