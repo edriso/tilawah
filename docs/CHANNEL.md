@@ -47,7 +47,11 @@ bot at `@TilawahDailyBot`.
 
 ## Pinned welcome post
 
-(Post this in the channel once, then pin it: tap the message, Pin.)
+(Post this in the channel once, then pin it: tap the message, Pin. Two bullets
+are conditional: the tajweed-lesson line assumes you enable it with
+`/admin_tajweed on` — it is OFF by default, so drop that bullet if you won't
+enable it; and the "صورة الصفحة" line assumes the image format is configured
+(`MUSHAF_IMAGE_BASE_URL`), otherwise the channel posts the page as text.)
 
 السلام عليكم ورحمة الله وبركاته 🌿
 
