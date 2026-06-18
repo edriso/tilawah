@@ -38,6 +38,20 @@ describe('daysCountAr (Arabic number-noun agreement for days)', () => {
   });
 });
 
+describe('bot profile fits Telegram limits', () => {
+  // Telegram rejects an over-long short description (120) or description (512)
+  // with a 400, and setBotProfile awaits both un-caught at boot — so an
+  // over-long string crash-loops the bot and the live text silently goes stale.
+  // Count Unicode code points, the way Telegram counts characters.
+  it('botAbout is within the 120-character short-description limit', () => {
+    expect([...COPY.botAbout].length).toBeLessThanOrEqual(120);
+  });
+
+  it('botDescription is within the 512-character description limit', () => {
+    expect([...COPY.botDescription].length).toBeLessThanOrEqual(512);
+  });
+});
+
 describe('read-confirmation copy', () => {
   it('confirmed message names the new page (and juz) and points to /next', () => {
     const msg = COPY.readConfirmed(15, 1);
