@@ -73,6 +73,10 @@ describe('read-confirmation copy', () => {
     // reader's own wird (which follows next under "🌿 وردك اليوم").
     expect(msg).toContain('وهذه آيةٌ في فضل القرآن:');
     expect(msg).not.toContain('وردك اليوم');
+    // Re-engagement copy keeps agency on the reader (a fresh start) and never
+    // says the Qur'an "waits" on them.
+    expect(msg).toContain('كل يومٍ فرصةٌ جديدة');
+    expect(msg).not.toContain('بانتظارك');
   });
 });
 

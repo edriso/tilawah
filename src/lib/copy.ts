@@ -242,7 +242,7 @@ export const COPY = {
   ) =>
     [
       `لم تقرأ وردك منذ ${daysCountAr(days)}.`,
-      'لا حرج، عُد متى شئت ووردك بانتظارك من حيث توقفت.',
+      'كل يومٍ فرصةٌ جديدة؛ تابع من حيث توقفت، وما مضى لا يمنعك من خيرٍ تستأنفه اليوم.',
       '',
       // Frame the verse as an encouragement on the merit of the Qur'an — NOT the
       // reader's wird — so a verse shown here is never mistaken for today's wird
