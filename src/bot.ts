@@ -1,4 +1,5 @@
 import { Bot, InlineKeyboard, InputFile, type Context } from 'grammy';
+import { autoRetry } from '@grammyjs/auto-retry';
 import {
   activeDaysList,
   nextPageAfter,
@@ -84,6 +85,24 @@ import {
 import { setPending, takePending, clearPending } from './lib/pending';
 
 const bot = new Bot<Context>(config.botToken);
+
+// Smooth Telegram's rate limits. The daily batch broadcasts to the channel and
+// every due user in one minute-tick, and a wird can be several messages (pages,
+// recitation, tajweed, prompt), so a busy send minute can burst past Telegram's
+// flood limit and earn a 429. auto-retry catches that at the transformer layer
+// for EVERY api call (text, photo, audio, callback answers), waits the server's
+// retry_after, and retries — instead of dropping the message. Bounded (3 tries,
+// ≤30s) and scoped to rate limits only (other errors rethrow, so the per-send
+// wrappers still classify 403/blocked and transient failures as before). grammY
+// recommends auto-retry over the throttler plugin.
+bot.api.config.use(
+  autoRetry({
+    maxRetryAttempts: 3,
+    maxDelaySeconds: 30,
+    rethrowInternalServerErrors: true,
+    rethrowHttpErrors: true,
+  }),
+);
 
 // Any explicit command or button tap means the user is no longer answering a
 // previous /page or /wird prompt with a bare number, so drop any stale pending

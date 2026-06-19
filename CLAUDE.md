@@ -355,6 +355,13 @@ Commit the new folder under `prisma/migrations/`. Production applies it with
 - The channel chat id can be a numeric id or a public @username in `.env`. It
   is resolved to a numeric id once at startup and stored on the channel
   subscriber row.
+- Rate limits: the `@grammyjs/auto-retry` transformer is installed on the bot
+  (`bot.api.config.use(autoRetry(...))` in `bot.ts`). It transparently waits out
+  a Telegram 429 (`retry_after`) and retries, for every API call, so a busy send
+  minute (channel + many users, multi-page wirds) does not drop messages. Bounded
+  (3 tries, ≤30s) and scoped to rate limits only; the per-send wrappers still
+  classify 403/blocked and other failures. grammY recommends auto-retry over the
+  throttler plugin.
 
 ## Where things live
 
