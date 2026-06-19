@@ -69,6 +69,10 @@ describe('read-confirmation copy', () => {
     expect(msg).toContain('نص الآية');
     expect(msg).toContain('سورة فاطر');
     expect(msg).toContain('٢٩');
+    // The verse is framed as encouragement, so it is never mistaken for the
+    // reader's own wird (which follows next under "🌿 وردك اليوم").
+    expect(msg).toContain('وهذه آيةٌ في فضل القرآن:');
+    expect(msg).not.toContain('وردك اليوم');
   });
 });
 

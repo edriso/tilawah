@@ -424,14 +424,18 @@ describe('deliverDueSubscribers', () => {
     expect(stats).toMatchObject({ due: 1, sent: 1, failed: 0 });
   });
 
-  it('marks a user blocked mid-wird but still records the pages that went out', async () => {
-    h.listDeliverableSubscribers.mockResolvedValue([sub({ wirdSize: 2 })]);
+  it('marks a user blocked mid-wird, records the pages out, and skips the doomed audio + prompt', async () => {
+    h.listDeliverableSubscribers.mockResolvedValue([sub({ wirdSize: 2, wirdAudioEnabled: true })]);
     h.getWird.mockResolvedValue(TWO_PAGES);
     h.sendMessages.mockResolvedValueOnce('ok').mockResolvedValueOnce('blocked'); // blocked on page 2
     const stats = await deliverDueSubscribers(fakeBot, NOW);
     expect(h.commitDelivery).toHaveBeenCalledOnce();
     expect(h.commitDelivery.mock.calls[0][0]).toMatchObject({ pageCount: 1 });
     expect(h.markBlocked).toHaveBeenCalledWith(1);
+    // They blocked us mid-wird: do not push the recitation or the read prompt at
+    // a chat that just 403'd (they would only be more guaranteed-to-fail sends).
+    expect(h.sendAudio).not.toHaveBeenCalled();
+    expect(apiSendMessage).not.toHaveBeenCalled();
     expect(stats).toMatchObject({ due: 1, sent: 1 });
   });
 

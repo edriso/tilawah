@@ -284,6 +284,12 @@ describe('sendTodayView page recitation', () => {
     expect(h.sendPageAudio).not.toHaveBeenCalled();
   });
 
+  it('never sends the missed-days nudge (push-only; only the scheduler leads with it)', async () => {
+    h.sendWird.mockResolvedValue({ pagesSent: 2, lastResult: 'ok' });
+    await sendTodayView(fakeCtx() as never, SUB, TWO_PAGE_VIEW() as never, new Date());
+    expect(h.sendMissedDaysNudge).not.toHaveBeenCalled();
+  });
+
   it('sends no recitation when the commit loses the race (duplicate)', async () => {
     h.sendWird.mockResolvedValue({ pagesSent: 2, lastResult: 'ok' });
     h.commitDelivery.mockResolvedValue('duplicate');

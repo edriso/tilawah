@@ -690,14 +690,18 @@ export async function deliverDueSubscribers(
         // A partial wird. For the channel the unsent pages roll to the next run
         // from the advanced position; for a user the whole wird simply repeats
         // next time (the position did not move). If a USER blocked us mid-wird,
-        // stop future sends.
+        // stop future sends AND skip the page audio + read prompt below — they
+        // would only be more guaranteed-to-fail sends at a chat that just 403'd.
         logger.warn('Partial wird sent', {
           id: sub.id,
           sent: pagesSent,
           requested: content.length,
           lastResult: result,
         });
-        if (result === 'blocked' && sub.kind === KIND_USER) await markBlocked(sub.id);
+        if (result === 'blocked' && sub.kind === KIND_USER) {
+          await markBlocked(sub.id);
+          continue;
+        }
       }
 
       // After the wird, send the page recitation for the pages that went out
