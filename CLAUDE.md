@@ -130,7 +130,11 @@ skipped past:
   position did not move) with the gentle missed-days nudge + an ayah on the
   Qur'an's virtue (`countUnreadDeliveriesBefore`, `pickQuranVirtue`,
   `sendMissedDaysNudge`; the ayah TEXT is read from the verified DB, never
-  typed — golden rule #1).
+  typed — golden rule #1). The nudge leads the SCHEDULED daily push ONLY
+  (`deliverDueSubscribers`); it is deliberately NOT sent on a manual `/today` or
+  `/page`, where the reader is already engaged, so it never repeats within one
+  session. Its verse is framed ("وهذه آيةٌ في فضل القرآن:") so it is not mistaken
+  for the reader's own wird, which follows next under "🌿 وردك اليوم".
 - **`/next`** (`advanceAndShowNext`) confirms the current wird and shows the
   next one now — for a reader who finished early and wants more, or is catching
   up. Each `/next` advances exactly one wird (repeat for several in a sitting).

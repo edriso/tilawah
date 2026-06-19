@@ -47,7 +47,6 @@ import {
   sampleAudioPagesFor,
   wirdPageNumbersFor,
   sendConfirmPrompt,
-  sendMissedDaysNudge,
   sendWirdNow,
   buildLessonReview,
   renderLessonAt,
@@ -178,7 +177,11 @@ bot.command('status', async (ctx) => {
  * confirmed read), so the wird repeats until confirmed. The record is committed
  * only AFTER the messages are shown; the unique (subscriber, date) index makes
  * it safe even if the scheduler races at the same minute. The "read ✓ / next"
- * button rides every shown wird (unless paused) so the reader can advance.
+ * button rides every shown wird (unless paused) so the reader can advance. The
+ * missed-days nudge is NOT sent here: it leads the SCHEDULED daily push only
+ * (deliverDueSubscribers), so a manual /today or a /page reposition — where the
+ * reader is already engaged — is never interrupted by it, and it can never
+ * repeat within one session.
  */
 export async function sendTodayView(
   ctx: Context,
@@ -186,10 +189,6 @@ export async function sendTodayView(
   view: TodayView,
   now: Date,
 ): Promise<void> {
-  // Lead with a gentle "you have not read for N days" note + an encouragement
-  // ayah when the wird has been repeating unread (best effort, never blocks).
-  await sendMissedDaysNudge(bot, sub.chatId, sub.id, sub.timezone, now);
-
   // The daily tajweed lesson goes out right before the wird, but only when this
   // view will be RECORDED as today's delivery (a daily drip tied to the recorded
   // send) — not on a re-show or a paused/off-day peek.
@@ -277,8 +276,7 @@ bot.command('today', async (ctx) => {
     await ctx.reply(COPY.notReady);
     return;
   }
-  // A re-show (today already delivered, still unread) says so before the wird;
-  // sendTodayView adds the gentle "N days" nudge when one applies.
+  // A re-show (today already delivered, still unread) says so before the wird.
   if (view.alreadyDelivered) await ctx.reply(COPY.todayAlready);
   await sendTodayView(ctx, sub, view, now);
   if (sub.pausedAt) await ctx.reply(COPY.pausedHint);

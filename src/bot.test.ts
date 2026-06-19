@@ -220,12 +220,14 @@ describe('repositionToPage', () => {
     expect(h.commitDelivery).not.toHaveBeenCalled();
   });
 
-  it('leads with the missed-days nudge and ends with the read-confirm prompt', async () => {
+  it('does NOT send the missed-days nudge on a manual reposition (push-only), but still ends with the read-confirm prompt', async () => {
     h.buildTodayView.mockResolvedValue(ONE_PAGE_VIEW());
     await repositionToPage(fakeCtx() as never, SUB, 5);
 
-    expect(h.sendMissedDaysNudge).toHaveBeenCalledTimes(1); // gentle "N days" + ayah
-    expect(h.sendConfirmPrompt).toHaveBeenCalledTimes(1); // the "read ✓" button
+    // The nudge leads the SCHEDULED daily push only; a manual /today or /page
+    // (where the reader is already engaged) is never interrupted by it.
+    expect(h.sendMissedDaysNudge).not.toHaveBeenCalled();
+    expect(h.sendConfirmPrompt).toHaveBeenCalledTimes(1); // the "read ✓" button still rides the wird
   });
 });
 

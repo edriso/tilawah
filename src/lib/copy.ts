@@ -218,16 +218,16 @@ export const COPY = {
   notReady: 'تعذّر تجهيز وردك الآن، حاول لاحقًا بإذن الله.',
 
   // Shown above the wird when /today re-shows a wird already delivered today.
-  todayAlready: 'لقد وصلك ورد اليوم بالفعل، وهذا هو 🌿',
+  todayAlready: 'وصلك ورد اليوم من قبل، وهذا هو:',
 
   // ── Reading confirmation (the "read ✓" button) ───────────────────
   // The button under each user wird, and the small prompt that carries it.
   readButton: '✅ قرأتُ وردي — التالي',
-  confirmPrompt: 'إذا أتممت قراءة وردك، فاضغط الزر لأنتقل بك إلى وردك التالي 🌿',
+  confirmPrompt: 'إذا أتممتَ قراءة وردك فاضغط الزر لأنتقل بك إلى وردك التالي.',
   // Shown after a confirmed read advances the reader. Mentions /next so a reader
   // who wants more knows how to keep going now.
   readConfirmed: (page: number, juz?: number) =>
-    `بارك الله فيك ✓\nانتقلتَ إلى ${pagePositionAr(page, juz)}.\nيصلك وردك التالي في موعده، أو اكتب ${ltr('/next')} لقراءة المزيد الآن 🌿`,
+    `بارك الله فيك ✓\nانتقلتَ إلى ${pagePositionAr(page, juz)}.\nيصلك وردك التالي في موعده، أو اكتب ${ltr('/next')} لقراءة المزيد الآن.`,
   // Toast when an old/already-used "read" button is tapped (the position has
   // already moved on). Kept gentle: their reading is recorded, nothing is wrong.
   readAlready: 'سجّلنا قراءتك ✓',
@@ -241,8 +241,13 @@ export const COPY = {
     ayah: { text: string; surahNameAr: string; numberInSurah: number; note?: string },
   ) =>
     [
-      `لم تقرأ وردك منذ ${daysCountAr(days)} 🌿`,
+      `لم تقرأ وردك منذ ${daysCountAr(days)}.`,
       'لا حرج، عُد متى شئت ووردك بانتظارك من حيث توقفت.',
+      '',
+      // Frame the verse as an encouragement on the merit of the Qur'an — NOT the
+      // reader's wird — so a verse shown here is never mistaken for today's wird
+      // (which follows next, clearly led by "🌿 وردك اليوم").
+      'وهذه آيةٌ في فضل القرآن:',
       '',
       ayah.text,
       `[سورة ${ayah.surahNameAr} — آية ${toArabicDigits(ayah.numberInSurah)}]`,
@@ -297,10 +302,10 @@ export const COPY = {
   // After /page: the position is set to the new page and that wird is shown.
   // Read-gated, so nothing advances yet — the reader moves on by confirming.
   pageSet: (page: number, juz?: number) =>
-    `ضبطنا موضعك على ${pagePositionAr(page, juz)} ✅\nوهذا وردك من هنا 🌿`,
+    `ضبطنا موضعك على ${pagePositionAr(page, juz)} ✅\nوهذا وردك من هنا.`,
 
   // ── Pause / resume (single toggle) ────────────────────────────────
-  paused: 'تم إيقاف الإرسال مؤقتًا، وسيبقى موضعك محفوظًا 🌿\nوعندما تريد العودة اكتب /pause',
+  paused: 'تم إيقاف الإرسال مؤقتًا، وسيبقى موضعك محفوظًا.\nوعندما تريد العودة اكتب /pause',
   resumed: 'أهلًا بعودتك 🌿 سنكمل من حيث توقفت بإذن الله.',
   pausedHint: 'تذكير: أنت في وضع الراحة الآن، فلن يصلك الورد تلقائيًا.\nللعودة اكتب /pause',
 
@@ -357,14 +362,14 @@ export const COPY = {
     'درس التجويد اليومي قيد الإعداد والمراجعة على يد متخصص، وسيبدأ قريبًا بإذن الله 🌿',
   // Caption + music-player title/performer for a lesson's example clip, so the
   // player names it when Telegram auto-advances the chat's audio playlist.
-  tajweedAudioCaption: (titleAr: string) => `🔊 مثال: ${titleAr}`,
+  tajweedAudioCaption: (titleAr: string) => `مثال: ${titleAr}`,
   tajweedAudioTitle: (titleAr: string) => `مثال: ${titleAr}`,
   tajweedAudioPerformer: 'دروس التجويد',
 
   // ── Page recitation (reciter) ─────────────────────────────────────
   // Caption under each page's audio clip.
   pageAudioCaption: (page: number, reciter: string) =>
-    `🎧 تلاوة الصفحة ${toArabicDigits(page)} — ${reciterNameAr(reciter)}`,
+    `تلاوة الصفحة ${toArabicDigits(page)} — ${reciterNameAr(reciter)}`,
   // Music-player title for a page clip (the reciter is the performer). Telegram
   // auto-advances through the chat's audio when one ends; naming the track
   // keeps the player and lock screen showing which page is playing.
@@ -385,8 +390,8 @@ export const COPY = {
   // toasts. The preview plays ONE page's recitation in the new voice as a
   // silent peek: it never records a delivery or advances the position.
   reciterSampleBtn: '🎧 جرّب على صفحة اليوم',
-  sampleSent: 'أرسلنا عينة على صفحة اليوم 🌿',
-  sampleNoPage: 'ابدأ أولًا بـ /today لتجربة القارئ 🌿',
+  sampleSent: 'أرسلنا عينة على صفحة اليوم',
+  sampleNoPage: 'ابدأ أولًا بـ /today لتجربة القارئ',
   sampleReciterOff: 'التلاوة متوقفة حاليًا',
 
   // ── Page tafseer (/tafsir) ────────────────────────────────────────
@@ -395,7 +400,7 @@ export const COPY = {
   // tafsir is one tap away. The buttons below cover today's wird pages.
   tafsirIntro:
     'تفسير صفحات وردك 📖\nافتح الصفحة على الموقع، ثم اضغط على أي آية لقراءة تفسيرها (الميسر، السعدي، ابن كثير، وغيرها).',
-  tafsirNoPages: 'لم نتمكّن من تحديد صفحات وردك الآن. جرّب /today أولًا 🌿',
+  tafsirNoPages: 'لم نتمكّن من تحديد صفحات وردك الآن. جرّب /today أولًا.',
 
   // ── Admin / channel ───────────────────────────────────────────────
   adminOnly: 'هذا الأمر للمشرف فقط.',
