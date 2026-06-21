@@ -163,15 +163,45 @@ pnpm data:page-audio --cover assets/audio-cover.jpg
 pnpm verify:audio --dir assets/page-audio
 
 # 3) Put the files where the server keeps big runtime files (outside the repo,
-#    so a git pull never deletes them), then point the bot at them:
+#    so a git pull never deletes them). Either rsync from your laptop:
 rsync -av assets/page-audio/ root@<SERVER_IP>:/opt/bots/data/tilawah/page-audio/
-#    In /opt/bots/docker-compose.yml, mount it read-only on the tilawah service:
+#    ...or, if the server has no node/ffmpeg, build STRAIGHT into that folder
+#    with a one-off container (this is how production was first built; ~2 GB per
+#    reciter, run it in tmux so it survives a disconnect):
+#      mkdir -p /opt/bots/data/tilawah/page-audio && cd /opt/bots/telegram/tilawah
+#      docker run --rm -v "$PWD":/app -w /app \
+#        -v /opt/bots/data/tilawah/page-audio:/out node:22-slim bash -lc '
+#          apt-get update -qq && apt-get install -y -qq ffmpeg &&
+#          npm i -g pnpm@10.33.0 && pnpm install --frozen-lockfile &&
+#          pnpm data:page-audio --reciter abdulbasit --out /out &&
+#          pnpm verify:audio --dir /out --reciter abdulbasit --deep --full'
+
+# 4) Point the bot at the files, then recreate it.
+#    In /opt/bots/docker-compose.yml, mount them read-only on the tilawah
+#    service (just add the line if it already has a volumes: block):
 #      volumes:
 #        - ./data/tilawah/page-audio:/app/assets/page-audio:ro
-#    In the bot's .env on the server:
+#    In the file compose loads for tilawah (its env_file, e.g.
+#    /opt/bots/telegram/tilawah/.env), set:
 #      PAGE_AUDIO_BASE_URL="/app/assets/page-audio/{folder}/Page{page3}.mp3"
-#    Then: docker compose up -d tilawah
+#    Recreate (NOT restart, which keeps the old env and volumes):
+cd /opt/bots && docker compose up -d tilawah
+#    Confirm it took, from INSIDE the container (this is the check that catches a
+#    volume or env that did not apply):
+docker compose exec tilawah printenv PAGE_AUDIO_BASE_URL                                     # prints the template
+docker compose exec tilawah ls /app/assets/page-audio/Abdul_Basit_Murattal_192kbps | head   # files are visible
+
+# 5) Drop the page-audio file_id cache. The bot caches each (page, reciter)
+#    Telegram file_id and re-sends THAT, so without clearing it the old everyayah
+#    clips (no cover, and the defective pages) keep going out. Clearing it makes
+#    the next delivery re-upload from the new files.
+docker compose exec shared-db mariadb -utilawah -p tilawah -e "DELETE FROM page_audio;"
 ```
+
+Because the source has a built-in fallback (see `pageAudioSourceFor` in
+`src/lib/deliver.ts`), you can roll out one reciter at a time: any page whose
+local file is not built yet is streamed from everyayah instead of failing, so
+unbuilt reciters keep working until you generate their sets.
 
 A quick smoke test before the full run: build just the page that was broken and
 confirm it now includes the last ayah.
