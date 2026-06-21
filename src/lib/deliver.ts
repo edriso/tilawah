@@ -426,7 +426,7 @@ export async function buildLessonReview(): Promise<string> {
   for (let i = 0; i < TAJWEED_LESSONS.length; i++) {
     const lesson = TAJWEED_LESSONS[i]!;
     const example = await getAyahText(lesson.example.surah, lesson.example.ayah);
-    lines.push('—'.repeat(40));
+    lines.push('─'.repeat(40));
     lines.push(
       `الدرس ${toArabicDigits(i + 1)} من ${toArabicDigits(TAJWEED_LESSON_COUNT)}: ${lesson.titleAr}`,
     );
@@ -435,7 +435,7 @@ export async function buildLessonReview(): Promise<string> {
     lines.push('');
     if (example) {
       lines.push(
-        `المثال — سورة ${example.surahNameAr}، آية ${toArabicDigits(example.numberInSurah)}:`,
+        `المثال من سورة ${example.surahNameAr}، آية ${toArabicDigits(example.numberInSurah)}:`,
       );
       lines.push(example.text);
     } else {

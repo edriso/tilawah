@@ -183,7 +183,7 @@ export const COPY = {
       'مرحبًا بك في بوت "تلاوة". يرسل لك وردًا من القرآن كل يوم بإذن الله، صفحة واحدة افتراضيًا، ويمكنك زيادتها حتى ٢٠ صفحة (جزء كامل).',
       '',
       '👈 لقراءة وردك الآن اضغط /today',
-      'وبعد قراءته اضغط زر «✅ قرأتُ وردي — التالي» لينتقل بك إلى ما بعده. وما لم تؤكّد، يبقى وردك في انتظارك ولا تفوتك صفحة.',
+      'وبعد قراءته اضغط زر «✅ قرأتُ وردي» لينتقل بك إلى ما بعده. وما لم تؤكّد، يبقى وردك في انتظارك ولا تفوتك صفحة.',
       '',
       settings,
       '',
@@ -225,7 +225,7 @@ export const COPY = {
 
   // ── Reading confirmation (the "read ✓" button) ───────────────────
   // The button under each user wird, and the small prompt that carries it.
-  readButton: '✅ قرأتُ وردي — التالي',
+  readButton: '✅ قرأتُ وردي، التالي',
   confirmPrompt: 'إذا أتممتَ قراءة وردك فاضغط الزر لأنتقل بك إلى وردك التالي.',
   // Short acknowledgement sent just before the next wird is revealed, when a
   // confirmed read (the button or /next) advances the reader. The revealed wird
@@ -259,7 +259,7 @@ export const COPY = {
       'وهذه آيةٌ في فضل القرآن:',
       '',
       ayah.text,
-      `[سورة ${ayah.surahNameAr} — آية ${toArabicDigits(ayah.numberInSurah)}]`,
+      `[سورة ${ayah.surahNameAr}، آية ${toArabicDigits(ayah.numberInSurah)}]`,
     ].join('\n'),
 
   // Shown for a stray text message that is not a command and not an expected
@@ -363,7 +363,7 @@ export const COPY = {
   // A read-only library of every lesson; tapping one shows it, without touching
   // the reader's daily lesson position.
   tajweedBrowseBtn: '📚 كل دروس التجويد',
-  tajweedListHeader: '📚 دروس التجويد — اختر الدرس الذي تحب أن تتعلّمه:',
+  tajweedListHeader: '📚 دروس التجويد، اختر الدرس الذي تحب أن تتعلّمه:',
   tajweedBackBtn: '« كل الدروس',
   tajweedLessonUnavailable: 'هذا الدرس غير متاح حاليًا.',
   // Shown while the lesson deck is still under review (not yet live).
@@ -378,7 +378,7 @@ export const COPY = {
   // ── Page recitation (reciter) ─────────────────────────────────────
   // Caption under each page's audio clip.
   pageAudioCaption: (page: number, reciter: string) =>
-    `تلاوة الصفحة ${toArabicDigits(page)} — ${reciterNameAr(reciter)}`,
+    `تلاوة الصفحة ${toArabicDigits(page)} (${reciterNameAr(reciter)})`,
   // Music-player title for a page clip (the reciter is the performer). Telegram
   // auto-advances through the chat's audio when one ends; naming the track
   // keeps the player and lock screen showing which page is playing.
