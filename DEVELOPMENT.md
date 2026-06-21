@@ -178,7 +178,9 @@ confirm it now includes the last ayah.
 
 ```bash
 pnpm data:page-audio --reciter abdulbasit --from 11 --to 11 --cover assets/audio-cover.jpg --out /tmp/pa
-# /tmp/pa/Abdul_Basit_Murattal_192kbps/Page011.mp3 should run to 2:76, not stop at 2:75.
+# Prove it is correct (the built page's size should match the per-ayah sum, so
+# it includes 2:76 instead of stopping at 2:75 like everyayah's file did):
+pnpm verify:audio --reciter abdulbasit --dir /tmp/pa --deep --full
 ```
 
 The cover image: pick ONE square image (about 1000x1000, JPG or PNG, properly

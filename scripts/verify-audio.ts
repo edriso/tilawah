@@ -12,9 +12,11 @@
 //
 // Run with:  pnpm verify:audio [flags]
 //   --dir <path>      verify a generated set on disk (built by data:page-audio)
+//   --deep            with --dir, also check each sampled page's byte size against
+//                     the per-ayah sum (catches a concat that dropped an ayah)
 //   --reciter <keys>  comma list (default: all)
 //   --scan-defects    run the everyayah PageMp3 size-vs-per-ayah diagnostic
-//   --full            with --scan-defects, scan all 604 pages (default: a sample)
+//   --full            scan/deep-check all 604 pages (default: a sample)
 //
 // Read-only: no database, no sending. Network HEAD/GET requests only.
 
@@ -46,6 +48,7 @@ const reciters = (
   reciterArg ? (reciterArg.split(',').map((s) => s.trim()) as ReciterKey[]) : [...RECITER_KEYS]
 ).filter((r) => RECITER_KEYS.includes(r));
 const scanDefects = argv.includes('--scan-defects');
+const deep = argv.includes('--deep');
 const full = argv.includes('--full');
 
 const quran = JSON.parse(
@@ -85,9 +88,15 @@ async function checkSourceReachable(): Promise<void> {
   }
 }
 
-/** 2. A generated set on disk is complete (all 604 pages, none empty). */
-function checkLocalSet(root: string): void {
+/** 2. A generated set on disk is complete (all 604 pages, none empty), and with
+ *  --deep, each sampled page's byte size matches the sum of its ayat's per-ayah
+ *  clips (so a concat that dropped or duplicated an ayah is caught, not just a
+ *  missing file). --deep needs the network; --full deep-checks all 604 pages. */
+async function checkLocalSet(root: string): Promise<void> {
   console.log(`\nVerifying generated set in ${root} ...`);
+  const deepPages = full
+    ? Array.from({ length: 604 }, (_, i) => i + 1)
+    : [1, 11, 100, 200, 300, 400, 500, 604];
   for (const reciter of reciters) {
     const folder = RECITERS[reciter].folder;
     let present = 0;
@@ -105,6 +114,36 @@ function checkLocalSet(root: string): void {
           (missing.length > 15 ? ' ...' : ''),
       );
     }
+    if (!deep) continue;
+    let checked = 0;
+    for (const page of deepPages) {
+      const f = join(root, folder, pageFileName(page));
+      if (!existsSync(f)) continue;
+      const ayat = pageAyat.get(page)!;
+      let sum = 0;
+      let ok = true;
+      for (const { surah, ayah } of ayat) {
+        const l = await headLen(perAyahAudioUrl(folder, surah, ayah));
+        if (l < 0) {
+          ok = false;
+          break;
+        }
+        sum += l;
+      }
+      if (!ok) continue;
+      // The built file is the concatenated ayat plus a little container/tag/cover
+      // overhead, so it should be within ~10% of the per-ayah sum. A page that
+      // dropped an ayah (like everyayah's) would be far smaller.
+      const ratio = statSync(f).size / sum;
+      checked++;
+      if (ratio < 0.9 || ratio > 1.15) {
+        problems.push(
+          `local: ${reciter} Page${pad3(page)} size off (ratio ${ratio.toFixed(2)}; ` +
+            `expected ~${ayat.length} ayat ${ayat[0].surah}:${ayat[0].ayah}..${ayat.at(-1)!.surah}:${ayat.at(-1)!.ayah})`,
+        );
+      }
+    }
+    if (deep) console.log(`    deep-checked ${checked} page(s) against the per-ayah sum`);
   }
 }
 
@@ -146,7 +185,7 @@ async function scanEveryayahDefects(): Promise<void> {
 
 async function main(): Promise<void> {
   await checkSourceReachable();
-  if (dir) checkLocalSet(dir);
+  if (dir) await checkLocalSet(dir);
   if (scanDefects) await scanEveryayahDefects();
 
   if (problems.length) {
