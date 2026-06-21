@@ -174,6 +174,15 @@ point): run `pnpm data:mushaf --check --out /out` and eyeball a few pages.
 site, a Caddy `file_server`), upload `assets/mushaf/` there and set
 `MUSHAF_IMAGE_BASE_URL="https://your-host/mushaf/{page3}.jpg"`. No bot change.
 
+**Page recitation audio (the same shape).** The per-page recitation is a second
+self-hosted asset built exactly like the images: make the verified set, keep it
+in the shared data tree, and bind-mount it read-only. Its full runbook (build,
+verify, the `volumes` line, the `PAGE_AUDIO_BASE_URL` env, and the `page_audio`
+cache clear) is in `DEVELOPMENT.md`, section "Building the page recitation
+audio"; the volume is also shown in `compose.example.yml`. Until you build a
+given reciter's set, the bot streams that reciter from everyayah, so you can roll
+it out one reciter at a time.
+
 ## Verify the Quran assets before you go live (required)
 
 This bot sends the holy Quran: page images and recitation audio. A wrong or
@@ -194,7 +203,13 @@ also lets you re-verify them offline at any time:
 2. **Tajweed lesson clips** (`pnpm data:tajweed`). `pnpm data:tajweed --check`
    re-verifies the on-disk clips; **listen to a couple** to confirm the right
    ayah and clean audio.
-3. **Dry run to yourself first.** Point `CHANNEL_CHAT_ID` at a PRIVATE test
+3. **Page recitation audio** (`pnpm data:page-audio`, if you self-host it). Build
+   the per-page clips from the trusted per-ayah recitations, then
+   `pnpm verify:audio --dir assets/page-audio` (add `--deep --full` to prove each
+   page covers the right ayat, not everyayah's defective split); **listen to a
+   couple**. After mounting a new set on the server, clear the `page_audio`
+   file_id cache so the new clips are sent, not the old cached ones.
+4. **Dry run to yourself first.** Point `CHANNEL_CHAT_ID` at a PRIVATE test
    channel (or just use a DM with `USER_WIRD_ENABLED=true`) and watch a full
    wird go out, with the image and the tajweed clip, before you ever point the
    bot at the public channel.

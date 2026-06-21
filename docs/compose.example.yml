@@ -64,3 +64,12 @@ services:
     # images".) The source is relative to /opt/bots, where the compose file lives.
     volumes:
       - ./data/tilawah/mushaf:/app/assets/mushaf:ro
+      # Self-hosted page recitation audio (optional; only when
+      # PAGE_AUDIO_BASE_URL is a LOCAL path like
+      # "/app/assets/page-audio/{folder}/Page{page3}.mp3"). Same idea as the
+      # Mushaf mount: build the verified set once into the shared data tree
+      # OUTSIDE this checkout (see DEVELOPMENT.md, "Building the page recitation
+      # audio"), mount it READ-ONLY here, recreate the bot (up -d, not restart),
+      # then clear the page_audio file_id cache so the new clips are sent. Leave
+      # this line out to stream from everyayah instead.
+      - ./data/tilawah/page-audio:/app/assets/page-audio:ro
