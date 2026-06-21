@@ -581,7 +581,7 @@ bot.callbackQuery(new RegExp(`^${WIRD_PICK_PREFIX}(\\d+)$`), async (ctx) => {
     return;
   }
   await setWirdSize(sub.id, size);
-  await ctx.editMessageReplyMarkup(); // remove the keyboard
+  await ctx.editMessageReplyMarkup().catch(() => {}); // remove the keyboard (ignore a stale double-tap 400)
   await ctx.reply(COPY.wirdUpdated(size));
   await ctx.answerCallbackQuery();
 });
@@ -594,7 +594,9 @@ bot.callbackQuery(new RegExp(`^${WIRD_PICK_PREFIX}(\\d+)$`), async (ctx) => {
 //     page no longer matches the current position is a STALE button from a wird
 //     already passed — a gentle no-op, so old buttons left in the chat can never
 //     advance the reader a second time.
-//   - With no unread delivery there is nothing to confirm — also a no-op.
+//   - It works even on a /next reveal's button, which rides a wird with NO
+//     recorded delivery: the idempotency guard is the page check + confirmRead's
+//     compare-and-set on currentPage, NOT the presence of an unread delivery.
 // `buttonStartPage` is undefined only for legacy bare "tilawah:read" buttons sent
 // before the page was added; those fall back to acting on the current wird.
 /**
@@ -607,16 +609,16 @@ export async function handleReadConfirm(
   sub: Subscriber,
   buttonStartPage?: number,
 ): Promise<void> {
-  const latest = await getLatestUnconfirmedDelivery(sub.id);
-  if (!latest || (buttonStartPage !== undefined && sub.currentPage !== buttonStartPage)) {
-    // Nothing outstanding, or a stale button from a wird already passed. No-op:
-    // drop the button so it cannot be tapped again, and reassure.
+  // A stale button from a wird already passed (its page is no longer current).
+  // Gentle no-op: drop the button so it cannot be tapped again, and reassure.
+  if (buttonStartPage !== undefined && sub.currentPage !== buttonStartPage) {
     await ctx.editMessageReplyMarkup().catch(() => {});
     await ctx.answerCallbackQuery({ text: COPY.readAlready });
     return;
   }
   // Confirm + reveal the next wird, exactly as /next does, so the button and the
-  // command stay in lockstep. Drop the tapped button first (it is single-use).
+  // command stay in lockstep (including a reveal's button, which has no recorded
+  // delivery). Drop the tapped button first (it is single-use).
   await ctx.editMessageReplyMarkup().catch(() => {});
   await ctx.answerCallbackQuery();
   await advanceAndShowNext(ctx, sub, new Date());
@@ -682,7 +684,7 @@ bot.callbackQuery(new RegExp(`^${FORMAT_PICK_PREFIX}(text|image)$`), async (ctx)
     return;
   }
   await setWirdFormat(sub.id, chosen);
-  await ctx.editMessageReplyMarkup(); // remove the keyboard
+  await ctx.editMessageReplyMarkup().catch(() => {}); // remove the keyboard (ignore a stale double-tap 400)
   await ctx.reply(COPY.formatUpdated(chosen));
   await ctx.answerCallbackQuery();
 });
@@ -872,7 +874,7 @@ bot.callbackQuery(DAYS_DONE, async (ctx) => {
     await ctx.answerCallbackQuery();
     return;
   }
-  await ctx.editMessageReplyMarkup(); // remove the keyboard
+  await ctx.editMessageReplyMarkup().catch(() => {}); // remove the keyboard (ignore a stale double-tap 400)
   await ctx.reply(COPY.daysUpdated(daysSummaryAr(sub.activeDays)));
   await ctx.answerCallbackQuery();
 });
@@ -894,7 +896,7 @@ bot.callbackQuery(new RegExp(`^${TIME_PICK_PREFIX}(\\d{2})(\\d{2})$`), async (ct
     return;
   }
   await setDeliveryTime(sub.id, hour, minute);
-  await ctx.editMessageReplyMarkup(); // remove the keyboard
+  await ctx.editMessageReplyMarkup().catch(() => {}); // remove the keyboard (ignore a stale double-tap 400)
   await ctx.reply(COPY.timeUpdated(formatTimeAr(hour, minute), sub.timezone));
   await ctx.answerCallbackQuery();
 });
@@ -913,7 +915,7 @@ bot.callbackQuery(new RegExp(`^${TZ_PICK_PREFIX}(\\d+)$`), async (ctx) => {
     return;
   }
   await setTimezone(sub.id, tz);
-  await ctx.editMessageReplyMarkup(); // remove the keyboard
+  await ctx.editMessageReplyMarkup().catch(() => {}); // remove the keyboard (ignore a stale double-tap 400)
   await ctx.reply(COPY.tzUpdated(tz));
   await ctx.answerCallbackQuery();
 });

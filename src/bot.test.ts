@@ -341,14 +341,17 @@ describe('handleReadConfirm', () => {
     );
   });
 
-  it('does nothing to advance when there is no unread delivery', async () => {
+  it('advances even with NO unread delivery (a /next reveal button is not dead)', async () => {
+    // After a /next reveal the wird has no unread delivery, but its button must
+    // still advance — confirmRead's compare-and-set on currentPage is the guard,
+    // not a pending delivery row. (Regression: the button used to silently no-op.)
     h.getLatestUnconfirmedDelivery.mockResolvedValue(null);
     const ctx = fakeCtx();
-    await handleReadConfirm(ctx as never, SUB, 1);
+    const sub = { ...(SUB as object), currentPage: 10 } as never; // wirdSize 1
+    await handleReadConfirm(ctx as never, sub, 10); // button pinned to the current wird
 
-    expect(h.confirmRead).not.toHaveBeenCalled();
-    expect(h.sendWirdNow).not.toHaveBeenCalled();
-    expect(ctx.editMessageReplyMarkup).toHaveBeenCalled(); // stale button removed
+    expect(h.confirmRead).toHaveBeenCalledWith(1, 10, advanceStartPage(10, 1), expect.any(Date));
+    expect(h.sendWirdNow).toHaveBeenCalledTimes(1); // the next wird is revealed
   });
 
   it('a legacy bare button (no page) acts on the current wird', async () => {
