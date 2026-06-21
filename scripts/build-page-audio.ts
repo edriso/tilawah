@@ -70,9 +70,12 @@ function parseArgs(argv: string[]): Args {
       }
     }
   }
+  // --cover wins; otherwise use the committed placeholder if it is there.
+  const coverArg = get('--cover');
+  const defaultCover = join(ROOT, 'assets/audio-cover.jpg');
   return {
     reciters,
-    cover: get('--cover') ? resolve(get('--cover')!) : null,
+    cover: coverArg ? resolve(coverArg) : existsSync(defaultCover) ? defaultCover : null,
     out: resolve(get('--out') ?? join(ROOT, 'assets/page-audio')),
     from: Number(get('--from') ?? 1),
     to: Number(get('--to') ?? 604),

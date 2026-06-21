@@ -37,8 +37,8 @@ assets/mushaf/*.png
 # Self-hosted per-page recitation set (build with `pnpm data:page-audio`). Far
 # too large to commit (~2 GB per reciter); lives in /opt/bots/data on the server.
 assets/page-audio/
-# A cover image you supply for the page clips (embedded by the generator).
-assets/audio-cover.*
+# assets/audio-cover.jpg (the clip cover the generator embeds) IS committed as a
+# placeholder, so data:page-audio works out of the box. Replace it with your own.
 
 # Logs
 *.log

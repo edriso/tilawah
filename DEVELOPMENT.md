@@ -183,12 +183,13 @@ pnpm data:page-audio --reciter abdulbasit --from 11 --to 11 --cover assets/audio
 pnpm verify:audio --reciter abdulbasit --dir /tmp/pa --deep --full
 ```
 
-The cover image: pick ONE square image (about 1000x1000, JPG or PNG, properly
-licensed, no faces) that suits the Quran, for example a tasteful Mushaf or
-Islamic-pattern motif, or the bot's own logo. Put it at `assets/audio-cover.jpg`
-and pass it with `--cover`. The generator embeds it in every clip, so the
-phone's player shows a consistent, correct cover instead of a random one. If you
-leave `--cover` off, the audio is still correct, just without art.
+The cover image: a placeholder (a simple gold star motif) is committed at
+`assets/audio-cover.jpg`, so the generator embeds it by default with no flag. The
+generator embeds it in every clip, so the phone's player shows a consistent,
+correct cover instead of a random one. To rebrand, just replace that file with
+your own square image (about 600x600 to 1000x1000, JPG or PNG, properly licensed,
+no faces) or pass a different one with `--cover`. If the file is missing and you
+pass no `--cover`, the audio is still correct, just without art.
 
 If everyayah ever changes a reciter's per-ayah files, rebuild and re-verify.
 `pnpm verify:audio` (no flags) checks the per-ayah source is still reachable, and
