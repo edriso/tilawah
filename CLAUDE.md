@@ -249,6 +249,16 @@ deliver.ts): a failed clip is skipped and NEVER blocks the wird; it runs after
 the delivery is recorded, for exactly the pages that went out. A juz wird sends
 one audio per page.
 
+Cover art: the source clips carry no embedded art, so a phone's player would show
+a random cached image. `sendPageAudio` attaches a small constant cover
+(`assets/audio-thumb.jpg`, committed and baked into the image) as Telegram's
+thumbnail, but ONLY on a fresh (URL/upload) send — a re-send by cached file_id
+passes none, since Telegram already holds that file's media + thumbnail (so
+already-cached pages keep their look until the `PageAudio` row is cleared). A
+missing thumb file is a safe no-op. (When the self-hosted set is built, the cover
+is also embedded in the file; the thumbnail is then belt-and-suspenders.) Replace
+`assets/audio-thumb.jpg` to rebrand.
+
 **The source matters (a verified set, not everyayah's PageMp3s).** The DEFAULT
 template is everyayah's pre-split `PageMp3s` (`PAGE_AUDIO_TEMPLATE`), fine for a
 dev box but NOT ayah-accurate: those files were auto-split (Mp3Splt), several are

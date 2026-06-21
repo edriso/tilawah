@@ -46,6 +46,16 @@ export interface AudioSendOptions {
   title?: string;
   /** Performer hint shown with the title (the reciter); same ID3 caveat. */
   performer?: string;
+  /**
+   * A small cover image for the clip (Telegram's thumbnail: shown in chat and in
+   * its player, including the lock-screen controls). The source clips carry no
+   * embedded art, so without this the OS player falls back to a random cached
+   * cover; a constant thumbnail keeps every clip on-brand. Only honored on a
+   * fresh send (a URL/file upload), not a re-send by cached file_id (Telegram
+   * already holds that file's media), so the caller passes it only on a cache
+   * miss. Must be an uploaded file, not a URL.
+   */
+  thumbnail?: InputFile;
 }
 
 function audioFileId(message: Message): string | undefined {
@@ -75,6 +85,7 @@ export async function sendAudio(
     ...(opts.silent ? { disable_notification: true } : {}),
     ...(opts.title ? { title: opts.title } : {}),
     ...(opts.performer ? { performer: opts.performer } : {}),
+    ...(opts.thumbnail ? { thumbnail: opts.thumbnail } : {}),
   };
   const send = () => bot.api.sendAudio(Number(chatId), audio, other);
   try {

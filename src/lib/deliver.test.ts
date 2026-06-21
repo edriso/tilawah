@@ -339,6 +339,19 @@ describe('sendWirdAudioNow (on-demand recitation for the current wird)', () => {
     });
     expect(h.sendAudio).not.toHaveBeenCalled();
   });
+
+  it('attaches a cover thumbnail on a fresh send, but not when re-sent by file_id', async () => {
+    h.getWird.mockResolvedValue(CONTENT); // one page
+    const args = { chatId: 123n, currentPage: 5, wirdSize: 1, reciter: 'abdulbasit' };
+    // fresh (cache miss, set in beforeEach): the constant cover is attached.
+    await sendWirdAudioNow(fakeBot, args);
+    expect(h.sendAudio.mock.calls[0][3].thumbnail).toBeDefined();
+    // re-sent by cached file_id: no thumbnail (Telegram already holds it).
+    h.sendAudio.mockClear();
+    h.getCachedPageAudioId.mockResolvedValue('CACHED_PAGE_ID');
+    await sendWirdAudioNow(fakeBot, args);
+    expect(h.sendAudio.mock.calls[0][3].thumbnail).toBeUndefined();
+  });
 });
 
 describe('sampleAudioPagesFor (the reciter "try it on today\'s page" preview)', () => {

@@ -1,4 +1,6 @@
 import { InlineKeyboard, InputFile, type Bot, type Context } from 'grammy';
+import { existsSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import {
   dueLocalDate,
   advanceStartPage,
@@ -86,6 +88,16 @@ export interface DeliveryStats {
   skipped: number;
   failed: number;
 }
+
+/** A constant cover for the page-recitation clips. The source clips carry no
+ *  embedded art, so a phone's player would otherwise show a random cached image.
+ *  We attach this small image as Telegram's thumbnail on the first (fresh) send,
+ *  so the clip is on-brand without re-hosting audio. (When the self-hosted set is
+ *  built, the cover is also embedded in the file; the thumbnail is then a
+ *  belt-and-suspenders.) Resolved from the committed asset; null if missing, so a
+ *  misplaced file never breaks audio. Replace assets/audio-thumb.jpg to rebrand. */
+const AUDIO_THUMB_PATH = fileURLToPath(new URL('../../assets/audio-thumb.jpg', import.meta.url));
+const AUDIO_THUMB: string | null = existsSync(AUDIO_THUMB_PATH) ? AUDIO_THUMB_PATH : null;
 
 /** Which subscriber kinds this deployment serves, from config. */
 export function allowedKinds(): string[] {
@@ -485,6 +497,9 @@ export async function sendPageAudio(
         title: COPY.pageAudioTitle(page.pageNumber),
         performer: reciterNameAr(reciter),
         silent: true, // a quiet companion to the wird that just notified
+        // Attach the cover only on a fresh send (cache miss): a cached file_id
+        // already carries the media + thumbnail Telegram stored the first time.
+        ...(!cached && AUDIO_THUMB ? { thumbnail: new InputFile(AUDIO_THUMB) } : {}),
       });
       if (result === 'blocked') return; // the chat is blocked; stop trying
       if (result === 'ok' && fileId && fileId !== cached) {
