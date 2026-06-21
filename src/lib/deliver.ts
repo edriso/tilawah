@@ -17,6 +17,7 @@ import {
   nextLessonIndex,
   toArabicDigits,
   pageAudioSource,
+  PAGE_AUDIO_TEMPLATE,
   normalizeReciter,
   WIRD_FORMAT_IMAGE,
   type WirdFormat,
@@ -151,6 +152,21 @@ function resolvePhoto(
  *  tajweed-audio paths so the http-vs-local rule lives in one place. */
 function toMediaInput(source: string): string | InputFile {
   return isHttpSource(source) ? source : new InputFile(source);
+}
+
+/** The page-recitation source for (reciter, page), with a safety fallback: when
+ *  the configured source is a LOCAL self-hosted file that has not been built yet
+ *  (this reciter/page is missing from the set), stream that page from everyayah
+ *  instead. This lets the verified self-hosted set roll out one reciter at a time:
+ *  built reciters get the correct, cover-embedded clip; the rest keep working off
+ *  everyayah until their set is generated. (When the source is an http template,
+ *  there is nothing local to miss, so it is used as-is.) */
+function pageAudioSourceFor(reciter: ReciterKey, page: number): string {
+  const src = pageAudioSource(reciter, page, config.pageAudioBaseUrl);
+  if (!isHttpSource(src) && !existsSync(src)) {
+    return pageAudioSource(reciter, page, PAGE_AUDIO_TEMPLATE);
+  }
+  return src;
 }
 
 /** A page photo's caption: the page banner, with the wird lead prepended on the
@@ -490,7 +506,7 @@ export async function sendPageAudio(
       if (cached) {
         audio = cached;
       } else {
-        audio = toMediaInput(pageAudioSource(reciter, page.pageNumber, config.pageAudioBaseUrl));
+        audio = toMediaInput(pageAudioSourceFor(reciter, page.pageNumber));
       }
       const { result, fileId } = await sendAudio(bot, chatId, audio, {
         caption: COPY.pageAudioCaption(page.pageNumber, reciter),

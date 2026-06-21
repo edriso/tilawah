@@ -102,6 +102,7 @@ import { advanceStartPage } from '../core';
 const mutableConfig = config as {
   mushafImageBaseUrl: string | null;
   tajweedAudioBaseUrl: string | null;
+  pageAudioBaseUrl?: string;
 };
 
 const NOW = new Date('2026-06-01T12:00:00Z');
@@ -170,6 +171,7 @@ beforeEach(() => {
   // Restore the sources each run, in case a test changed them.
   mutableConfig.mushafImageBaseUrl = 'https://x/{page3}.png';
   mutableConfig.tajweedAudioBaseUrl = null;
+  mutableConfig.pageAudioBaseUrl = undefined; // default -> everyayah URL
   h.getAyahText.mockResolvedValue({ surahNameAr: 'البقرة', numberInSurah: 27, text: 'نص الآية' });
   h.getCachedTajweedAudioId.mockResolvedValue(null);
   h.cacheTajweedAudioId.mockResolvedValue({});
@@ -338,6 +340,22 @@ describe('sendWirdAudioNow (on-demand recitation for the current wird)', () => {
       reciter: 'abdulbasit',
     });
     expect(h.sendAudio).not.toHaveBeenCalled();
+  });
+
+  it('falls back to everyayah when a self-hosted page file is missing (partial rollout)', async () => {
+    // PAGE_AUDIO_BASE_URL points at a local set, but this reciter/page is not
+    // built yet -> stream that page from everyayah instead of failing.
+    mutableConfig.pageAudioBaseUrl = '/srv/page-audio/{folder}/Page{page3}.mp3';
+    h.getWird.mockResolvedValue(CONTENT); // one page (pageNumber 1)
+    await sendWirdAudioNow(fakeBot, {
+      chatId: 123n,
+      currentPage: 1,
+      wirdSize: 1,
+      reciter: 'abdulbasit',
+    });
+    const src = h.sendAudio.mock.calls[0][2];
+    expect(src).toContain('everyayah.com');
+    expect(src).toContain('PageMp3s');
   });
 
   it('attaches a cover thumbnail on a fresh send, but not when re-sent by file_id', async () => {
