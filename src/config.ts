@@ -1,4 +1,10 @@
-import { loadEnv, hasPagePlaceholder, hasAyahPlaceholder } from './core';
+import {
+  loadEnv,
+  hasPagePlaceholder,
+  hasAyahPlaceholder,
+  hasFolderPlaceholder,
+  PAGE_AUDIO_TEMPLATE,
+} from './core';
 
 // Load the single root .env before we read any variable.
 loadEnv();
@@ -76,6 +82,24 @@ function parseAudioBaseUrl(raw: string | undefined): string | null {
   return url;
 }
 
+/** The per-page recitation source template. Empty = the everyayah default
+ *  (PAGE_AUDIO_TEMPLATE), which works on a dev box but is NOT ayah-verified
+ *  (some pages are defective). Production points this at the self-hosted set, an
+ *  http(s) URL or a local path; either way it must carry a {folder} and a
+ *  {page}/{page3} placeholder, so we fail fast on a template that could never
+ *  form a real source. See scripts/build-page-audio.ts and .env.example. */
+function parsePageAudioBaseUrl(raw: string | undefined): string {
+  const url = raw?.trim();
+  if (!url) return PAGE_AUDIO_TEMPLATE;
+  if (!hasFolderPlaceholder(url) || !hasPagePlaceholder(url)) {
+    throw new Error(
+      `PAGE_AUDIO_BASE_URL must contain a {folder} and a {page}/{page3} placeholder (got "${url}"). ` +
+        `Example: /app/assets/page-audio/{folder}/Page{page3}.mp3`,
+    );
+  }
+  return url;
+}
+
 export const config = Object.freeze({
   // REQUIRED. Bot token from @BotFather.
   botToken: requireEnv('BOT_TOKEN').trim(),
@@ -94,6 +118,9 @@ export const config = Object.freeze({
   // Template for per-ayah tajweed example audio, or null when not configured
   // (lessons then go out without an audio clip). See parseAudioBaseUrl.
   tajweedAudioBaseUrl: parseAudioBaseUrl(process.env.TAJWEED_AUDIO_BASE_URL),
+  // Template for the per-page recitation source. Defaults to everyayah; set to
+  // the self-hosted verified set in production. See parsePageAudioBaseUrl.
+  pageAudioBaseUrl: parsePageAudioBaseUrl(process.env.PAGE_AUDIO_BASE_URL),
   isDev: process.env.NODE_ENV !== 'production',
 });
 

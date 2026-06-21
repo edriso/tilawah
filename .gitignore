@@ -34,6 +34,12 @@ assets/mushaf/*.png
 # The tajweed example clips (assets/tajweed/*.mp3, ~8 MB) ARE committed on
 # purpose, so they bake into the image and ship with the code. Not ignored.
 
+# Self-hosted per-page recitation set (build with `pnpm data:page-audio`). Far
+# too large to commit (~2 GB per reciter); lives in /opt/bots/data on the server.
+assets/page-audio/
+# A cover image you supply for the page clips (embedded by the generator).
+assets/audio-cover.*
+
 # Logs
 *.log
 

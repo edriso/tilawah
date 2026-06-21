@@ -143,7 +143,56 @@ no source, so the holy text always gets through.
 - Change the schema: edit `prisma/schema.prisma`, then `pnpm db:migrate` to make
   a migration, and commit the new folder under `prisma/migrations/`.
 
-## 8. Golden rules you must not break
+## 8. Building the page recitation audio (self-hosted, verified)
+
+The audio sent after a wird must match the page the reader sees. everyayah's
+ready-made page files do NOT guarantee that (some are missing an ayah and they
+have junk titles and no cover art), so for production we build our own set: one
+clip per page per reciter, made by joining the trusted per-ayah recitations for
+exactly the ayat our layout puts on that page, with a clean title and a cover.
+
+You need `ffmpeg` installed and a square cover image (see below). This is best
+run on the server (good bandwidth), but it works on a laptop too.
+
+```bash
+# 1) Build (all reciters, ~2 GB each; use --reciter to do a subset, --from/--to
+#    to test a slice first).
+pnpm data:page-audio --cover assets/audio-cover.jpg
+
+# 2) Check it is complete (604 pages per reciter, none empty).
+pnpm verify:audio --dir assets/page-audio
+
+# 3) Put the files where the server keeps big runtime files (outside the repo,
+#    so a git pull never deletes them), then point the bot at them:
+rsync -av assets/page-audio/ root@<SERVER_IP>:/opt/bots/data/tilawah/page-audio/
+#    In /opt/bots/docker-compose.yml, mount it read-only on the tilawah service:
+#      volumes:
+#        - ./data/tilawah/page-audio:/app/assets/page-audio:ro
+#    In the bot's .env on the server:
+#      PAGE_AUDIO_BASE_URL="/app/assets/page-audio/{folder}/Page{page3}.mp3"
+#    Then: docker compose up -d tilawah
+```
+
+A quick smoke test before the full run: build just the page that was broken and
+confirm it now includes the last ayah.
+
+```bash
+pnpm data:page-audio --reciter abdulbasit --from 11 --to 11 --cover assets/audio-cover.jpg --out /tmp/pa
+# /tmp/pa/Abdul_Basit_Murattal_192kbps/Page011.mp3 should run to 2:76, not stop at 2:75.
+```
+
+The cover image: pick ONE square image (about 1000x1000, JPG or PNG, properly
+licensed, no faces) that suits the Quran, for example a tasteful Mushaf or
+Islamic-pattern motif, or the bot's own logo. Put it at `assets/audio-cover.jpg`
+and pass it with `--cover`. The generator embeds it in every clip, so the
+phone's player shows a consistent, correct cover instead of a random one. If you
+leave `--cover` off, the audio is still correct, just without art.
+
+If everyayah ever changes a reciter's per-ayah files, rebuild and re-verify.
+`pnpm verify:audio` (no flags) checks the per-ayah source is still reachable, and
+`pnpm verify:audio --scan-defects` reproduces how we found the broken page.
+
+## 9. Golden rules you must not break
 
 1. Never type Quran text by hand. It only comes from the fetch script, which
    verifies it against a trusted source.

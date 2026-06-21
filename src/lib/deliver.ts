@@ -130,8 +130,15 @@ function resolvePhoto(
   const cachedId = cached.get(pageNumber);
   if (cachedId) return cachedId;
   if (!baseUrl) return null;
-  const src = mushafImageSource(baseUrl, pageNumber);
-  return isHttpSource(src) ? src : new InputFile(src);
+  return toMediaInput(mushafImageSource(baseUrl, pageNumber));
+}
+
+/** Turn a media source string into what Telegram's send wants: an http(s) URL is
+ *  passed through (Telegram fetches it); a local filesystem path is wrapped in an
+ *  InputFile (the bot uploads it). Shared by the page-image, page-audio, and
+ *  tajweed-audio paths so the http-vs-local rule lives in one place. */
+function toMediaInput(source: string): string | InputFile {
+  return isHttpSource(source) ? source : new InputFile(source);
 }
 
 /** A page photo's caption: the page banner, with the wird lead prepended on the
@@ -378,8 +385,7 @@ export async function sendLesson(
       if (cachedId) {
         audio = cachedId;
       } else {
-        const src = tajweedAudioSource(baseUrl, surah, ayah);
-        audio = isHttpSource(src) ? src : new InputFile(src);
+        audio = toMediaInput(tajweedAudioSource(baseUrl, surah, ayah));
       }
       const { result, fileId } = await sendAudio(bot, chatId, audio, {
         caption: COPY.tajweedAudioCaption(view.titleAr),
@@ -472,8 +478,7 @@ export async function sendPageAudio(
       if (cached) {
         audio = cached;
       } else {
-        const src = pageAudioSource(reciter, page.pageNumber);
-        audio = isHttpSource(src) ? src : new InputFile(src);
+        audio = toMediaInput(pageAudioSource(reciter, page.pageNumber, config.pageAudioBaseUrl));
       }
       const { result, fileId } = await sendAudio(bot, chatId, audio, {
         caption: COPY.pageAudioCaption(page.pageNumber, reciter),

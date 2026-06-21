@@ -24,6 +24,8 @@
     "data:fetch": "tsx scripts/fetch-quran.ts",
     "data:mushaf": "tsx scripts/fetch-mushaf-images.ts",
     "data:tajweed": "tsx scripts/fetch-tajweed-audio.ts",
+    "data:page-audio": "tsx scripts/build-page-audio.ts",
+    "verify:audio": "tsx scripts/verify-audio.ts",
     "test:image": "tsx scripts/test-mushaf-image.ts",
     "test": "vitest run",
     "test:watch": "vitest",

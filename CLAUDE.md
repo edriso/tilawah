@@ -237,16 +237,37 @@ delivery is where the example clip is heard.
 After the wird, the bot sends an audio recitation of each delivered page (on by
 default for users and the channel; `/reciter` switches voice or turns it off,
 `/admin_reciter <off|key>` for the channel). Each subscriber has `reciter`
-(default `abdulbasit`) and `wirdAudioEnabled`. The reciters and the per-page URL
-builder live in `src/core/reciter.ts` (`RECITERS` maps each key to its
-everyayah.com data folder; `pageAudioSource(reciter, page)` builds
-`…/PageMp3s/Page<NNN>.mp3`). The clip is fetched from everyayah (trusted,
-no-copyright) the first time and then re-sent by cached `file_id` (`PageAudio`,
-keyed by page+reciter) — same approach as the Mushaf images, so the full set is
-never stored locally. Sending is best-effort and page-by-page (`sendPageAudio`
-in deliver.ts): a failed clip is skipped and NEVER blocks the wird; it runs
-after the delivery is recorded, for exactly the pages that went out. A juz wird
-therefore sends one audio per page.
+(default `abdulbasit`) and `wirdAudioEnabled`. The reciters and the per-page
+source builder live in `src/core/reciter.ts` (`RECITERS` maps each key to its
+data folder; `pageAudioSource(reciter, page, template)` fills the template). The
+template is `config.pageAudioBaseUrl` (`PAGE_AUDIO_BASE_URL`): a local path means
+the bot uploads the file (`InputFile`), an http(s) URL means Telegram fetches it
+(`toMediaInput` in deliver.ts picks). The clip is sent once then re-sent by
+cached `file_id` (`PageAudio`, keyed by page+reciter), so the full set is never
+stored twice. Sending is best-effort and page-by-page (`sendPageAudio` in
+deliver.ts): a failed clip is skipped and NEVER blocks the wird; it runs after
+the delivery is recorded, for exactly the pages that went out. A juz wird sends
+one audio per page.
+
+**The source matters (a verified set, not everyayah's PageMp3s).** The DEFAULT
+template is everyayah's pre-split `PageMp3s` (`PAGE_AUDIO_TEMPLATE`), fine for a
+dev box but NOT ayah-accurate: those files were auto-split (Mp3Splt), several are
+defective (confirmed: Abdul Basit's `Page011` drops 2:76, so the audio did not
+match the page text), and all carry junk ID3 tags with no cover art (so a phone's
+player showed garbage + a random cached image). For production we BUILD a verified
+self-hosted set with `pnpm data:page-audio`: for each reciter and page it
+downloads the TRUSTED per-ayah clips (`perAyahAudioUrl`, everyayah's ayah-accurate
+files, the same source the tajweed audio uses) for EXACTLY the ayat our Madani
+layout puts on that page (`buildPageAyat` in `scripts/lib/page-audio-build.ts`,
+the same data the wird text uses), concatenates them with ffmpeg, and stamps clean
+ID3 tags plus a constant cover image. So the clip always matches the page the
+reader sees, for every reciter, and the player shows a proper title and cover. The
+set lives in `/opt/bots/data/tilawah/page-audio/<folder>/Page<NNN>.mp3`, mounted
+read-only, with `PAGE_AUDIO_BASE_URL=/app/assets/page-audio/{folder}/Page{page3}.mp3`.
+`pnpm verify:audio` is the trusted-resource guardrail: it checks the per-ayah
+source is reachable, that a built set (`--dir`) is complete (604 pages per
+reciter), and (`--scan-defects`) reproduces the everyayah PageMp3 size-vs-per-ayah
+diagnostic. See DEVELOPMENT.md for the build/deploy runbook.
 
 The recitation is **silent** (`disable_notification`), a quiet companion to the
 wird that just notified, so a multi-page wird does not buzz once per page. This
@@ -398,12 +419,17 @@ Commit the new folder under `prisma/migrations/`. Production applies it with
   files are re-export shims.
 - Page and wird math: `src/core/wird.ts`
 - Message building (one message per page): `src/core/format.ts`
-- Page recitation: reciters + per-page URL builder in `src/core/reciter.ts`;
-  the file_id cache in `src/database/services/page-audio.service.ts` (table
-  `page_audio`); the delivery (`sendPageAudio`) and reciter names/captions in
+- Page recitation: reciters + the per-page and per-ayah source builders in
+  `src/core/reciter.ts` (`pageAudioSource`, `perAyahAudioUrl`); the source
+  template in `config.pageAudioBaseUrl`; the file_id cache in
+  `src/database/services/page-audio.service.ts` (table `page_audio`); the
+  delivery (`sendPageAudio`, `toMediaInput`) and reciter names/captions in
   `src/lib/deliver.ts` and `src/lib/copy.ts`; the picker in
   `src/lib/reciter-keyboard.ts`. The "try it on today's page" preview button is
   `sampleAudioPagesFor` in deliver.ts + the `RECITER_SAMPLE` handler in bot.ts.
+  The verified self-hosted set is built by `scripts/build-page-audio.ts`
+  (`pnpm data:page-audio`), its page math by `scripts/lib/page-audio-build.ts`
+  (`buildPageAyat`), and checked by `scripts/verify-audio.ts` (`pnpm verify:audio`).
 - Page tafseer link (`/tafsir`): the URL builder `pageTafseerUrl` in
   `src/core/tafseer.ts`, the page resolver `wirdPageNumbersFor` in deliver.ts,
   the keyboard in `src/lib/tafseer-keyboard.ts`, the command in bot.ts.
