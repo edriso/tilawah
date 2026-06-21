@@ -217,19 +217,22 @@ export const COPY = {
 
   notReady: 'تعذّر تجهيز وردك الآن، حاول لاحقًا بإذن الله.',
 
-  // Shown above the wird when /today re-shows a wird already delivered today.
-  todayAlready: 'وصلك ورد اليوم من قبل، وهذا هو:',
+  // Shown above the wird when /today is used after today's wird already went
+  // out. It re-shows the LIVE current wird (the next one if the reader has since
+  // confirmed today's), so it points at "your current wird" rather than claiming
+  // this is exactly what was delivered.
+  todayAlready: 'وصلك ورد اليوم من قبل. وهذا وردك الحالي:',
 
   // ── Reading confirmation (the "read ✓" button) ───────────────────
   // The button under each user wird, and the small prompt that carries it.
   readButton: '✅ قرأتُ وردي — التالي',
   confirmPrompt: 'إذا أتممتَ قراءة وردك فاضغط الزر لأنتقل بك إلى وردك التالي.',
-  // Shown after a confirmed read advances the reader. Mentions /next so a reader
-  // who wants more knows how to keep going now.
-  readConfirmed: (page: number, juz?: number) =>
-    `بارك الله فيك ✓\nانتقلتَ إلى ${pagePositionAr(page, juz)}.\nيصلك وردك التالي في موعده، أو اكتب ${ltr('/next')} لقراءة المزيد الآن.`,
-  // Toast when an old/already-used "read" button is tapped (the position has
-  // already moved on). Kept gentle: their reading is recorded, nothing is wrong.
+  // Short acknowledgement sent just before the next wird is revealed, when a
+  // confirmed read (the button or /next) advances the reader. The revealed wird
+  // carries its own "🌿 وردك التالي" lead, so the ack stays brief.
+  readAdvancedAck: 'بارك الله فيك ✓',
+  // Toast when an old/stale "read" button is tapped — one from a wird already
+  // passed. Kept gentle: their reading is recorded, nothing is wrong.
   readAlready: 'سجّلنا قراءتك ✓',
   // The lead line for the wird shown by /next (the NEXT portion, on demand).
   nextLead: '🌿 وردك التالي',

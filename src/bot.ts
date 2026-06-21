@@ -255,8 +255,9 @@ export async function sendTodayView(
   }
 
   // The "read ✓ / next" button rides every shown wird so the reader can confirm
-  // and advance — unless paused (a resting reader is not nudged onward).
-  if (!sub.pausedAt && pagesSent > 0) await sendConfirmPrompt(bot, sub.chatId);
+  // and advance — unless paused (a resting reader is not nudged onward). It
+  // carries the shown wird's start page, so a later tap names this exact wird.
+  if (!sub.pausedAt && pagesSent > 0) await sendConfirmPrompt(bot, sub.chatId, sub.currentPage);
 }
 
 /**
@@ -311,9 +312,18 @@ export async function advanceAndShowNext(ctx: Context, sub: Subscriber, now: Dat
   const latest = await getLatestUnconfirmedDelivery(sub.id);
   const size = latest ? latest.pageCount : sub.wirdSize;
   const nextPage = advanceStartPage(sub.currentPage, size);
-  await confirmRead(sub.id, sub.currentPage, nextPage, now);
+  const result = await confirmRead(sub.id, sub.currentPage, nextPage, now);
+  // Brief ack (the revealed wird carries its own "🌿 وردك التالي" lead). On a rare
+  // concurrent 'already' we skip the ack but still reveal the next portion.
+  if (result === 'advanced') await ctx.reply(COPY.readAdvancedAck);
   const sent = await sendWirdNow(bot, { ...sub, currentPage: nextPage }, COPY.nextLead);
-  if (sent === 0) await ctx.reply(COPY.notReady);
+  if (sent === 0) {
+    await ctx.reply(COPY.notReady);
+    return;
+  }
+  // The revealed wird rides its own "read ✓" button, carrying its start page so
+  // the chain never skips — unless paused (a resting reader is not nudged on).
+  if (!sub.pausedAt) await sendConfirmPrompt(bot, sub.chatId, nextPage);
   if (sub.pausedAt) await ctx.reply(COPY.pausedHint);
 }
 
@@ -542,37 +552,53 @@ bot.callbackQuery(new RegExp(`^${WIRD_PICK_PREFIX}(\\d+)$`), async (ctx) => {
 
 // ─── Read-confirmation button ("read ✓ / next") ─────────────────────
 //
-// Advances the reader one wird and marks the day(s) read. Idempotent: it works
-// off the LATEST unconfirmed delivery and confirmRead is a compare-and-set on
-// the current page, so a double tap or an old button from an earlier day moves
-// no one twice — it just reports "already recorded ✓". The tapped message's
-// button is removed on either outcome (best practice: do not leave it live).
+// The button is the same action as /next: confirm THIS wird as read, advance,
+// and reveal the next wird (see advanceAndShowNext). It is idempotent:
+//   - The button carries the start page of the wird it was sent for. A tap whose
+//     page no longer matches the current position is a STALE button from a wird
+//     already passed — a gentle no-op, so old buttons left in the chat can never
+//     advance the reader a second time.
+//   - With no unread delivery there is nothing to confirm — also a no-op.
+// `buttonStartPage` is undefined only for legacy bare "tilawah:read" buttons sent
+// before the page was added; those fall back to acting on the current wird.
 /**
- * Handle a "read ✓ / next" tap: advance one wird and acknowledge. Idempotent —
- * works off the latest unconfirmed delivery and confirmRead's compare-and-set —
- * so a double tap or a stale button from an earlier day is a harmless no-op. The
- * tapped button is removed either way. Exported for testing.
+ * Handle a "read ✓ / next" tap: confirm this wird and reveal the next, exactly
+ * as /next does. A double tap, or a stale button from a wird already passed, is a
+ * harmless no-op. The tapped button is removed either way. Exported for testing.
  */
-export async function handleReadConfirm(ctx: Context, sub: Subscriber): Promise<void> {
+export async function handleReadConfirm(
+  ctx: Context,
+  sub: Subscriber,
+  buttonStartPage?: number,
+): Promise<void> {
   const latest = await getLatestUnconfirmedDelivery(sub.id);
-  if (!latest) {
-    // Nothing outstanding (already confirmed, or a stale button). No-op.
+  if (!latest || (buttonStartPage !== undefined && sub.currentPage !== buttonStartPage)) {
+    // Nothing outstanding, or a stale button from a wird already passed. No-op:
+    // drop the button so it cannot be tapped again, and reassure.
     await ctx.editMessageReplyMarkup().catch(() => {});
     await ctx.answerCallbackQuery({ text: COPY.readAlready });
     return;
   }
-  const nextPage = advanceStartPage(sub.currentPage, latest.pageCount);
-  const result = await confirmRead(sub.id, sub.currentPage, nextPage, new Date());
-  await ctx.editMessageReplyMarkup().catch(() => {}); // drop the button either way
-  if (result === 'advanced') {
-    const juz = (await getJuzForPage(nextPage)) ?? undefined;
-    await ctx.answerCallbackQuery();
-    await ctx.reply(COPY.readConfirmed(nextPage, juz));
-  } else {
-    await ctx.answerCallbackQuery({ text: COPY.readAlready });
-  }
+  // Confirm + reveal the next wird, exactly as /next does, so the button and the
+  // command stay in lockstep. Drop the tapped button first (it is single-use).
+  await ctx.editMessageReplyMarkup().catch(() => {});
+  await ctx.answerCallbackQuery();
+  await advanceAndShowNext(ctx, sub, new Date());
 }
 
+// New "read ✓" buttons carry the shown wird's start page ("tilawah:read:<page>"):
+// confirm only while that wird is still current (so a stale tap is a no-op).
+bot.callbackQuery(new RegExp(`^${READ_CONFIRM}:(\\d+)$`), async (ctx) => {
+  const sub = await userFromCallback(ctx);
+  if (!sub) {
+    await ctx.answerCallbackQuery();
+    return;
+  }
+  await handleReadConfirm(ctx, sub, Number(ctx.match![1]));
+});
+
+// Legacy bare "tilawah:read" buttons (sent before the page was added) still
+// work: they act on the current wird.
 bot.callbackQuery(READ_CONFIRM, async (ctx) => {
   const sub = await userFromCallback(ctx);
   if (!sub) {

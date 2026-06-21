@@ -53,10 +53,11 @@ describe('bot profile fits Telegram limits', () => {
 });
 
 describe('read-confirmation copy', () => {
-  it('confirmed message names the new page (and juz) and points to /next', () => {
-    const msg = COPY.readConfirmed(15, 1);
-    expect(msg).toContain('صفحة ١٥ (الجزء ١)');
-    expect(msg).toContain('/next');
+  it('the advance ack is brief (the revealed wird carries its own "next" lead)', () => {
+    // The button/ /next now REVEAL the next wird, so the ack is just a short
+    // acknowledgement, not a "type /next" pointer.
+    expect(COPY.readAdvancedAck).toContain('بارك الله فيك');
+    expect(COPY.readAdvancedAck).not.toContain('/next');
   });
 
   it('missed-days message states the days and embeds the ayah + reference', () => {

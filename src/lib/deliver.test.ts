@@ -88,7 +88,11 @@ import {
   renderLessonAt,
   sampleAudioPagesFor,
   wirdPageNumbersFor,
+  sendWirdNow,
+  sendConfirmPrompt,
+  readConfirmData,
 } from './deliver';
+import { COPY } from './copy';
 import { config } from '../config';
 import { advanceStartPage } from '../core';
 
@@ -253,6 +257,44 @@ describe('buildTodayView (read-gated: shows the live wird, never advances)', () 
     const view = await buildTodayView(todaySub(), NOW);
     expect(view.pages).toEqual([]);
     expect(view.record).toBeNull();
+  });
+});
+
+describe('sendWirdNow (read-ahead reveal: pages only, no recitation)', () => {
+  it('reveals the wird pages but sends NO page audio (audio rides a real delivery)', async () => {
+    h.getWird.mockResolvedValue(CONTENT);
+    const sent = await sendWirdNow(
+      fakeBot,
+      { chatId: 123n, currentPage: 5, wirdSize: 1, wirdFormat: 'text' },
+      COPY.nextLead,
+    );
+    expect(sent).toBe(1);
+    expect(h.sendMessages).toHaveBeenCalled(); // the pages went out
+    expect(h.sendAudio).not.toHaveBeenCalled(); // but no recitation clip
+  });
+
+  it('returns 0 when no pages resolve', async () => {
+    h.getWird.mockResolvedValue([]);
+    const sent = await sendWirdNow(
+      fakeBot,
+      { chatId: 123n, currentPage: 999, wirdSize: 1, wirdFormat: 'text' },
+      COPY.nextLead,
+    );
+    expect(sent).toBe(0);
+  });
+});
+
+describe('the "read ✓" button carries the wird start page', () => {
+  it('readConfirmData builds tilawah:read:<startPage>', () => {
+    expect(readConfirmData(42)).toBe('tilawah:read:42');
+  });
+
+  it('sendConfirmPrompt sends a prompt whose button names the start page', async () => {
+    await sendConfirmPrompt(fakeBot, 123n, 42);
+    const call = apiSendMessage.mock.calls.find((c) => c[1] === COPY.confirmPrompt);
+    expect(call).toBeTruthy();
+    expect(call![2].disable_notification).toBe(true);
+    expect(JSON.stringify(call![2].reply_markup)).toContain('tilawah:read:42');
   });
 });
 

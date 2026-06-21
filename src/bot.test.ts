@@ -306,52 +306,68 @@ describe('sendTodayView page recitation', () => {
   });
 });
 
-// The "read ✓ / next" button: advance one wird, idempotently.
+// The "read ✓ / next" button: confirm this wird and reveal the next, idempotently.
 describe('handleReadConfirm', () => {
-  it('advances by the latest delivery’s pageCount and confirms', async () => {
+  it('confirms THIS wird and reveals the next (delegates to the /next flow)', async () => {
     h.getLatestUnconfirmedDelivery.mockResolvedValue({ startPage: 10, pageCount: 2 });
     const ctx = fakeCtx();
     const sub = { ...(SUB as object), currentPage: 10 } as never;
-    await handleReadConfirm(ctx as never, sub);
+    // The button carries the current wird's start page (10), so it is not stale.
+    await handleReadConfirm(ctx as never, sub, 10);
 
+    expect(ctx.editMessageReplyMarkup).toHaveBeenCalled(); // tapped button removed
     expect(h.confirmRead).toHaveBeenCalledWith(1, 10, advanceStartPage(10, 2), expect.any(Date));
-    expect(ctx.editMessageReplyMarkup).toHaveBeenCalled(); // button removed
-    expect(ctx.reply).toHaveBeenCalled(); // a confirmation with the new page
+    expect(h.sendWirdNow).toHaveBeenCalledTimes(1); // the next wird is revealed
   });
 
-  it('is a gentle no-op on a stale/double tap (confirmRead reports "already")', async () => {
+  it('is a gentle no-op on a STALE button (its page is no longer the current wird)', async () => {
     h.getLatestUnconfirmedDelivery.mockResolvedValue({ startPage: 10, pageCount: 2 });
-    h.confirmRead.mockResolvedValue('already');
     const ctx = fakeCtx();
-    await handleReadConfirm(ctx as never, { ...(SUB as object), currentPage: 10 } as never);
+    // current is page 10; the tapped button was for page 3 (a wird already passed).
+    await handleReadConfirm(ctx as never, { ...(SUB as object), currentPage: 10 } as never, 3);
 
+    expect(h.confirmRead).not.toHaveBeenCalled(); // nothing advanced
+    expect(h.sendWirdNow).not.toHaveBeenCalled(); // nothing revealed
+    expect(ctx.editMessageReplyMarkup).toHaveBeenCalled(); // stale button removed
     expect(ctx.answerCallbackQuery).toHaveBeenCalledWith(
       expect.objectContaining({ text: expect.any(String) }),
     );
-    expect(ctx.reply).not.toHaveBeenCalled(); // no fresh "advanced" message
   });
 
   it('does nothing to advance when there is no unread delivery', async () => {
     h.getLatestUnconfirmedDelivery.mockResolvedValue(null);
     const ctx = fakeCtx();
-    await handleReadConfirm(ctx as never, SUB);
+    await handleReadConfirm(ctx as never, SUB, 1);
 
     expect(h.confirmRead).not.toHaveBeenCalled();
+    expect(h.sendWirdNow).not.toHaveBeenCalled();
     expect(ctx.editMessageReplyMarkup).toHaveBeenCalled(); // stale button removed
+  });
+
+  it('a legacy bare button (no page) acts on the current wird', async () => {
+    h.getLatestUnconfirmedDelivery.mockResolvedValue({ startPage: 10, pageCount: 2 });
+    const sub = { ...(SUB as object), currentPage: 10 } as never;
+    await handleReadConfirm(fakeCtx() as never, sub); // no buttonStartPage (legacy)
+
+    expect(h.confirmRead).toHaveBeenCalledWith(1, 10, advanceStartPage(10, 2), expect.any(Date));
+    expect(h.sendWirdNow).toHaveBeenCalledTimes(1);
   });
 });
 
 // /next: advance one wird and show the next portion.
 describe('advanceAndShowNext (/next)', () => {
-  it('advances by the latest delivery’s pageCount, then shows the next wird', async () => {
+  it('advances by the latest delivery’s pageCount, then reveals the next wird with its own button', async () => {
     h.getLatestUnconfirmedDelivery.mockResolvedValue({ startPage: 10, pageCount: 2 });
     const sub = { ...(SUB as object), currentPage: 10 } as never;
     await advanceAndShowNext(fakeCtx() as never, sub, new Date());
 
     expect(h.confirmRead).toHaveBeenCalledWith(1, 10, advanceStartPage(10, 2), expect.any(Date));
     expect(h.sendWirdNow).toHaveBeenCalledTimes(1);
-    // The next wird is shown from the advanced position.
-    expect(h.sendWirdNow.mock.calls[0][1]).toMatchObject({ currentPage: advanceStartPage(10, 2) });
+    // The next wird is revealed from the advanced position, never skipping it.
+    const nextPage = advanceStartPage(10, 2);
+    expect(h.sendWirdNow.mock.calls[0][1]).toMatchObject({ currentPage: nextPage });
+    // Its "read ✓" button carries the NEXT wird's start page, so the chain never skips.
+    expect(h.sendConfirmPrompt).toHaveBeenCalledWith(expect.anything(), 123n, nextPage);
   });
 
   it('falls back to the current wird size when there is no unread delivery', async () => {

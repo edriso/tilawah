@@ -119,13 +119,23 @@ skipped past:
   its quiet companion, like the recitation — one buzz per day). It is one button
   for the whole wird, however many pages, so a juz-sized day is one tap. The
   channel never gets it.
-- Tapping it advances ONE wird and marks the day(s) read (`confirmRead`, an
-  atomic compare-and-set on `currentPage`). It is **idempotent**: it works off
-  the latest unconfirmed delivery, so a double tap or an old button left in the
-  chat from an earlier day is a harmless no-op ("سجّلنا قراءتك ✓"). The tapped
-  button is removed on tap. This is the Telegram best practice — edit the
-  message in place AND make the action idempotent — so stale buttons cannot
-  double-advance.
+- The button is the SAME action as `/next`: tapping it confirms this wird,
+  advances ONE wird (`confirmRead`, an atomic compare-and-set on `currentPage`),
+  and REVEALS the next wird (titled "🌿 وردك التالي") with its own button —
+  `handleReadConfirm` delegates to `advanceAndShowNext`. This unification fixes
+  the old skip where the button advanced silently and a following `/next` then
+  confirmed the unseen wird and jumped a second one.
+- The button carries the start page of the wird it was sent for
+  (`tilawah:read:<startPage>`, built by `readConfirmData`; `sendConfirmPrompt`
+  embeds it). `handleReadConfirm` confirms only while that page is still
+  `currentPage`, so a tap on a STALE button (one left in the chat from a wird
+  already passed) is a gentle no-op ("سجّلنا قراءتك ✓") — old buttons cannot
+  double-advance. A legacy bare `tilawah:read` (sent before the page was added)
+  falls back to acting on the current wird. The tapped button is removed on tap.
+- The REVEAL is not a delivery: `sendWirdNow` sends only the pages, NOT the page
+  recitation — audio is tied to a real delivery (the scheduled push, or a
+  `/today` that records the day), so a reader racing ahead with `/next` is not
+  buried under a clip per page; it arrives with the wird's actual delivery.
 - If a day goes unconfirmed, the next day's send REPEATS the same wird (the
   position did not move) with the gentle missed-days nudge + an ayah on the
   Qur'an's virtue (`countUnreadDeliveriesBefore`, `pickQuranVirtue`,
@@ -135,9 +145,10 @@ skipped past:
   `/page`, where the reader is already engaged, so it never repeats within one
   session. Its verse is framed ("وهذه آيةٌ في فضل القرآن:") so it is not mistaken
   for the reader's own wird, which follows next under "🌿 وردك اليوم".
-- **`/next`** (`advanceAndShowNext`) confirms the current wird and shows the
-  next one now — for a reader who finished early and wants more, or is catching
-  up. Each `/next` advances exactly one wird (repeat for several in a sitting).
+- **`/next`** (`advanceAndShowNext`) is the typed twin of the button: it confirms
+  the current wird, advances, and reveals the next one (with its own button) — for
+  a reader who finished early and wants more, or is catching up. Each `/next`
+  advances exactly one wird (repeat for several in a sitting).
 - The CHANNEL is unchanged: it advances on send and has no button, nudge, or
   `/next`.
 
@@ -234,8 +245,9 @@ bot.ts), so the audio always matches the wird the reader just got. It is tied to
 a REAL delivery on all of them: the scheduler and `sendTodayView` both gate the
 audio on a fresh `commitDelivery` of 'sent', so a `/today` re-show (no new
 record) or the loser of a race with the scheduler shows the wird again but does
-NOT re-send the audio. `/next` sends the next wird's recitation through
-`sendWirdNow`. The recitation reads the subscriber's CURRENT settings each time,
+NOT re-send the audio. The `/next` and "read ✓" REVEAL (`sendWirdNow`) likewise
+does NOT carry audio — it is a read-ahead view, not a delivery, so the recitation
+arrives with the wird's real delivery. The recitation reads the subscriber's CURRENT settings each time,
 so a setting change is honoured on the very next send with no extra wiring:
 
 - Raise the wird size with `/wird N`: the next wird (or the live `/today`) is N

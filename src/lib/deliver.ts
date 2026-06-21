@@ -52,11 +52,18 @@ import { sendAudio } from './send-audio';
 import { COPY, reciterNameAr } from './copy';
 import { logger } from './logger';
 
-/** Callback data for the "read ✓ / next" button under a user's wird. A bare
- *  constant (no per-message payload): the latest unconfirmed delivery is the
- *  source of truth, and the confirm is an idempotent compare-and-set, so every
- *  day's button carries the same data and old buttons are harmless. */
+/** Callback-data PREFIX for the "read ✓ / next" button under a user's wird. The
+ *  shown wird's start page is appended ("tilawah:read:<startPage>") so a tap names
+ *  the exact wird it was sent for: handleReadConfirm confirms only while that page
+ *  is still the reader's current position, and a tap on an old button (from a wird
+ *  already passed) is a gentle no-op. */
 export const READ_CONFIRM = 'tilawah:read';
+
+/** Build the callback data for a wird's "read ✓" button (carries the wird's
+ *  start page so stale taps are detectable). See READ_CONFIRM. */
+export function readConfirmData(startPage: number): string {
+  return `${READ_CONFIRM}:${startPage}`;
+}
 
 export interface DeliveryStats {
   due: number;
@@ -481,10 +488,14 @@ export async function sendPageAudio(
  * Best effort: it is the call to action, not the wird, so a failure is logged
  * and swallowed — the reader can still confirm with /next.
  */
-export async function sendConfirmPrompt(bot: Bot<Context>, chatId: bigint): Promise<void> {
+export async function sendConfirmPrompt(
+  bot: Bot<Context>,
+  chatId: bigint,
+  startPage: number,
+): Promise<void> {
   try {
     await bot.api.sendMessage(Number(chatId), COPY.confirmPrompt, {
-      reply_markup: new InlineKeyboard().text(COPY.readButton, READ_CONFIRM),
+      reply_markup: new InlineKeyboard().text(COPY.readButton, readConfirmData(startPage)),
       // Silent: the wird itself already notified; this is its quiet companion,
       // like the recitation, so a reader is buzzed once per day, not twice.
       disable_notification: true,
@@ -532,11 +543,16 @@ export async function sendMissedDaysNudge(
 }
 
 /**
- * Send a subscriber's CURRENT wird right now (its pages + the recitation),
- * format-aware, WITHOUT recording a delivery or attaching a confirm button.
- * Used by /next, which has already advanced the position and is just showing
- * the new portion for a reader who wants to read ahead. Returns the number of
- * pages that went out (0 when nothing could be prepared/sent).
+ * Reveal a subscriber's CURRENT wird (its pages, format-aware) right now — the
+ * read-ahead view after a confirmed read — WITHOUT recording a delivery. Used to
+ * show the next wird from the just-advanced position (the caller attaches its
+ * own "read ✓" button). `lead` titles it (e.g. "🌿 وردك التالي").
+ *
+ * It deliberately does NOT send the page recitation: audio is tied to a real
+ * delivery (the scheduled push, or a /today that records the day), not to merely
+ * showing a wird — so a reader who races ahead with /next is not buried under a
+ * clip per page. It arrives with the wird's actual delivery. Returns the number
+ * of pages that went out (0 when nothing could be prepared/sent).
  */
 export async function sendWirdNow(
   bot: Bot<Context>,
@@ -545,8 +561,6 @@ export async function sendWirdNow(
     currentPage: number;
     wirdSize: number;
     wirdFormat: string;
-    wirdAudioEnabled: boolean;
-    reciter: string;
   },
   lead: string,
 ): Promise<number> {
@@ -559,14 +573,6 @@ export async function sendWirdNow(
     lead,
     format: normalizeWirdFormat(sub.wirdFormat),
   });
-  if (sub.wirdAudioEnabled && pagesSent > 0) {
-    await sendPageAudio(
-      bot,
-      sub.chatId,
-      content.slice(0, pagesSent),
-      normalizeReciter(sub.reciter),
-    );
-  }
   return pagesSent;
 }
 
@@ -715,9 +721,10 @@ export async function deliverDueSubscribers(
         );
       }
 
-      // Finally, the "read ✓ / next" button (USERS only): tapping it advances
-      // the position and marks the day read. The channel never gets it.
-      if (sub.kind === KIND_USER) await sendConfirmPrompt(bot, sub.chatId);
+      // Finally, the "read ✓ / next" button (USERS only): tapping it confirms
+      // THIS wird (carried as its start page), advances, and reveals the next.
+      // The channel never gets it.
+      if (sub.kind === KIND_USER) await sendConfirmPrompt(bot, sub.chatId, sub.currentPage);
     } catch (err) {
       stats.failed++;
       logger.error('Delivery failed for subscriber', { id: sub.id, error: String(err) });
