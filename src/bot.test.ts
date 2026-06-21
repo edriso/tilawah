@@ -21,6 +21,8 @@ const h = vi.hoisted(() => ({
   sendConfirmPrompt: vi.fn(),
   sendMissedDaysNudge: vi.fn(),
   sendWirdNow: vi.fn(),
+  sendWirdAudioNow: vi.fn(),
+  markStarted: vi.fn(),
 }));
 
 vi.mock('./config', () => ({
@@ -42,6 +44,7 @@ vi.mock('./database', () => ({
   setWirdSize: vi.fn(),
   setWirdFormat: vi.fn(),
   setCurrentPage: h.setCurrentPage,
+  markStarted: h.markStarted,
   restartSubscriber: vi.fn(),
   toggleActiveDay: vi.fn(),
   setDeliveryTime: vi.fn(),
@@ -66,12 +69,14 @@ vi.mock('./lib/deliver', () => ({
   sendConfirmPrompt: h.sendConfirmPrompt,
   sendMissedDaysNudge: h.sendMissedDaysNudge,
   sendWirdNow: h.sendWirdNow,
+  sendWirdAudioNow: h.sendWirdAudioNow,
   sampleAudioPagesFor: vi.fn(),
   wirdPageNumbersFor: vi.fn(),
   buildLessonReview: vi.fn(),
   renderLessonAt: vi.fn(),
   previewWird: vi.fn(),
   READ_CONFIRM: 'tilawah:read',
+  AUDIO_NOW: 'tilawah:listen',
 }));
 vi.mock('./scheduler', () => ({ runDeliveryOnce: vi.fn() }));
 vi.mock('./lib/logger', () => ({
@@ -84,7 +89,9 @@ import { advanceStartPage } from './core';
 const SUB = {
   id: 1,
   chatId: 123n,
-  startedAt: null,
+  // A reader who has already received a wird (the common case). A brand-new user
+  // (startedAt null, no deliveries) is exercised explicitly where it matters.
+  startedAt: new Date('2026-01-01T00:00:00Z'),
   pausedAt: null,
   currentPage: 1,
   wirdSize: 1,
@@ -366,8 +373,25 @@ describe('advanceAndShowNext (/next)', () => {
     // The next wird is revealed from the advanced position, never skipping it.
     const nextPage = advanceStartPage(10, 2);
     expect(h.sendWirdNow.mock.calls[0][1]).toMatchObject({ currentPage: nextPage });
-    // Its "read ✓" button carries the NEXT wird's start page, so the chain never skips.
-    expect(h.sendConfirmPrompt).toHaveBeenCalledWith(expect.anything(), 123n, nextPage);
+    // Its "read ✓" button carries the NEXT wird's start page (so the chain never
+    // skips), plus the on-demand "listen" action (the reveal did not auto-send audio).
+    expect(h.sendConfirmPrompt).toHaveBeenCalledWith(
+      expect.anything(),
+      123n,
+      nextPage,
+      expect.objectContaining({ audio: expect.any(Boolean) }),
+    );
+  });
+
+  it('a brand-new reader (never delivered) sees their CURRENT wird, no advance, no skip', async () => {
+    h.getLatestUnconfirmedDelivery.mockResolvedValue(null);
+    const fresh = { ...(SUB as object), startedAt: null, currentPage: 1 } as never;
+    await advanceAndShowNext(fakeCtx() as never, fresh, new Date());
+
+    expect(h.markStarted).toHaveBeenCalledWith(1, expect.any(Date)); // stamp so next /next advances
+    expect(h.confirmRead).not.toHaveBeenCalled(); // nothing to confirm yet
+    // The current wird (page 1) is shown, not page 1 + size.
+    expect(h.sendWirdNow.mock.calls[0][1]).toMatchObject({ currentPage: 1 });
   });
 
   it('falls back to the current wird size when there is no unread delivery', async () => {

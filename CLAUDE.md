@@ -3,6 +3,10 @@
 Notes for anyone (human or AI) working in this repo. Easy English on purpose,
 no em dashes, so a junior developer can read this and be productive.
 
+New here? Start with `DEVELOPMENT.md` for a gentle, plain English tour (how to
+run it, the shape of the code, the two reader kinds, the read-gated idea, and how
+to make a change). This file is the deeper reference for whatever part you touch.
+
 ## What this is
 
 Tilawah is a Telegram bot that sends a daily Quran "wird" (a daily reading
@@ -136,6 +140,18 @@ skipped past:
   recitation — audio is tied to a real delivery (the scheduled push, or a
   `/today` that records the day), so a reader racing ahead with `/next` is not
   buried under a clip per page; it arrives with the wird's actual delivery.
+  Instead, when a showing did NOT auto-send the audio (a `/next` reveal, or a
+  `/today` re-show), the prompt carries an on-demand "🎧 الاستماع" button
+  (`AUDIO_NOW`, pinned to that wird's start page like the "read ✓" button, gated
+  by `wirdAudioEnabled`) — progressive disclosure: the page stays clean and the
+  reader can hear the exact wird shown with one tap (`audioActionsFor` decides,
+  `sendWirdAudioNow` plays it, recording nothing).
+- **`/next` for a brand-new reader** (one who has never received a wird,
+  `startedAt === null`) SHOWS their current wird without advancing, then stamps
+  `startedAt` (`markStarted`) so the next `/next` advances. Without this, the very
+  first `/next` would confirm-and-advance past page 1 — a wird never seen — and
+  skip it. (A reader who has been delivered to before is past this branch: there
+  `/next` confirms the wird they were last shown and reveals the next.)
 - If a day goes unconfirmed, the next day's send REPEATS the same wird (the
   position did not move) with the gentle missed-days nudge + an ayah on the
   Qur'an's virtue (`countUnreadDeliveriesBefore`, `pickQuranVirtue`,

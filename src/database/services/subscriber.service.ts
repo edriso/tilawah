@@ -89,6 +89,20 @@ export function setCurrentPage(subscriberId: number, currentPage: number) {
 }
 
 /**
+ * Stamp the "member since" time the first time a brand-new user is shown their
+ * wird by /next (before any scheduled delivery), so a following /next ADVANCES
+ * instead of re-showing the same first wird. Guarded so it only sets once;
+ * `commitDelivery` sets it too on the first real delivery, so it is a harmless
+ * no-op after that.
+ */
+export function markStarted(subscriberId: number, now: Date = new Date()) {
+  return prisma.subscriber.updateMany({
+    where: { id: subscriberId, startedAt: null },
+    data: { startedAt: now },
+  });
+}
+
+/**
  * Restart a subscriber's whole program from the very beginning: back to page 1
  * of the Mushaf and the first tajweed lesson. Used by the channel admin to begin
  * a fresh khatma without waiting for the current cycle to wrap past page 604.

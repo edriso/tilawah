@@ -234,6 +234,12 @@ export const COPY = {
   // Toast when an old/stale "read" button is tapped — one from a wird already
   // passed. Kept gentle: their reading is recorded, nothing is wrong.
   readAlready: 'سجّلنا قراءتك ✓',
+  // On-demand "listen" button that rides the prompt when the recitation was NOT
+  // auto-sent with this showing (a /next reveal, or a /today re-show), so the
+  // reader can hear the wird they are on with one tap. Plays the current wird.
+  listenBtn: '🎧 الاستماع',
+  // Toast if "listen" is tapped while the recitation is turned off.
+  audioOff: 'التلاوة متوقفة حاليًا',
   // The lead line for the wird shown by /next (the NEXT portion, on demand).
   nextLead: '🌿 وردك التالي',
   // The gentle "you have not read for N days" message shown when a wird repeats

@@ -65,6 +65,21 @@ export function readConfirmData(startPage: number): string {
   return `${READ_CONFIRM}:${startPage}`;
 }
 
+/** Callback-data PREFIX for the on-demand "listen" button: play the recitation
+ *  of a specific wird. The wird's start page is appended ("tilawah:listen:<page>")
+ *  so a tap names the exact wird that prompt displayed — even one scrolled back to
+ *  after advancing — matching the id-pinned "read ✓" button. It rides a prompt
+ *  only on a showing that did NOT auto-send the audio (a /next reveal, or a /today
+ *  re-show). Distinct from the "read ✓" callback so they never clash. */
+export const AUDIO_NOW = 'tilawah:listen';
+
+/** Whether to offer the on-demand "listen" button under a prompt. Set for a
+ *  showing that did NOT auto-send the recitation; omitted for a fresh delivery,
+ *  which already sent it (when the reader has audio on). */
+export interface PromptActions {
+  audio: boolean;
+}
+
 export interface DeliveryStats {
   due: number;
   sent: number;
@@ -492,10 +507,16 @@ export async function sendConfirmPrompt(
   bot: Bot<Context>,
   chatId: bigint,
   startPage: number,
+  actions?: PromptActions,
 ): Promise<void> {
   try {
+    const keyboard = new InlineKeyboard().text(COPY.readButton, readConfirmData(startPage));
+    // When the recitation was not auto-sent with this showing, offer it one tap
+    // away (progressive disclosure) on a second row.
+    // Pin the listen action to this wird, so a tap names the wird this prompt shows.
+    if (actions?.audio) keyboard.row().text(COPY.listenBtn, `${AUDIO_NOW}:${startPage}`);
     await bot.api.sendMessage(Number(chatId), COPY.confirmPrompt, {
-      reply_markup: new InlineKeyboard().text(COPY.readButton, readConfirmData(startPage)),
+      reply_markup: keyboard,
       // Silent: the wird itself already notified; this is its quiet companion,
       // like the recitation, so a reader is buzzed once per day, not twice.
       disable_notification: true,
@@ -574,6 +595,21 @@ export async function sendWirdNow(
     format: normalizeWirdFormat(sub.wirdFormat),
   });
   return pagesSent;
+}
+
+/**
+ * Play the recitation of the reader's CURRENT wird on demand (the prompt's
+ * "🎧 الاستماع" button), in their chosen reciter. Best effort, page by page
+ * (`sendPageAudio`). A pure read — it never records a delivery or advances. The
+ * caller has already checked the reader has audio enabled.
+ */
+export async function sendWirdAudioNow(
+  bot: Bot<Context>,
+  sub: { chatId: bigint; currentPage: number; wirdSize: number; reciter: string },
+): Promise<void> {
+  const pages = await getWird(sub.currentPage, sub.wirdSize);
+  if (pages.length === 0) return;
+  await sendPageAudio(bot, sub.chatId, pages, normalizeReciter(sub.reciter));
 }
 
 /**

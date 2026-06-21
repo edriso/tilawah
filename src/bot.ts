@@ -18,6 +18,7 @@ import {
   setWirdSize,
   setWirdFormat,
   setCurrentPage,
+  markStarted,
   restartSubscriber,
   setTajweedEnabled,
   setWirdAudioEnabled,
@@ -49,9 +50,12 @@ import {
   wirdPageNumbersFor,
   sendConfirmPrompt,
   sendWirdNow,
+  sendWirdAudioNow,
   buildLessonReview,
   renderLessonAt,
   READ_CONFIRM,
+  AUDIO_NOW,
+  type PromptActions,
   type TodayView,
 } from './lib/deliver';
 import { buildTajweedKeyboard, TAJWEED_TOGGLE } from './lib/tajweed-keyboard';
@@ -256,8 +260,13 @@ export async function sendTodayView(
 
   // The "read ✓ / next" button rides every shown wird so the reader can confirm
   // and advance — unless paused (a resting reader is not nudged onward). It
-  // carries the shown wird's start page, so a later tap names this exact wird.
-  if (!sub.pausedAt && pagesSent > 0) await sendConfirmPrompt(bot, sub.chatId, sub.currentPage);
+  // carries the shown wird's start page, so a later tap names this exact wird. On
+  // a fresh delivery the recitation was just auto-sent (no extra button); on a
+  // re-show it was not, so offer "listen" one tap away.
+  if (!sub.pausedAt && pagesSent > 0) {
+    const actions = recorded ? undefined : audioActionsFor(sub);
+    await sendConfirmPrompt(bot, sub.chatId, sub.currentPage, actions);
+  }
 }
 
 /**
@@ -309,6 +318,25 @@ bot.command('today', async (ctx) => {
  * any unread days read. Exported for testing; /next is a thin wrapper.
  */
 export async function advanceAndShowNext(ctx: Context, sub: Subscriber, now: Date): Promise<void> {
+  // Brand-new reader who has never received a wird: SHOW their current wird (no
+  // advance, no skip) and stamp "started" so the next /next advances. Without
+  // this, /next would confirm-and-advance past a wird the reader never saw.
+  if (sub.startedAt === null) {
+    const sent = await sendWirdNow(bot, sub, COPY.wirdLead);
+    if (sent === 0) {
+      // A data fault (assertQuranSeeded should prevent it): show nothing and do
+      // NOT stamp started, so a retry still shows this first wird.
+      await ctx.reply(COPY.notReady);
+      return;
+    }
+    // Stamp only after the wird actually went out, so the next /next advances.
+    await markStarted(sub.id, now);
+    if (!sub.pausedAt)
+      await sendConfirmPrompt(bot, sub.chatId, sub.currentPage, audioActionsFor(sub));
+    if (sub.pausedAt) await ctx.reply(COPY.pausedHint);
+    return;
+  }
+
   const latest = await getLatestUnconfirmedDelivery(sub.id);
   const size = latest ? latest.pageCount : sub.wirdSize;
   const nextPage = advanceStartPage(sub.currentPage, size);
@@ -322,9 +350,17 @@ export async function advanceAndShowNext(ctx: Context, sub: Subscriber, now: Dat
     return;
   }
   // The revealed wird rides its own "read ✓" button, carrying its start page so
-  // the chain never skips — unless paused (a resting reader is not nudged on).
-  if (!sub.pausedAt) await sendConfirmPrompt(bot, sub.chatId, nextPage);
+  // the chain never skips, plus the on-demand "listen" button (the reveal does
+  // not auto-send audio) — unless paused (a resting reader is not nudged on).
+  if (!sub.pausedAt) await sendConfirmPrompt(bot, sub.chatId, nextPage, audioActionsFor(sub));
   if (sub.pausedAt) await ctx.reply(COPY.pausedHint);
+}
+
+/** Which on-demand prompt buttons a reader should see, by their settings: a
+ *  "listen" button only when the recitation is on. Used for a showing that did
+ *  not auto-send the audio (a /next reveal, or a /today re-show). */
+function audioActionsFor(sub: Subscriber): PromptActions {
+  return { audio: sub.wirdAudioEnabled };
 }
 
 // /next: confirm the current wird as read and show the NEXT portion now — for a
@@ -606,6 +642,27 @@ bot.callbackQuery(READ_CONFIRM, async (ctx) => {
     return;
   }
   await handleReadConfirm(ctx, sub);
+});
+
+// ─── On-demand recitation (the prompt's "🎧 الاستماع") ───────────────
+// Rides the prompt on a showing that did NOT auto-send the audio (a /next reveal,
+// or a /today re-show). The button carries the start page of the wird that prompt
+// shows, so it plays THAT wird (even one scrolled back to after advancing). Pure:
+// it sends silently and never records a delivery or advances.
+bot.callbackQuery(new RegExp(`^${AUDIO_NOW}:(\\d+)$`), async (ctx) => {
+  const sub = await userFromCallback(ctx);
+  if (!sub) {
+    await ctx.answerCallbackQuery();
+    return;
+  }
+  if (!sub.wirdAudioEnabled) {
+    await ctx.answerCallbackQuery({ text: COPY.audioOff });
+    return;
+  }
+  await ctx.answerCallbackQuery();
+  // Best-effort: sendWirdAudioNow / sendPageAudio swallow their own send errors.
+  // Play the wird the prompt showed (its start page), at the reader's wird size.
+  await sendWirdAudioNow(bot, { ...sub, currentPage: Number(ctx.match![1]) });
 });
 
 // ─── Format-picker buttons ──────────────────────────────────────────

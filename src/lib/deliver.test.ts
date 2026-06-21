@@ -89,6 +89,7 @@ import {
   sampleAudioPagesFor,
   wirdPageNumbersFor,
   sendWirdNow,
+  sendWirdAudioNow,
   sendConfirmPrompt,
   readConfirmData,
 } from './deliver';
@@ -294,7 +295,49 @@ describe('the "read ✓" button carries the wird start page', () => {
     const call = apiSendMessage.mock.calls.find((c) => c[1] === COPY.confirmPrompt);
     expect(call).toBeTruthy();
     expect(call![2].disable_notification).toBe(true);
-    expect(JSON.stringify(call![2].reply_markup)).toContain('tilawah:read:42');
+    const data = JSON.stringify(call![2].reply_markup);
+    expect(data).toContain('tilawah:read:42');
+    expect(data).not.toContain('tilawah:listen'); // no audio button without actions
+  });
+
+  it('offers the on-demand "listen" button when the audio action is set', async () => {
+    await sendConfirmPrompt(fakeBot, 123n, 42, { audio: true });
+    const call = apiSendMessage.mock.calls.find((c) => c[1] === COPY.confirmPrompt);
+    const data = JSON.stringify(call![2].reply_markup);
+    expect(data).toContain('tilawah:read:42'); // read button still there
+    expect(data).toContain('tilawah:listen:42'); // recitation for THIS wird, one tap away
+  });
+
+  it('omits the "listen" button when audio is off', async () => {
+    await sendConfirmPrompt(fakeBot, 123n, 42, { audio: false });
+    const call = apiSendMessage.mock.calls.find((c) => c[1] === COPY.confirmPrompt);
+    expect(JSON.stringify(call![2].reply_markup)).not.toContain('tilawah:listen');
+  });
+});
+
+describe('sendWirdAudioNow (on-demand recitation for the current wird)', () => {
+  it('plays the current wird pages through the page-audio sender', async () => {
+    h.getWird.mockResolvedValue(TWO_PAGES);
+    h.sendAudio.mockResolvedValue({ result: 'ok', fileId: 'A1' });
+    await sendWirdAudioNow(fakeBot, {
+      chatId: 123n,
+      currentPage: 10,
+      wirdSize: 2,
+      reciter: 'abdulbasit',
+    });
+    expect(h.getWird).toHaveBeenCalledWith(10, 2); // the live wird
+    expect(h.sendAudio).toHaveBeenCalledTimes(TWO_PAGES.length); // one clip per page
+  });
+
+  it('does nothing when no pages resolve', async () => {
+    h.getWird.mockResolvedValue([]);
+    await sendWirdAudioNow(fakeBot, {
+      chatId: 123n,
+      currentPage: 999,
+      wirdSize: 1,
+      reciter: 'abdulbasit',
+    });
+    expect(h.sendAudio).not.toHaveBeenCalled();
   });
 });
 
