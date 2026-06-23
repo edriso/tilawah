@@ -169,6 +169,84 @@ such bridge: it is page-native.
 Each stage is shippable and reversible, and the channel + every Hafs reader keep
 working untouched throughout.
 
+## Build status
+
+Shipped and deployed (each Hafs-identical and non-breaking):
+
+- **A — Warsh dataset** (`prisma/data/quran-warsh-asbahani.json`, 6214, verified
+  KFGQPC + quran-meta). `pnpm data:fetch:warsh`.
+- **B — schema + per-riwayah seed/services + reciter grouping** (migration
+  `20260623000000_add_riwayah`, default `hafs`; verified on populated tables).
+- **C — riwayah-aware send engine** ({riwayah} in the image/audio templates, with
+  the guard that a non-Hafs reader is never served a Hafs asset).
+- **D — UX:** `/riwayah` picker, `/reciter` filtered by riwayah, switch-resets-
+  reciter, `/status` line, the Warsh reciter محمد عبد الكريم registered. Gated by
+  `offeredRiwayat()`.
+
+The remaining work to actually turn Warsh ON is operational (Stage E below): host
+the verified Warsh assets and point the templates at them. Until then,
+`offeredRiwayat()` returns `['hafs']` (the image template has no `{riwayah}`), so
+Warsh is invisible and the bot is exactly as before.
+
+## Stage E — operator runbook (turn Warsh on)
+
+Everything below is done on the server / your laptop; no code change is needed
+(the existing `data:mushaf` and `verify:audio` tools already take the riwayah via
+their `--source` / `--out` / `--dir` flags).
+
+1. **Get + verify the Warsh page images (604).** Render a verified KFGQPC Warsh
+   Madani set (vector pages from https://pdf.quran.ws/ or the SVGs in
+   quranpedia/quran-svg) to `001.jpg`..`604.jpg`, then fingerprint them:
+
+       pnpm data:mushaf --source '<warsh-image-url-template-with-{page3}>' \
+                        --out assets/mushaf/warsh-asbahani
+       # eyeball a few pages: they must be the 604-page Madinah Warsh edition
+
+2. **Get + verify the Warsh page audio (604).** Download محمد عبد الكريم's
+   604-page Madinah Warsh-Asbahani set
+   (https://archive.org/details/2435724525242002_yahoo_001) to
+   `assets/page-audio/warsh-asbahani/AbdulKareem/Page001.mp3`..`Page604.mp3`,
+   then confirm it is complete + every file is a real MP3:
+
+       pnpm verify:audio --dir assets/page-audio/warsh-asbahani/AbdulKareem
+       # spot-check: play a few pages and confirm they recite THAT page (Warsh)
+
+   It is a community upload, so this verification is the trust gate (golden rule).
+
+3. **Relocate the existing Hafs assets into a `hafs/` subfolder** (the templates
+   below namespace EVERY riwayah, so Hafs moves too — one-time):
+
+       cd /opt/bots/data/tilawah
+       mkdir -p mushaf/hafs && mv mushaf/[0-9]*.jpg mushaf/hafs/
+       # page-audio: mushaf reciters move under page-audio/hafs/<folder>/
+       mkdir -p page-audio/hafs && mv page-audio/*/ page-audio/hafs/ 2>/dev/null || true
+
+4. **Rsync the Warsh assets up:**
+
+       rsync -av assets/mushaf/warsh-asbahani/      root@<SERVER_IP>:/opt/bots/data/tilawah/mushaf/warsh-asbahani/
+       rsync -av assets/page-audio/warsh-asbahani/  root@<SERVER_IP>:/opt/bots/data/tilawah/page-audio/warsh-asbahani/
+
+5. **Add `{riwayah}` to the templates** in `/opt/bots/.env` (or tilawah's env):
+
+       MUSHAF_IMAGE_BASE_URL=/app/assets/mushaf/{riwayah}/{page3}.jpg
+       PAGE_AUDIO_BASE_URL=/app/assets/page-audio/{riwayah}/{folder}/Page{page3}.mp3
+
+   Confirm the volume mounts cover `mushaf/` and `page-audio/` parents (they do
+   if you mount those dirs; see hetzner `templates/compose-with-assets.yml`).
+
+6. **Recreate the bot** so it picks up the new env (a restart will not reload it):
+
+       cd /opt/bots && docker compose up -d tilawah
+       docker compose exec tilawah ls assets/mushaf/warsh-asbahani | head   # confirm visible
+
+Once step 5 lands, `offeredRiwayat()` returns `['hafs','warsh-asbahani']`,
+`/riwayah` appears, and a reader can switch. Roll back any time by removing
+`{riwayah}` from the templates (Warsh hides again instantly; data stays).
+
+6'. **(Future) Qaloon / more Warsh reciters:** pure data + asset additions — seed
+   the riwayah's text, host its assets under its own subfolder, register the
+   reciter in `reference`/`reciter.ts`. No engine change.
+
 ## Sources
 - KFGQPC dev platform — https://qurancomplex.gov.sa/quran-dev/
 - KFGQPC Warsh — https://qurancomplex.gov.sa/en/warsh/  | PDF — https://archive.org/details/quran-warsh-pdf
