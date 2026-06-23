@@ -9,7 +9,7 @@ import { DEFAULT_RIWAYAH, type RiwayahKey } from './riwayah';
 
 /** The reciter keys the bot offers. Stored as a short string on the subscriber
  *  (no Prisma enum), matching the rest of the schema. */
-export type ReciterKey = 'abdulbasit' | 'husary' | 'alafasy' | 'sudais' | 'minshawi';
+export type ReciterKey = 'abdulbasit' | 'husary' | 'alafasy' | 'sudais' | 'minshawi' | 'abdulkarim';
 
 export interface ReciterInfo {
   /** The reciter's per-page audio folder (everyayah naming for Hafs; the
@@ -30,6 +30,11 @@ export const RECITERS: Record<ReciterKey, ReciterInfo> = {
   alafasy: { folder: 'Alafasy_128kbps', riwayah: 'hafs' },
   sudais: { folder: 'Abdurrahmaan_As-Sudais_192kbps', riwayah: 'hafs' },
   minshawi: { folder: 'Minshawy_Murattal_128kbps', riwayah: 'hafs' },
+  // Warsh عن نافع من طريق الأصبهاني: Muhammad Abdul-Kareem, the complete 604-page
+  // Madinah set. Self-hosted only (not on everyayah); the page-audio resolver
+  // serves it from the riwayah-namespaced PAGE_AUDIO_BASE_URL once the operator
+  // hosts it (see docs/RIWAYAT.md). Offered only when Warsh is enabled.
+  abdulkarim: { folder: 'AbdulKareem', riwayah: 'warsh-asbahani' },
 };
 
 /** The reciter keys in display order (default first). */

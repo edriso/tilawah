@@ -177,6 +177,17 @@ export function setReciter(subscriberId: number, reciter: string) {
   });
 }
 
+/** Switch the reader's riwayah, resetting the reciter to one that belongs to the
+ *  new riwayah (a Hafs voice cannot recite a Warsh mushaf). The page number is
+ *  kept (both mushafs are 604 pages). Caller validates the riwayah and resolves
+ *  the reciter (reciterForRiwayah). */
+export function setRiwayah(subscriberId: number, riwayah: string, reciter: string) {
+  return prisma.subscriber.update({
+    where: { id: subscriberId },
+    data: { riwayah, reciter },
+  });
+}
+
 /**
  * Mark a subscriber unreachable (they blocked the bot, or a send failed with
  * 403). Send loops skip blocked subscribers. Cleared the next time a user

@@ -96,6 +96,7 @@ const RECITER_NAME_AR: Record<string, string> = {
   alafasy: 'مشاري العفاسي',
   sudais: 'عبد الرحمن السديس',
   minshawi: 'محمد صديق المنشاوي',
+  abdulkarim: 'محمد عبد الكريم',
 };
 
 export function reciterNameAr(key: string): string {
@@ -120,6 +121,10 @@ export interface SettingsView {
   /** Whether the page recitation is on, and the chosen reciter key. */
   wirdAudioEnabled?: boolean;
   reciter?: string;
+  /** The reader's riwayah label (e.g. "ورش عن نافع (من طريق الأصبهاني)"), shown
+   *  only when more than one riwayah is offered (otherwise it is just Hafs and
+   *  the line is noise). */
+  riwayahLabel?: string;
 }
 
 /** Build the status / settings summary, shared by users and the channel. */
@@ -141,6 +146,10 @@ export function settingsSummary(s: SettingsView, opts: { isChannel?: boolean } =
     `• الأيام: ${daysSummaryAr(s.activeDays)}`,
     `• المنطقة الزمنية: ${ltr(s.timezone)}`,
   ];
+  // Show the riwayah only when there is a real choice (more than Hafs offered).
+  if (s.riwayahLabel) {
+    lines.push(`• الرواية: ${s.riwayahLabel}`);
+  }
   // Show the delivery format (image is the default). Omitted only when a caller
   // does not track it.
   if (s.wirdFormat) {
@@ -393,6 +402,21 @@ export const COPY = {
   reciterUpdated: (reciter: string) =>
     `تم ✅ ستصلك تلاوة صفحتك بصوت ${reciterNameAr(reciter)} بإذن الله 🎧`,
   reciterOff: 'تم إيقاف تلاوة الصفحة ⏸️ سيصلك الورد بدون صوت.',
+
+  // ── Riwayah (the transmission / مصحف الرواية) ──
+  riwayahPrompt: (current: string) =>
+    [`روايتك الحالية: ${current}`, 'اختر الرواية التي تريد أن يصلك بها وردك:'].join('\n'),
+  // Shown when only Hafs is available (no other riwayah's mushaf is set up yet).
+  riwayahOnlyHafs: (current: string) =>
+    `روايتك الحالية: ${current}.\nلا تتوفر روايات أخرى حاليًا، وسنضيفها بإذن الله.`,
+  // After switching: the mushaf (نص وصورة) changes, the page number is kept, and
+  // the reciter is reset to one that recites the new riwayah.
+  riwayahUpdated: (riwayah: string, reciter: string) =>
+    [
+      `تم ✅ روايتك الآن: ${riwayah}.`,
+      `يتغيّر معها المصحف (نصًّا وصورةً)، ويبقى موضعك عند صفحتك الحالية.`,
+      `والقارئ الآن: ${reciterNameAr(reciter)} 🎧 (يمكنك تغييره بـ /reciter).`,
+    ].join('\n'),
   // Callback toasts.
   reciterToggledOff: 'تم إيقاف التلاوة ⏸️',
   // "Try it on today's page" preview button (on the reciter confirmation) + its

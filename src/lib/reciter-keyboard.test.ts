@@ -1,6 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { buildReciterKeyboard, RECITER_OFF, RECITER_PICK_PREFIX } from './reciter-keyboard';
-import { RECITER_KEYS } from '../core';
+import { recitersForRiwayah } from '../core';
+
+// The picker is built per riwayah; these tests use the Hafs reciters.
+const HAFS = recitersForRiwayah('hafs');
 
 // Flatten the keyboard to its buttons for assertions.
 function buttons(kb: ReturnType<typeof buildReciterKeyboard>) {
@@ -8,11 +11,13 @@ function buttons(kb: ReturnType<typeof buildReciterKeyboard>) {
 }
 
 describe('buildReciterKeyboard', () => {
-  it('offers off + every reciter, with the off button checked when disabled', () => {
-    const kb = buildReciterKeyboard(false, 'abdulbasit');
+  it('offers off + every reciter of the riwayah, off checked when disabled', () => {
+    const kb = buildReciterKeyboard(false, 'abdulbasit', HAFS);
     const all = buttons(kb);
     // off + one per reciter.
-    expect(all).toHaveLength(RECITER_KEYS.length + 1);
+    expect(all).toHaveLength(HAFS.length + 1);
+    // It shows only the riwayah's reciters (no Warsh voice among the Hafs list).
+    expect(HAFS).not.toContain('abdulkarim');
     const off = all.find((b) => 'callback_data' in b && b.callback_data === RECITER_OFF)!;
     expect(off.text).toContain('✅'); // off is the active state
     // No reciter is checked while disabled. (Exclude the off button, whose
@@ -23,12 +28,12 @@ describe('buildReciterKeyboard', () => {
         b.callback_data!.startsWith(RECITER_PICK_PREFIX) &&
         b.callback_data !== RECITER_OFF,
     );
-    expect(reciterBtns).toHaveLength(RECITER_KEYS.length);
+    expect(reciterBtns).toHaveLength(HAFS.length);
     expect(reciterBtns.every((b) => !b.text.includes('✅'))).toBe(true);
   });
 
   it('checks the current reciter when enabled, and not off', () => {
-    const kb = buildReciterKeyboard(true, 'husary');
+    const kb = buildReciterKeyboard(true, 'husary', HAFS);
     const all = buttons(kb);
     const off = all.find((b) => 'callback_data' in b && b.callback_data === RECITER_OFF)!;
     expect(off.text).not.toContain('✅');

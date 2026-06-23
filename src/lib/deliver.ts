@@ -33,6 +33,7 @@ import {
   hasDeliveryFor,
   getDeliveryFor,
   countUnreadDeliveriesBefore,
+  availableRiwayat,
   getWird,
   getAyahText,
   getBasmala,
@@ -103,6 +104,19 @@ export interface DeliveryStats {
  *  misplaced file never breaks audio. Replace assets/audio-thumb.jpg to rebrand. */
 const AUDIO_THUMB_PATH = fileURLToPath(new URL('../../assets/audio-thumb.jpg', import.meta.url));
 const AUDIO_THUMB: string | null = existsSync(AUDIO_THUMB_PATH) ? AUDIO_THUMB_PATH : null;
+
+/**
+ * The riwayat to OFFER a reader in /riwayah: those whose text is seeded AND
+ * (for a non-Hafs one) whose page images the operator has configured, i.e. the
+ * image template namespaces by {riwayah}. Until the operator hosts a riwayah's
+ * assets and sets that template, only Hafs is offered, so a reader can never
+ * switch into a riwayah with no images. Hafs is always offered.
+ */
+export async function offeredRiwayat(): Promise<RiwayahKey[]> {
+  const seeded = await availableRiwayat();
+  const imagesNamespaced = hasRiwayahPlaceholder(config.mushafImageBaseUrl ?? '');
+  return seeded.filter((r) => r === DEFAULT_RIWAYAH || imagesNamespaced);
+}
 
 /** Which subscriber kinds this deployment serves, from config. */
 export function allowedKinds(): string[] {

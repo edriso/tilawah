@@ -1,5 +1,5 @@
 import { InlineKeyboard } from 'grammy';
-import { RECITER_KEYS, type ReciterKey } from '../core';
+import { type ReciterKey } from '../core';
 import { reciterNameAr } from './copy';
 
 // The /reciter picker: one button per reciter then "off" at the bottom, a check
@@ -14,13 +14,18 @@ function label(text: string, isCurrent: boolean): string {
 }
 
 /**
- * Build the reciter picker. `enabled` is whether page audio is on, and
- * `current` the chosen reciter; the check mark shows the active reciter, or
- * "off" when disabled.
+ * Build the reciter picker for a given list of reciter keys (the reader's
+ * riwayah's reciters, so a Hafs voice is never offered for a Warsh mushaf).
+ * `enabled` is whether page audio is on and `current` the chosen reciter; the
+ * check mark shows the active reciter, or "off" when disabled.
  */
-export function buildReciterKeyboard(enabled: boolean, current: ReciterKey): InlineKeyboard {
+export function buildReciterKeyboard(
+  enabled: boolean,
+  current: ReciterKey,
+  keys: readonly ReciterKey[],
+): InlineKeyboard {
   const kb = new InlineKeyboard();
-  RECITER_KEYS.forEach((key) => {
+  keys.forEach((key) => {
     kb.text(
       label(reciterNameAr(key), enabled && key === current),
       `${RECITER_PICK_PREFIX}${key}`,

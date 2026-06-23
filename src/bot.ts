@@ -9,6 +9,11 @@ import {
   isWirdFormat,
   normalizeReciter,
   isReciter,
+  normalizeRiwayah,
+  isRiwayah,
+  riwayahLabel,
+  recitersForRiwayah,
+  reciterForRiwayah,
   WIRD_FORMAT_IMAGE,
 } from './core';
 import {
@@ -23,6 +28,7 @@ import {
   setTajweedEnabled,
   setWirdAudioEnabled,
   setReciter,
+  setRiwayah,
   toggleActiveDay,
   setDeliveryTime,
   setTimezone,
@@ -42,6 +48,7 @@ import { COPY, settingsSummary, formatTimeAr, daysSummaryAr } from './lib/copy';
 import {
   previewWird,
   buildTodayView,
+  offeredRiwayat,
   sendWird,
   tajweedLessonView,
   sendLesson,
@@ -68,6 +75,7 @@ import {
   LESSONS_NOOP,
 } from './lib/tajweed-lessons-keyboard';
 import { buildReciterKeyboard, RECITER_PICK_PREFIX, RECITER_OFF } from './lib/reciter-keyboard';
+import { buildRiwayahKeyboard, RIWAYAH_PICK_PREFIX } from './lib/riwayah-keyboard';
 import { buildPageTafseerKeyboard } from './lib/tafseer-keyboard';
 // The "try it on today's page" preview button on a reciter confirmation. A
 // distinct string (no "tilawah:reciter:" colon prefix) so it never matches the
@@ -152,9 +160,15 @@ function isAdmin(ctx: Context): boolean {
 
 /** Build the status text for a subscriber, including its current juz. */
 async function statusText(sub: Subscriber, isChannel = false): Promise<string> {
-  const currentJuz = (await getJuzForPage(sub.currentPage)) ?? undefined;
+  const riwayah = normalizeRiwayah(sub.riwayah);
+  const [currentJuz, offered] = await Promise.all([
+    getJuzForPage(sub.currentPage, riwayah),
+    offeredRiwayat(),
+  ]);
   return settingsSummary(
     {
+      // Show the riwayah line only when more than one riwayah is offered.
+      riwayahLabel: offered.length > 1 ? riwayahLabel(riwayah) : undefined,
       deliveryHour: sub.deliveryHour,
       deliveryMinute: sub.deliveryMinute,
       activeDays: sub.activeDays,
@@ -162,7 +176,7 @@ async function statusText(sub: Subscriber, isChannel = false): Promise<string> {
       wirdSize: sub.wirdSize,
       currentPage: sub.currentPage,
       pausedAt: sub.pausedAt,
-      currentJuz,
+      currentJuz: currentJuz ?? undefined,
       wirdFormat: normalizeWirdFormat(sub.wirdFormat),
       tajweedEnabled: sub.tajweedEnabled,
       wirdAudioEnabled: sub.wirdAudioEnabled,
@@ -457,15 +471,38 @@ bot.command('reciter', async (ctx) => {
     await ctx.reply(COPY.reciterOff);
     return;
   }
-  if (arg && isReciter(arg)) {
+  // Only the reader's riwayah's reciters are valid (a Hafs voice cannot recite a
+  // Warsh mushaf).
+  const riwayah = normalizeRiwayah(sub.riwayah);
+  const choices = recitersForRiwayah(riwayah);
+  if (arg && isReciter(arg) && choices.includes(arg)) {
     await setReciter(sub.id, arg);
     await replyReciterChosen(ctx, arg);
     return;
   }
-  // No (or unknown) arg: show the picker reflecting the current state.
-  const current = normalizeReciter(sub.reciter);
+  // No (or unknown/wrong-riwayah) arg: show the picker reflecting the current state.
+  const current = reciterForRiwayah(sub.reciter, riwayah);
   await ctx.reply(COPY.reciterPrompt(sub.wirdAudioEnabled, current), {
-    reply_markup: buildReciterKeyboard(sub.wirdAudioEnabled, current),
+    reply_markup: buildReciterKeyboard(sub.wirdAudioEnabled, current, choices),
+  });
+});
+
+// /riwayah: choose the transmission (mushaf) the wird arrives in. Only riwayat
+// whose text AND assets are ready are offered (offeredRiwayat); when just Hafs is
+// available we say so rather than show a one-button picker. Switching changes the
+// mushaf (text + image), keeps the page number, and resets the reciter to one
+// that recites the new riwayah.
+bot.command('riwayah', async (ctx) => {
+  const sub = await userSubscriber(ctx);
+  if (!sub) return;
+  const current = normalizeRiwayah(sub.riwayah);
+  const offered = await offeredRiwayat();
+  if (offered.length <= 1) {
+    await ctx.reply(COPY.riwayahOnlyHafs(riwayahLabel(current)));
+    return;
+  }
+  await ctx.reply(COPY.riwayahPrompt(riwayahLabel(current)), {
+    reply_markup: buildRiwayahKeyboard(offered, current),
   });
 });
 
@@ -797,9 +834,14 @@ bot.callbackQuery(RECITER_OFF, async (ctx) => {
     return;
   }
   await setWirdAudioEnabled(sub.id, false);
+  const offRiwayah = normalizeRiwayah(sub.riwayah);
   await ctx
     .editMessageReplyMarkup({
-      reply_markup: buildReciterKeyboard(false, normalizeReciter(sub.reciter)),
+      reply_markup: buildReciterKeyboard(
+        false,
+        reciterForRiwayah(sub.reciter, offRiwayah),
+        recitersForRiwayah(offRiwayah),
+      ),
     })
     .catch(() => {});
   await ctx.answerCallbackQuery({ text: COPY.reciterToggledOff });
@@ -813,7 +855,9 @@ bot.callbackQuery(new RegExp(`^${RECITER_PICK_PREFIX}(.+)$`), async (ctx) => {
     return;
   }
   const key = ctx.match![1];
-  if (!isReciter(key)) {
+  // The picked voice must belong to the reader's riwayah (a stale keyboard from
+  // before a riwayah switch could carry another riwayah's reciter).
+  if (!isReciter(key) || !recitersForRiwayah(normalizeRiwayah(sub.riwayah)).includes(key)) {
     await ctx.answerCallbackQuery();
     return;
   }
@@ -822,6 +866,28 @@ bot.callbackQuery(new RegExp(`^${RECITER_PICK_PREFIX}(.+)$`), async (ctx) => {
   await ctx.answerCallbackQuery();
   // Confirm with the "try it on today's page" preview button, like the ayah bot.
   await replyReciterChosen(ctx, key);
+});
+
+// Pick a riwayah: switch the mushaf (text + image), keep the page number, and
+// reset the reciter to one that recites the new riwayah. Validates the choice is
+// currently offered (a stale keyboard cannot select a since-disabled riwayah).
+bot.callbackQuery(new RegExp(`^${RIWAYAH_PICK_PREFIX}(.+)$`), async (ctx) => {
+  const sub = await userFromCallback(ctx);
+  if (!sub) {
+    await ctx.answerCallbackQuery();
+    return;
+  }
+  const key = ctx.match![1];
+  const offered = await offeredRiwayat();
+  if (!isRiwayah(key) || !offered.includes(key)) {
+    await ctx.answerCallbackQuery();
+    return;
+  }
+  const reciter = reciterForRiwayah(sub.reciter, key);
+  await setRiwayah(sub.id, key, reciter);
+  await ctx.editMessageReplyMarkup().catch(() => {}); // drop the picker
+  await ctx.answerCallbackQuery();
+  await ctx.reply(COPY.riwayahUpdated(riwayahLabel(key), reciter));
 });
 
 // "Try it on today's page": play ONE page's recitation (today's delivered page,
@@ -1233,12 +1299,16 @@ bot.catch((err) => {
  *  the user bot is enabled; admin commands are never listed publicly. */
 async function setBotCommands() {
   if (config.userWirdEnabled) {
+    // Offer /riwayah in the menu only when more than one transmission is ready
+    // (otherwise it would just say "only Hafs"). The rest are always present.
+    const showRiwayah = (await offeredRiwayat()).length > 1;
     await bot.api.setMyCommands([
       { command: 'today', description: 'قراءة ورد اليوم' },
       { command: 'next', description: 'تأكيد القراءة والانتقال إلى الورد التالي' },
       { command: 'wird', description: 'حجم الورد اليومي' },
       { command: 'tajweed', description: 'درس التجويد اليومي (تشغيل/إيقاف)' },
       { command: 'reciter', description: 'تلاوة الصفحة: اختيار القارئ أو الإيقاف' },
+      ...(showRiwayah ? [{ command: 'riwayah', description: 'اختيار الرواية (المصحف)' }] : []),
       { command: 'tafsir', description: 'تفسير صفحات وردك (رابط)' },
       { command: 'format', description: 'طريقة الإرسال: نص أو صورة' },
       { command: 'page', description: 'الانتقال إلى صفحة معيّنة' },
