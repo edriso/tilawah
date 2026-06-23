@@ -190,11 +190,22 @@ Warsh is invisible and the bot is exactly as before.
 
 ## Stage E — operator runbook (turn Warsh on)
 
-Everything below is done on the server / your laptop; no code change is needed
-(the existing `data:mushaf` and `verify:audio` tools already take the riwayah via
-their `--source` / `--out` / `--dir` flags).
+No code change is needed. Two machines are involved, and it matters which is
+which:
 
-1. **Get + verify the Warsh page images (604).** Render a verified KFGQPC Warsh
+- **Your laptop** (has the tilawah repo + pnpm/node): steps 1–2 + 4. The `pnpm`
+  commands run HERE, never on the server. The existing `data:mushaf` and
+  `verify:audio` tools already take the riwayah via `--source` / `--out` / `--dir`.
+- **The server** (Docker only, no pnpm): steps 3, 5, 6. Pure shell + `docker compose`.
+
+Prerequisite: this layout self-hosts EVERY riwayah's assets under a `{riwayah}`
+subfolder, so Hafs is self-hosted too. If your production image/audio source is
+currently a remote URL (not a local `/app/assets/...` path), self-host Hafs first
+(`pnpm data:mushaf` / `pnpm data:page-audio`) before enabling Warsh. Check your
+current values on the server with:
+`docker compose exec tilawah printenv MUSHAF_IMAGE_BASE_URL PAGE_AUDIO_BASE_URL`.
+
+1. **[laptop] Get + verify the Warsh page images (604).** Render a verified KFGQPC Warsh
    Madani set (vector pages from https://pdf.quran.ws/ or the SVGs in
    quranpedia/quran-svg) to `001.jpg`..`604.jpg`, then fingerprint them:
 
@@ -202,7 +213,7 @@ their `--source` / `--out` / `--dir` flags).
                         --out assets/mushaf/warsh-asbahani
        # eyeball a few pages: they must be the 604-page Madinah Warsh edition
 
-2. **Get + verify the Warsh page audio (604).** Download محمد عبد الكريم's
+2. **[laptop] Get + verify the Warsh page audio (604).** Download محمد عبد الكريم's
    604-page Madinah Warsh-Asbahani set
    (https://archive.org/details/2435724525242002_yahoo_001) to
    `assets/page-audio/warsh-asbahani/AbdulKareem/Page001.mp3`..`Page604.mp3`,
@@ -213,7 +224,7 @@ their `--source` / `--out` / `--dir` flags).
 
    It is a community upload, so this verification is the trust gate (golden rule).
 
-3. **Relocate the existing Hafs assets into a `hafs/` subfolder** (the templates
+3. **[server] Relocate the existing Hafs assets into a `hafs/` subfolder** (the templates
    below namespace EVERY riwayah, so Hafs moves too — one-time):
 
        cd /opt/bots/data/tilawah
@@ -221,12 +232,12 @@ their `--source` / `--out` / `--dir` flags).
        # page-audio: mushaf reciters move under page-audio/hafs/<folder>/
        mkdir -p page-audio/hafs && mv page-audio/*/ page-audio/hafs/ 2>/dev/null || true
 
-4. **Rsync the Warsh assets up:**
+4. **[laptop] Rsync the Warsh assets up:**
 
        rsync -av assets/mushaf/warsh-asbahani/      root@<SERVER_IP>:/opt/bots/data/tilawah/mushaf/warsh-asbahani/
        rsync -av assets/page-audio/warsh-asbahani/  root@<SERVER_IP>:/opt/bots/data/tilawah/page-audio/warsh-asbahani/
 
-5. **Add `{riwayah}` to the templates** in `/opt/bots/.env` (or tilawah's env):
+5. **[server] Add `{riwayah}` to the templates** in `/opt/bots/.env` (or tilawah's env):
 
        MUSHAF_IMAGE_BASE_URL=/app/assets/mushaf/{riwayah}/{page3}.jpg
        PAGE_AUDIO_BASE_URL=/app/assets/page-audio/{riwayah}/{folder}/Page{page3}.mp3
@@ -234,7 +245,7 @@ their `--source` / `--out` / `--dir` flags).
    Confirm the volume mounts cover `mushaf/` and `page-audio/` parents (they do
    if you mount those dirs; see hetzner `templates/compose-with-assets.yml`).
 
-6. **Recreate the bot** so it picks up the new env (a restart will not reload it):
+6. **[server] Recreate the bot** so it picks up the new env (a restart will not reload it):
 
        cd /opt/bots && docker compose up -d tilawah
        docker compose exec tilawah ls assets/mushaf/warsh-asbahani | head   # confirm visible
