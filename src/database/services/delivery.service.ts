@@ -123,19 +123,26 @@ export async function confirmRead(
   nextPage: number,
   now: Date = new Date(),
 ): Promise<ConfirmResult> {
-  // Compare-and-set: advance only if still parked at fromPage.
-  const moved = await prisma.subscriber.updateMany({
-    where: { id: subscriberId, currentPage: fromPage },
-    data: { currentPage: nextPage },
+  // The advance and the "mark read" must be one atomic unit: if only the first
+  // landed, the position would move while the just-read wird stayed unconfirmed
+  // — a spurious "days not read" count until the next confirm self-healed it. An
+  // interactive transaction lets us keep the compare-and-set's conditional
+  // (return 'already' when no row matched) between the two writes.
+  return prisma.$transaction(async (tx) => {
+    // Compare-and-set: advance only if still parked at fromPage.
+    const moved = await tx.subscriber.updateMany({
+      where: { id: subscriberId, currentPage: fromPage },
+      data: { currentPage: nextPage },
+    });
+    if (moved.count === 0) return 'already';
+    // Mark this and any earlier unread days read, so the "days not read" count
+    // resets to zero. (All unconfirmed rows are for the same fromPage wird.)
+    await tx.deliveryLog.updateMany({
+      where: { subscriberId, status: 'sent', confirmedAt: null },
+      data: { confirmedAt: now },
+    });
+    return 'advanced';
   });
-  if (moved.count === 0) return 'already';
-  // Mark this and any earlier unread days read, so the "days not read" count
-  // resets to zero. (All unconfirmed rows are for the same fromPage wird.)
-  await prisma.deliveryLog.updateMany({
-    where: { subscriberId, status: 'sent', confirmedAt: null },
-    data: { confirmedAt: now },
-  });
-  return 'advanced';
 }
 
 /**
