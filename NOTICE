@@ -27,5 +27,29 @@ without change, as long as you:
 
 This project does all three. The text is treated as read-only data: it is
 verified on download (6236 ayat, correct count per surah) and is never
-edited by application code. The software itself is under the 0BSD license
-in the LICENSE file; this NOTICE covers only the bundled Quran data.
+edited by application code.
+
+Warsh riwayah (عن نافع، من طريق الأصبهاني)
+------------------------------------------
+
+For readers who follow the Warsh riwayah, the Quran text plus the Madani page
+(604) and juz (30) boundaries come from the King Fahd Complex (KFGQPC) Warsh
+Uthmanic data, the authoritative publisher of the Warsh Madani Mushaf. It is
+downloaded with `pnpm data:fetch:warsh` (from the verbatim KFGQPC mirror at
+https://github.com/thetruetruth/quran-data-kfgqpc) and stored, unchanged, at:
+
+    prisma/data/quran-warsh-asbahani.json
+
+The per-ayah page and juz are taken from, and every ayah is cross-checked
+against, the independent quran-meta library (https://github.com/quran-center/quran-meta,
+MIT), which exposes the Warsh Madani page/juz/count metadata. Nothing is written
+unless every check passes: 6214 ayat (the Madani count), the correct Madani count
+per surah, every ayah's page/juz agreeing with quran-meta, full 604-page and
+30-juz coverage, and the Madani markers (Al-Baqarah is 285 ayat, not Hafs's 286).
+The Warsh text and its numbers are read-only data, never edited by application
+code. KFGQPC content remains the property of the King Fahd Complex; it is used
+here, unmodified, for the non-commercial educational purpose of helping people
+read and revise the Quran.
+
+The software itself is under the 0BSD license in the LICENSE file; this NOTICE
+covers only the bundled Quran data.
