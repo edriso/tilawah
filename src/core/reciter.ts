@@ -5,26 +5,37 @@
 
 import { isValidPage } from './wird';
 import { hasPagePlaceholder } from './mushaf-image';
+import { DEFAULT_RIWAYAH, type RiwayahKey } from './riwayah';
 
 /** The reciter keys the bot offers. Stored as a short string on the subscriber
  *  (no Prisma enum), matching the rest of the schema. */
 export type ReciterKey = 'abdulbasit' | 'husary' | 'alafasy' | 'sudais' | 'minshawi';
 
-// Each key maps to its everyayah.com data folder (verified to have a per-page
-// PageMp3s set). Bitrate chosen per reciter for a good size/quality balance
-// (only 64/192 exist for some, 128 for others).
-export const RECITERS: Record<ReciterKey, { folder: string }> = {
-  abdulbasit: { folder: 'Abdul_Basit_Murattal_192kbps' },
-  husary: { folder: 'Husary_128kbps' },
-  alafasy: { folder: 'Alafasy_128kbps' },
-  sudais: { folder: 'Abdurrahmaan_As-Sudais_192kbps' },
-  minshawi: { folder: 'Minshawy_Murattal_128kbps' },
+export interface ReciterInfo {
+  /** The reciter's per-page audio folder (everyayah naming for Hafs; the
+   *  self-hosted folder name for a non-Hafs riwayah). */
+  folder: string;
+  /** Which riwayah this reciter recites. A reader is only offered the reciters
+   *  of their chosen riwayah. */
+  riwayah: RiwayahKey;
+}
+
+// Each key maps to its per-page audio folder and its riwayah. The Hafs folders
+// are everyayah.com data folders (verified to have a per-page PageMp3s set);
+// bitrate chosen per reciter for a good size/quality balance. Non-Hafs reciters
+// (Warsh, ...) are added with the riwayah feature (see docs/RIWAYAT.md).
+export const RECITERS: Record<ReciterKey, ReciterInfo> = {
+  abdulbasit: { folder: 'Abdul_Basit_Murattal_192kbps', riwayah: 'hafs' },
+  husary: { folder: 'Husary_128kbps', riwayah: 'hafs' },
+  alafasy: { folder: 'Alafasy_128kbps', riwayah: 'hafs' },
+  sudais: { folder: 'Abdurrahmaan_As-Sudais_192kbps', riwayah: 'hafs' },
+  minshawi: { folder: 'Minshawy_Murattal_128kbps', riwayah: 'hafs' },
 };
 
 /** The reciter keys in display order (default first). */
 export const RECITER_KEYS = Object.keys(RECITERS) as ReciterKey[];
 
-/** The product default for a new subscriber and the channel. */
+/** The product default for a new subscriber and the channel (a Hafs reciter). */
 export const DEFAULT_RECITER: ReciterKey = 'abdulbasit';
 
 /** True when `value` is a known reciter key. */
@@ -35,6 +46,27 @@ export function isReciter(value: unknown): value is ReciterKey {
 /** Coerce a stored/raw value into a valid reciter key, defaulting safely. */
 export function normalizeReciter(raw: unknown): ReciterKey {
   return isReciter(raw) ? raw : DEFAULT_RECITER;
+}
+
+/** The reciters offered for a riwayah, in registry order. A reader sees only
+ *  these in the picker, so a Hafs voice is never offered for a Warsh mushaf. */
+export function recitersForRiwayah(riwayah: RiwayahKey): ReciterKey[] {
+  return RECITER_KEYS.filter((key) => RECITERS[key].riwayah === riwayah);
+}
+
+/** The default reciter for a riwayah: the global default for Hafs, otherwise the
+ *  first reciter listed for that riwayah (or the global default if none yet). */
+export function defaultReciterForRiwayah(riwayah: RiwayahKey): ReciterKey {
+  if (riwayah === DEFAULT_RIWAYAH) return DEFAULT_RECITER;
+  return recitersForRiwayah(riwayah)[0] ?? DEFAULT_RECITER;
+}
+
+/** Coerce a reciter to one valid for `riwayah`: keep it if it already recites
+ *  that riwayah, else fall back to the riwayah's default. Used when a reader
+ *  switches riwayah so their reciter never points at the wrong mushaf. */
+export function reciterForRiwayah(raw: unknown, riwayah: RiwayahKey): ReciterKey {
+  const reciter = normalizeReciter(raw);
+  return RECITERS[reciter].riwayah === riwayah ? reciter : defaultReciterForRiwayah(riwayah);
 }
 
 // The DEFAULT per-page template: everyayah's pre-split PageMp3s. {folder} is the

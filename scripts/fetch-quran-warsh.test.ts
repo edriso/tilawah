@@ -7,7 +7,9 @@ describe('stripAyahNumber', () => {
       'اِ۬لْحَمْدُ لِلهِ رَبِّ اِ۬لْعَٰلَمِينَ',
     );
     // multi-digit marker, and a leading space (as seen at 114:6)
-    expect(stripAyahNumber(' مِنَ اَ۬لْجِنَّةِ وَالنَّاسِۖ ٢٨٦')).toBe('مِنَ اَ۬لْجِنَّةِ وَالنَّاسِۖ');
+    expect(stripAyahNumber(' مِنَ اَ۬لْجِنَّةِ وَالنَّاسِۖ ٢٨٦')).toBe(
+      'مِنَ اَ۬لْجِنَّةِ وَالنَّاسِۖ',
+    );
   });
 
   it('leaves real text untouched (no trailing digits)', () => {

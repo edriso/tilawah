@@ -38,18 +38,24 @@ model Surah {
 
 model Ayah {
   id            Int    @id @default(autoincrement())
+  // The riwayah this ayah belongs to: "hafs" (Tanzil Uthmani, the default and
+  // only one seeded out of the box) or "warsh-asbahani" (KFGQPC). Both sets live
+  // here side by side; every read filters by the subscriber's riwayah. The
+  // Madani count differs (Warsh 6214 vs Hafs 6236), which is exactly why riwayah
+  // is part of the ayah's identity. See src/core/riwayah.ts.
+  riwayah       String @default("hafs") @db.VarChar(32)
   surahNumber   Int    @map("surah_number")
   numberInSurah Int    @map("number_in_surah")
-  text          String @db.Text // Uthmani text, exactly as Tanzil shipped it
+  text          String @db.Text // Uthmani text, exactly as the source shipped it
   // Madani Mushaf page (1-604) and juz (1-30) this ayah sits on. These drive
-  // the whole wird engine: "the next N pages" is just a query on page.
+  // the whole wird engine: "the next N pages" is just a query on (riwayah, page).
   page          Int
   juz           Int
 
   surah Surah @relation(fields: [surahNumber], references: [number])
 
-  @@unique([surahNumber, numberInSurah], map: "ayat_surah_number_in_surah_key")
-  @@index([page]) // fetching one page's ayat is the hot path
+  @@unique([riwayah, surahNumber, numberInSurah], map: "ayat_riwayah_surah_ayah_key")
+  @@index([riwayah, page]) // fetching one riwayah's page is the hot path
   @@map("ayat")
 }
 
@@ -99,6 +105,12 @@ model Subscriber {
   // string, no Prisma enum), default Abdul Basit (murattal).
   wirdAudioEnabled Boolean @default(true) @map("wird_audio_enabled")
   reciter          String  @default("abdulbasit") @map("reciter") @db.VarChar(16)
+
+  // The riwayah (transmission) the reader follows: "hafs" (default, the seeded
+  // Tanzil text and every shipped reciter) or "warsh-asbahani". It selects which
+  // mushaf text/images and which reciters they receive. The channel stays
+  // "hafs". A short string, not a Prisma enum. See src/core/riwayah.ts.
+  riwayah          String  @default("hafs") @map("riwayah") @db.VarChar(32)
 
   // Daily tajweed micro-lesson, posted right before the wird. OFF by default;
   // a reader opts in with /tajweed on (the channel admin with /admin_tajweed
@@ -173,13 +185,17 @@ model DeliveryLog {
 // no dependency on the source staying reachable). At most 604 small rows.
 
 model MushafPageImage {
-  // The Madani Mushaf page (1..604) is its natural primary key.
-  page      Int      @id
+  // A Warsh page 25 is a different image from a Hafs page 25, so the cache is
+  // keyed by (riwayah, page). Existing rows default to "hafs".
+  riwayah   String   @default("hafs") @db.VarChar(32)
+  // The Madani Mushaf page (1..604).
+  page      Int
   // The Telegram file_id returned for this page, reused on every later send.
   fileId    String   @map("file_id") @db.VarChar(255)
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
+  @@id([riwayah, page])
   @@map("mushaf_page_images")
 }
 
@@ -209,6 +225,9 @@ model TajweedAudio {
 // trusted source (everyayah) once and then re-sent by file_id forever.
 
 model PageAudio {
+  // The riwayah (see src/core/riwayah.ts); existing rows default to "hafs".
+  // A page's recitation differs per riwayah, so it is part of the key.
+  riwayah   String   @default("hafs") @db.VarChar(32)
   page      Int
   // The reciter key (see src/core/reciter.ts), e.g. "abdulbasit".
   reciter   String   @db.VarChar(16)
@@ -216,6 +235,6 @@ model PageAudio {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  @@id([page, reciter])
+  @@id([riwayah, page, reciter])
   @@map("page_audio")
 }

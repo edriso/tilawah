@@ -1,15 +1,20 @@
 import { prisma } from '../client';
+import { DEFAULT_RIWAYAH, type RiwayahKey } from '../../core';
 
 // The Telegram file_id cache for page-recitation clips, the audio twin of
 // mushaf-image.service. The first time a page goes out in a given reciter's
-// voice, Telegram fetches it from the source (everyayah) and hands back a
-// file_id; we store it keyed by (page, reciter) and reuse it forever. See
-// PageAudio in the schema.
+// voice, Telegram fetches it from the source and hands back a file_id; we store
+// it keyed by (riwayah, page, reciter) and reuse it forever. The riwayah is part
+// of the key because a page's recitation differs per riwayah. See PageAudio.
 
-/** The cached file_id for one page+reciter, or null if not cached yet. */
-export async function getCachedPageAudioId(page: number, reciter: string): Promise<string | null> {
+/** The cached file_id for one (riwayah, page, reciter), or null if not cached. */
+export async function getCachedPageAudioId(
+  page: number,
+  reciter: string,
+  riwayah: RiwayahKey = DEFAULT_RIWAYAH,
+): Promise<string | null> {
   const row = await prisma.pageAudio.findUnique({
-    where: { page_reciter: { page, reciter } },
+    where: { riwayah_page_reciter: { riwayah, page, reciter } },
     select: { fileId: true },
   });
   return row?.fileId ?? null;
@@ -20,10 +25,15 @@ export async function getCachedPageAudioId(page: number, reciter: string): Promi
  * id can change if the source clip is replaced, and a concurrent first-send for
  * the same page must not error.
  */
-export function cachePageAudioId(page: number, reciter: string, fileId: string) {
+export function cachePageAudioId(
+  page: number,
+  reciter: string,
+  fileId: string,
+  riwayah: RiwayahKey = DEFAULT_RIWAYAH,
+) {
   return prisma.pageAudio.upsert({
-    where: { page_reciter: { page, reciter } },
+    where: { riwayah_page_reciter: { riwayah, page, reciter } },
     update: { fileId },
-    create: { page, reciter, fileId },
+    create: { riwayah, page, reciter, fileId },
   });
 }

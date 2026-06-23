@@ -85,8 +85,9 @@ export function firstInt(value: string | number): number {
 }
 
 async function loadSource(src: string): Promise<KfgqpcAyah[]> {
-  const raw =
-    /^https?:\/\//i.test(src) ? await (await fetch(src)).text() : readFileSync(src, 'utf8');
+  const raw = /^https?:\/\//i.test(src)
+    ? await (await fetch(src)).text()
+    : readFileSync(src, 'utf8');
   const data = JSON.parse(raw) as KfgqpcAyah[];
   if (!Array.isArray(data)) throw new Error('Warsh source is not a JSON array');
   return data;
@@ -100,9 +101,7 @@ async function main(): Promise<void> {
   const src = process.env.WARSH_SOURCE_URL?.trim() || DEFAULT_SOURCE;
   console.log(`Downloading KFGQPC Warsh data from:\n  ${src}\n`);
   const rows = await loadSource(src);
-  const sha256 = createHash('sha256')
-    .update(JSON.stringify(rows))
-    .digest('hex');
+  const sha256 = createHash('sha256').update(JSON.stringify(rows)).digest('hex');
 
   // ── Verify the structure oracle agrees, ayah by ayah ──────────────
   if (WarshMeta.meta.numAyahs !== EXPECTED_AYAT)
@@ -144,9 +143,13 @@ async function main(): Promise<void> {
     const kfgPage = firstInt(r.page);
     const kfgJuz = firstInt(r.jozz);
     if (kfgPage !== page)
-      fail(`page mismatch at ${surah}:${ayah}: KFGQPC "${r.page}" (start ${kfgPage}) vs oracle ${page}`);
+      fail(
+        `page mismatch at ${surah}:${ayah}: KFGQPC "${r.page}" (start ${kfgPage}) vs oracle ${page}`,
+      );
     if (kfgJuz !== juz)
-      fail(`juz mismatch at ${surah}:${ayah}: KFGQPC "${r.jozz}" (start ${kfgJuz}) vs oracle ${juz}`);
+      fail(
+        `juz mismatch at ${surah}:${ayah}: KFGQPC "${r.jozz}" (start ${kfgJuz}) vs oracle ${juz}`,
+      );
 
     pages.add(page);
     juzs.add(juz);
@@ -161,8 +164,7 @@ async function main(): Promise<void> {
     const list = bySurah.get(s);
     if (!list) fail(`surah ${s} missing`);
     const want = WarshMeta.getAyahCountInSurah(s as Surah);
-    if (list.length !== want)
-      fail(`surah ${s} has ${list.length} ayat, oracle says ${want}`);
+    if (list.length !== want) fail(`surah ${s} has ${list.length} ayat, oracle says ${want}`);
   }
 
   // Full coverage of pages and juz.
@@ -209,7 +211,8 @@ async function main(): Promise<void> {
 
 // Run only when invoked directly (pnpm data:fetch:warsh), not when imported by
 // the unit test for the pure helpers above.
-const invokedDirectly = argv[1] !== undefined && resolve(argv[1]) === fileURLToPath(import.meta.url);
+const invokedDirectly =
+  argv[1] !== undefined && resolve(argv[1]) === fileURLToPath(import.meta.url);
 if (invokedDirectly) {
   main().catch((err) => {
     console.error(String(err));
