@@ -64,6 +64,16 @@ describe('pageAudioSource', () => {
     );
   });
 
+  it('substitutes {riwayah} so each riwayah has its own self-hosted path', () => {
+    expect(
+      pageAudioSource('husary', 5, '/audio/{riwayah}/{folder}/Page{page3}.mp3', 'warsh-asbahani'),
+    ).toBe('/audio/warsh-asbahani/Husary_128kbps/Page005.mp3');
+    // Default riwayah is hafs.
+    expect(pageAudioSource('husary', 5, '/audio/{riwayah}/{folder}/{page3}.mp3')).toBe(
+      '/audio/hafs/Husary_128kbps/005.mp3',
+    );
+  });
+
   it('throws on an out-of-range page', () => {
     expect(() => pageAudioSource('husary', 0)).toThrow();
     expect(() => pageAudioSource('husary', 605)).toThrow();

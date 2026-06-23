@@ -12,6 +12,7 @@
 // This file owns only the pure pieces: the format flag and the URL builder.
 
 import { isValidPage } from './wird';
+import { DEFAULT_RIWAYAH, type RiwayahKey } from './riwayah';
 
 /** The two ways a wird can be delivered. Stored as a short string on the
  *  subscriber row (no Prisma enum), matching the rest of the schema. */
@@ -54,6 +55,14 @@ export function hasPagePlaceholder(template: string): boolean {
   return PLACEHOLDER.test(template);
 }
 
+/** True when a template carries the optional {riwayah} placeholder. A template
+ *  without it serves one riwayah only (Hafs, the default); a non-Hafs reader is
+ *  given a page image only when the template namespaces by riwayah, so a Warsh
+ *  reader is never served the Hafs page of the same number. */
+export function hasRiwayahPlaceholder(template: string): boolean {
+  return /\{riwayah\}/.test(template);
+}
+
 /** True when a source string is an http(s) URL (Telegram fetches it) rather
  *  than a local filesystem path (the bot uploads the file itself). */
 export function isHttpSource(source: string): boolean {
@@ -67,7 +76,11 @@ export function isHttpSource(source: string): boolean {
  * on an invalid page (1..604) or a template with no placeholder, so a bad value
  * can never produce a wrong or empty source.
  */
-export function mushafImageSource(template: string, page: number): string {
+export function mushafImageSource(
+  template: string,
+  page: number,
+  riwayah: RiwayahKey = DEFAULT_RIWAYAH,
+): string {
   if (!isValidPage(page)) {
     throw new Error(`mushafImageSource: page must be 1..604, got ${page}`);
   }
@@ -77,6 +90,7 @@ export function mushafImageSource(template: string, page: number): string {
     );
   }
   return template
+    .replace(/\{riwayah\}/g, riwayah)
     .replace(/\{page3\}/g, String(page).padStart(3, '0'))
     .replace(/\{page\}/g, String(page));
 }

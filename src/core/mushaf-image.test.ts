@@ -3,11 +3,30 @@ import {
   isWirdFormat,
   normalizeWirdFormat,
   hasPagePlaceholder,
+  hasRiwayahPlaceholder,
   isHttpSource,
   mushafImageSource,
   WIRD_FORMAT_TEXT,
   WIRD_FORMAT_IMAGE,
 } from './mushaf-image';
+
+describe('mushafImageSource riwayah', () => {
+  it('defaults to hafs and leaves a no-riwayah template unchanged (back-compat)', () => {
+    expect(mushafImageSource('/m/{page3}.jpg', 5)).toBe('/m/005.jpg');
+  });
+
+  it('substitutes {riwayah} so a riwayah gets its own namespaced path', () => {
+    expect(mushafImageSource('/m/{riwayah}/{page3}.jpg', 5, 'warsh-asbahani')).toBe(
+      '/m/warsh-asbahani/005.jpg',
+    );
+    expect(mushafImageSource('/m/{riwayah}/{page3}.jpg', 5, 'hafs')).toBe('/m/hafs/005.jpg');
+  });
+
+  it('detects the {riwayah} placeholder (used to gate non-Hafs images)', () => {
+    expect(hasRiwayahPlaceholder('/m/{riwayah}/{page3}.jpg')).toBe(true);
+    expect(hasRiwayahPlaceholder('/m/{page3}.jpg')).toBe(false);
+  });
+});
 
 describe('wird format helpers', () => {
   it('recognises the two known formats and nothing else', () => {

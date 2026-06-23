@@ -9,9 +9,13 @@ import {
   getLocalContext,
   isDayActive,
   mushafImageSource,
+  hasRiwayahPlaceholder,
   tajweedAudioSource,
   isHttpSource,
   normalizeWirdFormat,
+  normalizeRiwayah,
+  DEFAULT_RIWAYAH,
+  type RiwayahKey,
   formatLesson,
   lessonIndexInRange,
   nextLessonIndex,
@@ -113,6 +117,9 @@ export interface SendWirdOptions {
   lead?: string;
   /** "text" (plain Quran text) or "image" (a photo of the Mushaf page). */
   format: WirdFormat;
+  /** The reader's riwayah, which selects the page image (and, for a non-Hafs
+   *  riwayah, gates it: see resolvePhoto). Defaults to Hafs when omitted. */
+  riwayah?: RiwayahKey;
 }
 
 export interface SendWirdResult {
@@ -139,11 +146,16 @@ function resolvePhoto(
   pageNumber: number,
   cached: Map<number, string>,
   baseUrl: string | null,
+  riwayah: RiwayahKey,
 ): string | InputFile | null {
   const cachedId = cached.get(pageNumber);
   if (cachedId) return cachedId;
   if (!baseUrl) return null;
-  return toMediaInput(mushafImageSource(baseUrl, pageNumber));
+  // Safety: a non-Hafs reader gets a page image ONLY when the template
+  // namespaces by riwayah ({riwayah}); otherwise the path would point at the
+  // Hafs page of the same number, so we return null and the page goes as text.
+  if (riwayah !== DEFAULT_RIWAYAH && !hasRiwayahPlaceholder(baseUrl)) return null;
+  return toMediaInput(mushafImageSource(baseUrl, pageNumber, riwayah));
 }
 
 /** Turn a media source string into what Telegram's send wants: an http(s) URL is
@@ -161,10 +173,22 @@ function toMediaInput(source: string): string | InputFile {
  *  built reciters get the correct, cover-embedded clip; the rest keep working off
  *  everyayah until their set is generated. (When the source is an http template,
  *  there is nothing local to miss, so it is used as-is.) */
-function pageAudioSourceFor(reciter: ReciterKey, page: number): string {
-  const src = pageAudioSource(reciter, page, config.pageAudioBaseUrl);
+function pageAudioSourceFor(reciter: ReciterKey, page: number, riwayah: RiwayahKey): string | null {
+  // A non-Hafs riwayah needs a riwayah-namespaced template, and has NO everyayah
+  // fallback (everyayah is Hafs only). When the configured template does not
+  // namespace by riwayah, or the self-hosted clip is not built yet, skip the
+  // audio rather than serve the wrong riwayah's recitation.
+  if (riwayah !== DEFAULT_RIWAYAH) {
+    if (!hasRiwayahPlaceholder(config.pageAudioBaseUrl)) return null;
+    const src = pageAudioSource(reciter, page, config.pageAudioBaseUrl, riwayah);
+    return !isHttpSource(src) && !existsSync(src) ? null : src;
+  }
+  // Hafs: the existing behaviour. When the self-hosted clip is missing, stream
+  // that page from everyayah so the verified set can roll out one reciter/page
+  // at a time.
+  const src = pageAudioSource(reciter, page, config.pageAudioBaseUrl, riwayah);
   if (!isHttpSource(src) && !existsSync(src)) {
-    return pageAudioSource(reciter, page, PAGE_AUDIO_TEMPLATE);
+    return pageAudioSource(reciter, page, PAGE_AUDIO_TEMPLATE, riwayah);
   }
   return src;
 }
@@ -183,10 +207,11 @@ async function cacheFileId(
   pageNumber: number,
   fileId: string | undefined,
   cached: Map<number, string>,
+  riwayah: RiwayahKey,
 ): Promise<void> {
   if (!fileId || cached.get(pageNumber) === fileId) return;
   try {
-    await cachePageImageId(pageNumber, fileId);
+    await cachePageImageId(pageNumber, fileId, riwayah);
     cached.set(pageNumber, fileId);
   } catch (err) {
     logger.warn('Could not cache page image file_id', { page: pageNumber, error: String(err) });
@@ -226,8 +251,12 @@ export async function sendWird(
     return sendPagesAsText(bot, chatId, pages, basmala, opts.lead);
   }
 
+  const riwayah = opts.riwayah ?? DEFAULT_RIWAYAH;
   const baseUrl = config.mushafImageBaseUrl ?? null;
-  const cached = await getCachedPageImageIds(pages.map((p) => p.pageNumber));
+  const cached = await getCachedPageImageIds(
+    pages.map((p) => p.pageNumber),
+    riwayah,
+  );
 
   let pagesSent = 0;
   let lastResult: SendResult = 'ok';
@@ -236,14 +265,14 @@ export async function sendWird(
   // file_id on success. 'blocked' stops the wird (text would be blocked too);
   // 'failed' falls back to text so a bad page never wedges the reader.
   const sendOnePage = async (page: PageContent, lead?: string): Promise<SendResult> => {
-    const photo = resolvePhoto(page.pageNumber, cached, baseUrl);
+    const photo = resolvePhoto(page.pageNumber, cached, baseUrl, riwayah);
     if (photo === null) {
       logger.debug('No page-image source; sending this page as text', { page: page.pageNumber });
       return sendMessages(bot, chatId, formatWird([page], basmala, lead));
     }
     const { result, fileId } = await sendPhoto(bot, chatId, photo, imageCaption(page, lead));
     if (result === 'ok') {
-      await cacheFileId(page.pageNumber, fileId, cached);
+      await cacheFileId(page.pageNumber, fileId, cached, riwayah);
       return 'ok';
     }
     if (result === 'blocked') return 'blocked';
@@ -253,7 +282,7 @@ export async function sendWird(
 
   for (const group of chunk(pages, MAX_ALBUM_SIZE)) {
     const lead = pagesSent === 0 ? opts.lead : undefined;
-    const photos = group.map((p) => resolvePhoto(p.pageNumber, cached, baseUrl));
+    const photos = group.map((p) => resolvePhoto(p.pageNumber, cached, baseUrl, riwayah));
 
     // Album the group when it has 2+ pages and every page has a real source
     // (a page with no source must go as text, which cannot sit in a photo album).
@@ -264,7 +293,9 @@ export async function sendWird(
       }));
       const album = await sendPhotoAlbum(bot, chatId, items);
       if (album.result === 'ok') {
-        await Promise.all(group.map((p, i) => cacheFileId(p.pageNumber, album.fileIds[i], cached)));
+        await Promise.all(
+          group.map((p, i) => cacheFileId(p.pageNumber, album.fileIds[i], cached, riwayah)),
+        );
         pagesSent += group.length;
         lastResult = 'ok';
         continue;
@@ -498,15 +529,18 @@ export async function sendPageAudio(
   chatId: bigint,
   pages: PageContent[],
   reciter: ReciterKey,
+  riwayah: RiwayahKey = DEFAULT_RIWAYAH,
 ): Promise<void> {
   for (const page of pages) {
     try {
-      const cached = await getCachedPageAudioId(page.pageNumber, reciter);
+      const cached = await getCachedPageAudioId(page.pageNumber, reciter, riwayah);
       let audio: string | InputFile;
       if (cached) {
         audio = cached;
       } else {
-        audio = toMediaInput(pageAudioSourceFor(reciter, page.pageNumber));
+        const src = pageAudioSourceFor(reciter, page.pageNumber, riwayah);
+        if (src === null) continue; // no source for this riwayah/page: skip its audio
+        audio = toMediaInput(src);
       }
       const { result, fileId } = await sendAudio(bot, chatId, audio, {
         caption: COPY.pageAudioCaption(page.pageNumber, reciter),
@@ -519,7 +553,7 @@ export async function sendPageAudio(
       });
       if (result === 'blocked') return; // the chat is blocked; stop trying
       if (result === 'ok' && fileId && fileId !== cached) {
-        await cachePageAudioId(page.pageNumber, reciter, fileId);
+        await cachePageAudioId(page.pageNumber, reciter, fileId, riwayah);
       }
     } catch (err) {
       logger.warn('Page recitation failed (wird already sent)', {
@@ -618,17 +652,20 @@ export async function sendWirdNow(
     currentPage: number;
     wirdSize: number;
     wirdFormat: string;
+    riwayah?: string;
   },
   lead: string,
 ): Promise<number> {
+  const riwayah = normalizeRiwayah(sub.riwayah);
   const [content, basmala] = await Promise.all([
-    getWird(sub.currentPage, sub.wirdSize),
+    getWird(sub.currentPage, sub.wirdSize, riwayah),
     getBasmala(),
   ]);
   if (content.length === 0) return 0;
   const { pagesSent } = await sendWird(bot, sub.chatId, content, basmala, {
     lead,
     format: normalizeWirdFormat(sub.wirdFormat),
+    riwayah,
   });
   return pagesSent;
 }
@@ -641,11 +678,12 @@ export async function sendWirdNow(
  */
 export async function sendWirdAudioNow(
   bot: Bot<Context>,
-  sub: { chatId: bigint; currentPage: number; wirdSize: number; reciter: string },
+  sub: { chatId: bigint; currentPage: number; wirdSize: number; reciter: string; riwayah?: string },
 ): Promise<void> {
-  const pages = await getWird(sub.currentPage, sub.wirdSize);
+  const riwayah = normalizeRiwayah(sub.riwayah);
+  const pages = await getWird(sub.currentPage, sub.wirdSize, riwayah);
   if (pages.length === 0) return;
-  await sendPageAudio(bot, sub.chatId, pages, normalizeReciter(sub.reciter));
+  await sendPageAudio(bot, sub.chatId, pages, normalizeReciter(sub.reciter), riwayah);
 }
 
 /**
@@ -688,7 +726,8 @@ export async function deliverDueSubscribers(
         continue;
       }
 
-      const content = await getWird(sub.currentPage, sub.wirdSize);
+      const riwayah = normalizeRiwayah(sub.riwayah);
+      const content = await getWird(sub.currentPage, sub.wirdSize, riwayah);
       if (content.length === 0) {
         // No pages resolved (a data fault, which assertQuranSeeded should
         // prevent). Never "succeed" on an empty send: that would advance the
@@ -722,6 +761,7 @@ export async function deliverDueSubscribers(
       const { pagesSent, lastResult: result } = await sendWird(bot, sub.chatId, content, basmala, {
         lead,
         format: normalizeWirdFormat(sub.wirdFormat),
+        riwayah,
       });
 
       if (pagesSent === 0) {
@@ -790,6 +830,7 @@ export async function deliverDueSubscribers(
           sub.chatId,
           content.slice(0, pagesSent),
           normalizeReciter(sub.reciter),
+          riwayah,
         );
       }
 
@@ -813,9 +854,10 @@ export async function deliverDueSubscribers(
 export async function previewWird(sub: {
   currentPage: number;
   wirdSize: number;
+  riwayah?: string;
 }): Promise<string[]> {
   const [content, basmala] = await Promise.all([
-    getWird(sub.currentPage, sub.wirdSize),
+    getWird(sub.currentPage, sub.wirdSize, normalizeRiwayah(sub.riwayah)),
     getBasmala(),
   ]);
   if (content.length === 0) return [];
@@ -893,6 +935,7 @@ export interface TodaySubscriber {
   pausedAt: Date | null;
   currentPage: number;
   wirdSize: number;
+  riwayah?: string;
 }
 
 /**
@@ -912,7 +955,7 @@ export async function buildTodayView(sub: TodaySubscriber, now: Date): Promise<T
   const scheduledFor = local.date;
   const delivered = await getDeliveryFor(sub.id, scheduledFor);
 
-  const content = await getWird(sub.currentPage, sub.wirdSize);
+  const content = await getWird(sub.currentPage, sub.wirdSize, normalizeRiwayah(sub.riwayah));
   if (content.length === 0) {
     return {
       pages: [],

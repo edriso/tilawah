@@ -227,7 +227,7 @@ describe('buildTodayView (read-gated: shows the live wird, never advances)', () 
     expect(view.alreadyDelivered).toBe(true);
     expect(view.record).toBeNull();
     // The position never moved, so the live wird IS the unread one (current page).
-    expect(h.getWird).toHaveBeenCalledWith(5, 1);
+    expect(h.getWird).toHaveBeenCalledWith(5, 1, 'hafs');
   });
 
   it('reflects a raised wird size at once, even after today was delivered', async () => {
@@ -237,7 +237,7 @@ describe('buildTodayView (read-gated: shows the live wird, never advances)', () 
     h.getWird.mockResolvedValue(manyPages(5));
     const view = await buildTodayView(todaySub({ wirdSize: 5 }), NOW);
     expect(view.record).toBeNull(); // already delivered, so not re-recorded
-    expect(h.getWird).toHaveBeenCalledWith(5, 5); // the bigger, live wird
+    expect(h.getWird).toHaveBeenCalledWith(5, 5, 'hafs'); // the bigger, live wird
     expect(view.pages).toHaveLength(5);
   });
 
@@ -327,7 +327,7 @@ describe('sendWirdAudioNow (on-demand recitation for the current wird)', () => {
       wirdSize: 2,
       reciter: 'abdulbasit',
     });
-    expect(h.getWird).toHaveBeenCalledWith(10, 2); // the live wird
+    expect(h.getWird).toHaveBeenCalledWith(10, 2, 'hafs'); // the live wird
     expect(h.sendAudio).toHaveBeenCalledTimes(TWO_PAGES.length); // one clip per page
   });
 
@@ -604,7 +604,7 @@ describe('deliverDueSubscribers (image format)', () => {
     expect(photo).toBe('https://x/001.png');
     expect(typeof caption).toBe('string');
     // The returned file_id is cached for next time.
-    expect(h.cachePageImageId).toHaveBeenCalledWith(1, 'FILE_1');
+    expect(h.cachePageImageId).toHaveBeenCalledWith(1, 'FILE_1', 'hafs');
     expect(h.commitDelivery).toHaveBeenCalledOnce();
     expect(stats).toMatchObject({ due: 1, sent: 1, failed: 0 });
   });
@@ -615,7 +615,7 @@ describe('deliverDueSubscribers (image format)', () => {
     await deliverDueSubscribers(fakeBot, NOW);
     const photoArg = h.sendPhoto.mock.calls[0][2];
     expect(photoArg).toBeInstanceOf(InputFile); // uploaded from disk, not a URL string
-    expect(h.cachePageImageId).toHaveBeenCalledWith(1, 'FILE_1'); // file_id still cached
+    expect(h.cachePageImageId).toHaveBeenCalledWith(1, 'FILE_1', 'hafs'); // file_id still cached
   });
 
   it('reuses a cached file_id and does not re-cache it', async () => {
@@ -688,8 +688,8 @@ describe('deliverDueSubscribers (image format)', () => {
     expect(items[0].caption).toContain('🌿'); // lead on the first item
     expect(items[1].caption).toBeUndefined(); // Telegram shows only the first caption
     // Each page's returned file_id is cached, and the position advances by 2.
-    expect(h.cachePageImageId).toHaveBeenCalledWith(1, 'FA1');
-    expect(h.cachePageImageId).toHaveBeenCalledWith(2, 'FA2');
+    expect(h.cachePageImageId).toHaveBeenCalledWith(1, 'FA1', 'hafs');
+    expect(h.cachePageImageId).toHaveBeenCalledWith(2, 'FA2', 'hafs');
     expect(h.commitDelivery.mock.calls[0][0]).toMatchObject({
       pageCount: 2,
       nextPage: advanceStartPage(1, 2),
@@ -740,8 +740,8 @@ describe('deliverDueSubscribers (image format)', () => {
     expect(h.sendPhoto).not.toHaveBeenCalled();
     expect(h.sendMessages).not.toHaveBeenCalled();
     // All 12 pages went out; the position advances by 12.
-    expect(h.cachePageImageId).toHaveBeenCalledWith(1, 'FA1');
-    expect(h.cachePageImageId).toHaveBeenCalledWith(12, 'FA2'); // 2nd item of the 2nd album
+    expect(h.cachePageImageId).toHaveBeenCalledWith(1, 'FA1', 'hafs');
+    expect(h.cachePageImageId).toHaveBeenCalledWith(12, 'FA2', 'hafs'); // 2nd item of the 2nd album
     expect(h.commitDelivery.mock.calls[0][0]).toMatchObject({
       pageCount: 12,
       nextPage: advanceStartPage(1, 12),
@@ -872,7 +872,7 @@ describe('deliverDueSubscribers (page recitation)', () => {
     );
     // Silent: a quiet companion to the wird that just notified (matches ayah).
     expect(h.sendAudio.mock.calls[0][3]).toMatchObject({ silent: true });
-    expect(h.cachePageAudioId).toHaveBeenCalledWith(1, 'husary', 'AUDIO_1');
+    expect(h.cachePageAudioId).toHaveBeenCalledWith(1, 'husary', 'AUDIO_1', 'hafs');
   });
 
   it('sends one recitation PER page, in order, for a multi-page wird', async () => {
@@ -897,8 +897,8 @@ describe('deliverDueSubscribers (page recitation)', () => {
     expect(h.sendAudio.mock.calls[1][2]).toBe(
       'https://everyayah.com/data/Husary_128kbps/PageMp3s/Page002.mp3',
     );
-    expect(h.cachePageAudioId).toHaveBeenCalledWith(1, 'husary', 'AUDIO_1');
-    expect(h.cachePageAudioId).toHaveBeenCalledWith(2, 'husary', 'AUDIO_1');
+    expect(h.cachePageAudioId).toHaveBeenCalledWith(1, 'husary', 'AUDIO_1', 'hafs');
+    expect(h.cachePageAudioId).toHaveBeenCalledWith(2, 'husary', 'AUDIO_1', 'hafs');
   });
 
   it('recites only the pages that actually went out on a partial multi-page wird', async () => {

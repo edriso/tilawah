@@ -102,6 +102,7 @@ export function pageAudioSource(
   reciter: ReciterKey,
   page: number,
   template: string = PAGE_AUDIO_TEMPLATE,
+  riwayah: RiwayahKey = DEFAULT_RIWAYAH,
 ): string {
   if (!isValidPage(page)) {
     throw new Error(`pageAudioSource: page must be 1..604, got ${page}`);
@@ -112,6 +113,7 @@ export function pageAudioSource(
     );
   }
   return template
+    .replace(/\{riwayah\}/g, riwayah)
     .replace(/\{folder\}/g, RECITERS[reciter].folder)
     .replace(/\{page3\}/g, String(page).padStart(3, '0'))
     .replace(/\{page\}/g, String(page));
