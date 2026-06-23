@@ -12,4 +12,5 @@ export * from './format';
 export * from './mushaf-image';
 export * from './tajweed';
 export * from './reciter';
+export * from './riwayah';
 export * from './tafseer';
