@@ -1301,20 +1301,29 @@ async function setBotCommands() {
   if (config.userWirdEnabled) {
     // Offer /riwayah in the menu only when more than one transmission is ready
     // (otherwise it would just say "only Hafs"). The rest are always present.
+    // Offer /riwayah only when more than one transmission is ready (otherwise it
+    // would just say "only Hafs"). Order = the daily flow, grouped: read now ->
+    // the wird's shape (size, page, format) -> how it is read (riwayah, reciter,
+    // tafsir, tajweed) -> schedule -> account.
     const showRiwayah = (await offeredRiwayat()).length > 1;
     await bot.api.setMyCommands([
+      // Read now
       { command: 'today', description: 'قراءة ورد اليوم' },
       { command: 'next', description: 'تأكيد القراءة والانتقال إلى الورد التالي' },
+      // The wird's shape
       { command: 'wird', description: 'حجم الورد اليومي' },
-      { command: 'tajweed', description: 'درس التجويد اليومي (تشغيل/إيقاف)' },
-      { command: 'reciter', description: 'تلاوة الصفحة: اختيار القارئ أو الإيقاف' },
-      ...(showRiwayah ? [{ command: 'riwayah', description: 'اختيار الرواية (المصحف)' }] : []),
-      { command: 'tafsir', description: 'تفسير صفحات وردك (رابط)' },
-      { command: 'format', description: 'طريقة الإرسال: نص أو صورة' },
       { command: 'page', description: 'الانتقال إلى صفحة معيّنة' },
+      { command: 'format', description: 'طريقة الإرسال: نص أو صورة' },
+      // How it is read (mushaf, recitation, understanding)
+      ...(showRiwayah ? [{ command: 'riwayah', description: 'اختيار الرواية (المصحف)' }] : []),
+      { command: 'reciter', description: 'تلاوة الصفحة: اختيار القارئ أو الإيقاف' },
+      { command: 'tafsir', description: 'تفسير صفحات وردك (رابط)' },
+      { command: 'tajweed', description: 'درس التجويد اليومي (تشغيل/إيقاف)' },
+      // Schedule
       { command: 'time', description: 'ضبط وقت الإرسال' },
       { command: 'days', description: 'اختيار أيام الإرسال' },
       { command: 'timezone', description: 'ضبط المنطقة الزمنية' },
+      // Account
       { command: 'pause', description: 'أخذ راحة أو العودة منها' },
       { command: 'status', description: 'عرض إعداداتك' },
       { command: 'help', description: 'المساعدة' },
