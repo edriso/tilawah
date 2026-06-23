@@ -31,6 +31,9 @@ Thumbs.db
 # tracked so the set can be re-verified offline (`pnpm data:mushaf --check`).
 assets/mushaf/*.jpg
 assets/mushaf/*.png
+# Per-riwayah image sets (e.g. assets/mushaf/warsh-asbahani/*.jpg) are just as
+# large, so ignore every subfolder's images too. The top-level manifest stays tracked.
+assets/mushaf/*/
 # The tajweed example clips (assets/tajweed/*.mp3, ~8 MB) ARE committed on
 # purpose, so they bake into the image and ship with the code. Not ignored.
 
