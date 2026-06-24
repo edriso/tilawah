@@ -258,6 +258,60 @@ Once step 5 lands, `offeredRiwayat()` returns `['hafs','warsh-asbahani']`,
    the riwayah's text, host its assets under its own subfolder, register the
    reciter in `reference`/`reciter.ts`. No engine change.
 
+## Reciter availability findings (إتقان thread, 2026-06-24)
+
+رقية بورية asked specifically for Warsh عن نافع **من طريق الأصبهاني** (not الأزرق),
+and named three reciters. What a search of the trusted sources turned up, judged
+against our golden rule (a verified, COMPLETE set, segmented to match the
+604-page Madinah layout the bot delivers — per-page, or per-ayah we can assemble
+per page):
+
+- **محمد عبد الكريم — DONE.** Warsh من طريق الأصبهاني, complete 604-page Madinah
+  set. This is the one shipped (Stage E reciter `abdulkarim`).
+- **محمد إرشاد مربعي — BLOCKED on segmentation, not route.** His Asbahani recitation
+  exists and is documented (IslamWeb qid 2421, Internet Archive), so the ROUTE is
+  right — but every copy found is split **by surah only** (≈88 files), with no
+  per-ayah or per-page (Madinah-aligned) split from a trusted source. We will not
+  self-segment a surah file into 604 pages (that fails the verification standard).
+  ADD WHEN: a verified per-page (or per-ayah) Asbahani set for him appears.
+- **أحمد ديبان — WRONG ROUTE.** His complete Quran on the authoritative reciter
+  index (mp3quran.net/ar/ahmd-dyb-n-4) is Warsh **من طريق الأزرق**, not الأصبهاني.
+  No complete Asbahani set for him was found. (His page-split archive uploads are
+  حدر / unconfirmed-rasm and not usable.) Not addable for her request as stated.
+
+Net: only محمد عبد الكريم meets the bar today. The blocker for the other two is
+the SEGMENTATION/route, not our engine — the moment a verified Asbahani set with
+the right split exists, adding a reciter is a one-line `reference`/`reciter.ts`
+change plus hosting the assets (no engine change).
+
+### Sources (this finding)
+- محمد إرشاد مربعي, Warsh Asbahani by surah — https://audio.islamweb.net/audio/index.php?page=allsoura&qid=2421
+- محمد إرشاد مربعي, Internet Archive (Asbahani) — https://archive.org/details/rabiea247524572457247247aa2043_gmail_040
+- أحمد ديبان, complete Warsh is **الأزرق** — https://www.mp3quran.net/ar/ahmd-dyb-n-4
+
+## Next up: Qaloon (قالون عن نافع)
+
+The blueprint above (stages 2–5) is now PROVEN by Warsh, so Qaloon is the same
+recipe with new data + assets and ONE registry/reference addition:
+
+1. **Registry:** add `qaloon` to `RiwayahKey` + `RIWAYAT` in `src/core/riwayah.ts`
+   (`nameAr: 'قالون عن نافع'`, `ayahCount: 6214`, `countingSchool: 'madani'`).
+   Unit-tested like the others.
+2. **Text dataset:** a `data:fetch:qaloon` script mirroring `fetch-quran-warsh.ts`
+   — fetch from the KFGQPC-derived sources (QuranJSON Qaloon + quran-meta
+   "Qalun ready" page/juz map), cross-check 6214 ayat / 604 pages / 30 juz against
+   a second oracle, write `prisma/data/quran-qaloon.json`. The per-riwayah seed
+   guard (`assertQuranSeeded`) already enforces complete-or-absent for it.
+3. **Reciter:** register a Qaloon reciter in `reciter.ts` **only** once a verified
+   complete per-page (or per-ayah) Qaloon set is in hand; until then Qaloon can
+   still ship as image+text (audio simply skips for a riwayah with no set).
+4. **Assets + turn-on:** identical to Stage E — host `mushaf/qaloon/…` and
+   `page-audio/qaloon/…`, and `offeredRiwayat()` surfaces it once the image
+   template namespaces by `{riwayah}` (already does after Stage E).
+
+No scheduler/advance/idempotency/channel change — everything is page-keyed and
+604 pages, exactly like Hafs and Warsh.
+
 ## Sources
 - KFGQPC dev platform — https://qurancomplex.gov.sa/quran-dev/
 - KFGQPC Warsh — https://qurancomplex.gov.sa/en/warsh/  | PDF — https://archive.org/details/quran-warsh-pdf
