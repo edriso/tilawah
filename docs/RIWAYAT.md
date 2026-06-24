@@ -289,15 +289,38 @@ change plus hosting the assets (no engine change).
 - محمد إرشاد مربعي, Internet Archive (Asbahani) — https://archive.org/details/rabiea247524572457247247aa2043_gmail_040
 - أحمد ديبان, complete Warsh is **الأزرق** — https://www.mp3quran.net/ar/ahmd-dyb-n-4
 
-## Next up: Qaloon (قالون عن نافع)
+## Qaloon (قالون عن نافع) — LIVE
 
-The blueprint above (stages 2–5) is now PROVEN by Warsh, so Qaloon is the same
-recipe with new data + assets and ONE registry/reference addition.
+Shipped and turned ON on the server: text seeded (6214), 604 page images and the
+مجدي سالم 604-page recitation hosted, so `/riwayah` now offers قالون عن نافع with
+image + audio, exactly like Warsh.
+
+The blueprint above (stages 2–5) is now PROVEN by Warsh, and Qaloon followed the
+same recipe with new data + assets and ONE registry/reference addition.
 
 Correction to the earlier reciter-availability note: a focused search ("مقسم
 صفحات 604 طبعة المدينة") found that Qaloon DOES have complete **per-page** sets on
 the King Fahd / Madinah 604 layout — so Qaloon, unlike the Warsh reciters رقية
 named, is NOT audio-blocked. It fits the page bot exactly like AbdulKareem's Warsh.
+
+How the assets were produced (for repeatability):
+- **Images:** the official KFGQPC "مصحف المدينة برواية قالون" HD PDF
+  (archive.org `Qaloon-HD`, `qaloun-1.pdf`, 640 pages, image-only) rendered with
+  `pdftoppm -jpeg -r 200`. The Mushaf starts at PDF page 4 (offset 3): the only
+  two heavy pages in the whole file are PDF 4 and 5 — the ornate Fatihah and
+  Baqarah-opening — so Mushaf 1..604 = PDF 4..607, renamed `001.jpg`..`604.jpg`.
+- **Audio:** مجدي سالم's per-page set (archive.org `3613614_yahoo_001_201603`),
+  picked over الحصري's because a page MP3-size ↔ on-page-text-length correlation
+  scored it 0.76 vs 0.57 (outliers only at the short-surah edges), and verified
+  604/604 valid + the same 0.755 correlation on the downloaded files, plus a
+  human by-ear spot-check.
+
+NOTE / future hardening: `offeredRiwayat()` gates on (seeded AND image template
+namespaced), NOT on the asset files existing. Because CI runs `db:seed` on deploy,
+Qaloon became "offered" the moment its code deployed — before its assets were
+hosted — so for a short window an image-format reader would have fallen back to
+text with no audio (graceful, never wrong content). If decoupling seed-from-host
+again, either host assets first or extend the gate to check the image set exists.
 
 **DONE in code (this session) — non-breaking, Qaloon stays dormant until its
 data is seeded and assets hosted:**
