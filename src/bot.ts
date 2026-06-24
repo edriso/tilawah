@@ -242,6 +242,11 @@ export async function sendTodayView(
   const { pagesSent } = await sendWird(bot, sub.chatId, view.pages, view.basmala, {
     lead: view.lead,
     format: normalizeWirdFormat(sub.wirdFormat),
+    // Pass the reader's riwayah so the page IMAGE (and its file_id cache) match
+    // the mushaf they chose. The text in view.pages was already loaded in the
+    // right riwayah by buildTodayView, but the image source/cache is keyed on it
+    // here — without it an image reader who switched would still see Hafs.
+    riwayah: normalizeRiwayah(sub.riwayah),
   });
 
   // Record today's delivery (no advance — the position moves on a confirmed
@@ -269,6 +274,7 @@ export async function sendTodayView(
       sub.chatId,
       view.pages.slice(0, pagesSent),
       normalizeReciter(sub.reciter),
+      normalizeRiwayah(sub.riwayah),
     );
   }
 
@@ -299,7 +305,7 @@ export async function repositionToPage(ctx: Context, sub: Subscriber, page: numb
     await ctx.reply(COPY.notReady);
     return;
   }
-  const juz = (await getJuzForPage(page)) ?? undefined;
+  const juz = (await getJuzForPage(page, normalizeRiwayah(sub.riwayah))) ?? undefined;
   await ctx.reply(COPY.pageSet(page, juz));
   await sendTodayView(ctx, { ...sub, currentPage: page }, view, now);
   if (sub.pausedAt) await ctx.reply(COPY.pausedHint);
@@ -531,7 +537,8 @@ bot.command('page', async (ctx) => {
   const arg = commandArg(ctx, 'page');
   if (!arg) {
     setPending(ctx.from!.id, 'page');
-    const currentJuz = (await getJuzForPage(sub.currentPage)) ?? undefined;
+    const currentJuz =
+      (await getJuzForPage(sub.currentPage, normalizeRiwayah(sub.riwayah))) ?? undefined;
     await ctx.reply(COPY.pagePrompt(sub.currentPage, currentJuz));
     return;
   }
@@ -909,8 +916,15 @@ bot.callbackQuery(RECITER_SAMPLE, async (ctx) => {
     return;
   }
   await ctx.answerCallbackQuery({ text: COPY.sampleSent });
-  // Best-effort: sendPageAudio swallows its own send errors.
-  await sendPageAudio(bot, sub.chatId, pages, normalizeReciter(sub.reciter));
+  // Best-effort: sendPageAudio swallows its own send errors. Pass the reader's
+  // riwayah so the sample plays the chosen mushaf's recitation, not Hafs.
+  await sendPageAudio(
+    bot,
+    sub.chatId,
+    pages,
+    normalizeReciter(sub.reciter),
+    normalizeRiwayah(sub.riwayah),
+  );
 });
 
 // ─── Day-picker buttons ─────────────────────────────────────────────

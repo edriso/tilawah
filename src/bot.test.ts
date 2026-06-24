@@ -236,6 +236,13 @@ describe('repositionToPage', () => {
     expect(h.sendMissedDaysNudge).not.toHaveBeenCalled();
     expect(h.sendConfirmPrompt).toHaveBeenCalledTimes(1); // the "read ✓" button still rides the wird
   });
+
+  it('looks up the page juz in the reader riwayah (the juz line must match the chosen mushaf)', async () => {
+    h.buildTodayView.mockResolvedValue(ONE_PAGE_VIEW());
+    const warshSub = { ...(SUB as object), riwayah: 'warsh-asbahani' } as never;
+    await repositionToPage(fakeCtx() as never, warshSub, 5);
+    expect(h.getJuzForPage).toHaveBeenCalledWith(5, 'warsh-asbahani');
+  });
 });
 
 // The page recitation rides a fresh delivery on the /page (reposition) path, for
@@ -310,6 +317,36 @@ describe('sendTodayView page recitation', () => {
     const pausedSub = { ...(SUB as object), pausedAt: new Date() } as never;
     await sendTodayView(fakeCtx() as never, pausedSub, TWO_PAGE_VIEW() as never, new Date());
     expect(h.sendConfirmPrompt).not.toHaveBeenCalled();
+  });
+
+  // Regression: /today and /page (which both render through sendTodayView) must
+  // render the reader's CHOSEN riwayah, not the Hafs default. The bug was that
+  // sendWird (image source + file_id cache) and sendPageAudio were called without
+  // the riwayah, so a reader who switched to Warsh still saw/heard the Hafs page
+  // until they advanced (where sendWirdNow did pass it).
+  it('passes the reader riwayah to sendWird so the image/cache match the chosen mushaf', async () => {
+    h.sendWird.mockResolvedValue({ pagesSent: 2, lastResult: 'ok' });
+    const warshSub = { ...(SUB as object), riwayah: 'warsh-asbahani' } as never;
+    await sendTodayView(fakeCtx() as never, warshSub, TWO_PAGE_VIEW() as never, new Date());
+    expect(h.sendWird.mock.calls[0][4]).toMatchObject({ riwayah: 'warsh-asbahani' });
+  });
+
+  it('passes the reader riwayah to the page recitation', async () => {
+    h.sendWird.mockResolvedValue({ pagesSent: 2, lastResult: 'ok' });
+    const warshSub = {
+      ...(SUB as object),
+      wirdAudioEnabled: true,
+      reciter: 'warsh-reciter',
+      riwayah: 'warsh-asbahani',
+    } as never;
+    await sendTodayView(fakeCtx() as never, warshSub, TWO_PAGE_VIEW() as never, new Date());
+    expect(h.sendPageAudio.mock.calls[0][4]).toBe('warsh-asbahani');
+  });
+
+  it('defaults to Hafs for a reader with no stored riwayah', async () => {
+    h.sendWird.mockResolvedValue({ pagesSent: 2, lastResult: 'ok' });
+    await sendTodayView(fakeCtx() as never, SUB, TWO_PAGE_VIEW() as never, new Date());
+    expect(h.sendWird.mock.calls[0][4]).toMatchObject({ riwayah: 'hafs' });
   });
 });
 
