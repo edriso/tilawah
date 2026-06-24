@@ -18,7 +18,7 @@ export type ReciterKey =
   | 'sudais'
   | 'minshawi'
   | 'abdulkarim'
-  | 'husary-qaloon';
+  | 'majdi-salem';
 
 export interface ReciterInfo {
   /** The reciter's per-page audio folder (everyayah naming for Hafs; the
@@ -44,11 +44,12 @@ export const RECITERS: Record<ReciterKey, ReciterInfo> = {
   // serves it from the riwayah-namespaced PAGE_AUDIO_BASE_URL once the operator
   // hosts it (see docs/RIWAYAT.md). Offered only when Warsh is enabled.
   abdulkarim: { folder: 'AbdulKareem', riwayah: 'warsh-asbahani' },
-  // Qaloon عن نافع: محمود خليل الحصري (إمام المقرئين, the same voice as Hafs
-  // `husary`), the complete 604-page Madinah Qaloon set. Self-hosted under
-  // page-audio/qaloon/Husary_Qaloon/; verified at Stage E like Warsh. Offered
-  // only when Qaloon is enabled (its data seeded + page images hosted).
-  'husary-qaloon': { folder: 'Husary_Qaloon', riwayah: 'qaloon' },
+  // Qaloon عن نافع: مجدي سالم, the complete 604-page set split on the Madinah
+  // (King Fahd) layout — the layout our Qaloon page map + images use, chosen for
+  // the closest page-alignment match (نداء الإسلام source). Self-hosted under
+  // page-audio/qaloon/Majdi_Salem/; verified at Stage E like Warsh. Offered only
+  // when Qaloon is enabled (its data seeded + page images hosted).
+  'majdi-salem': { folder: 'Majdi_Salem', riwayah: 'qaloon' },
 };
 
 /** The reciter keys in display order (default first). */

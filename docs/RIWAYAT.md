@@ -314,34 +314,34 @@ data is seeded and assets hosted:**
    30, per-surah counts, anchors, Madani marker). Run and verified; the frozen
    `prisma/data/quran-qaloon.json` is committed. The seed (`RIWAYAT_TO_SEED`) and
    the startup guard handle it complete-or-absent.
-3. **Reciter:** **محمود خليل الحصري** registered for Qaloon (`husary-qaloon`,
-   folder `Husary_Qaloon`) — the same trusted voice as Hafs `husary`, with a
-   complete Qaloon recitation (mp3quran `husr-qalon`). Like AbdulKareem for Warsh,
-   it is declared now and served once its verified per-page set is hosted (step 6).
+3. **Reciter:** **مجدي سالم** registered for Qaloon (`majdi-salem`, folder
+   `Majdi_Salem`) — its 604-page set is split on the Madinah (King Fahd) layout
+   we use (نداء الإسلام source), chosen over الحصري's set because a page-size↔text
+   alignment test scored it markedly higher (0.76 vs 0.57, outliers only at the
+   short-surah edges). Declared now and served once its verified per-page set is
+   hosted (step 6).
 
 **REMAINING to turn Qaloon on (operational, no engine/UX change):**
 
 4. **Run the fetch + seed:** `pnpm data:fetch:qaloon` (done — file committed) then,
    on the server's DB, `pnpm db:seed` (writes the 6214 Qaloon `Ayah` rows;
    idempotent).
-5. **Host the page images** under `mushaf/qaloon/…` (Stage E recipe; render a
-   verified KFGQPC Qaloon Madani set, e.g. via quranpedia/quran-svg `qalun` or
-   pdf.quran.ws). Once hosted, `offeredRiwayat()` surfaces Qaloon (the image
-   template already namespaces by `{riwayah}` after Warsh's Stage E).
-6. **Host the page audio** under `page-audio/qaloon/Husary_Qaloon/Page001.mp3`..
-   `Page604.mp3` from a verified per-page Qaloon set, then
-   `pnpm verify:audio --dir assets/page-audio/qaloon/Husary_Qaloon` (604 files,
-   each a real MP3) and spot-check that page N recites page N of THAT Madinah
-   layout. It is a community upload, so this verification is the trust gate
-   (golden rule). Candidate sets (all archive.org, "مقسم صفحات 604 طبعة المدينة"):
-   - الحصري (our registered voice) — `alhosari__qaloon--604-part-full-quran-604-page--safahat-mp3-96kb`
-   - مجدي سالم (explicit "طبعة المدينة"، نداء الإسلام) — `3613614_yahoo_001_201603`
-   - الدوكالي محمد العالم / الأمين قنيوة / أحمد الطرابلسي — alternates.
-   If الحصري's split fails the page-match spot-check, host مجدي سالم's instead and
-   change the registered folder/key — no engine change.
+5. **Host the page images** under `mushaf/qaloon/001.jpg…604.jpg` (Stage E recipe;
+   render the verified KFGQPC Qaloon Madani PDF — archive.org `Qaloon-HD`,
+   `qaloun-1.pdf` — to JPGs with `pdftoppm`, accounting for the front-matter page
+   offset so PDF→Mushaf page numbers line up). Once hosted, `offeredRiwayat()`
+   surfaces Qaloon (the image template already namespaces by `{riwayah}`).
+6. **Host the page audio** under `page-audio/qaloon/Majdi_Salem/Page001.mp3`..
+   `Page604.mp3` from مجدي سالم's verified set (archive.org `3613614_yahoo_001_201603`),
+   then `pnpm verify:audio --dir assets/page-audio/qaloon/Majdi_Salem` (604 files,
+   each a real MP3) and a listen spot-check that page N recites page N of THAT
+   Madinah layout. It is a community upload, so this verification is the trust
+   gate (golden rule). Alternates if needed: الحصري
+   (`alhosari__qaloon--604-part-full-quran-604-page--safahat-mp3-96kb`), الدوكالي،
+   الطرابلسي، قنيوة.
 
 No scheduler/advance/idempotency/channel change — everything is page-keyed and
-604 pages, exactly like Hafs and Warsh. A `husary-qaloon` reciter shown before
+604 pages, exactly like Hafs and Warsh. A `majdi-salem` reciter shown before
 its audio is hosted simply plays nothing (the resolver skips a missing set), so
 steps 5 and 6 can land in either order.
 
@@ -351,8 +351,8 @@ steps 5 and 6 can land in either order.
 - Text per riwayah — https://github.com/Ishaksmail/QuranJSON
 - KFGQPC text mirror used by the fetchers (Warsh `warshData_v10`, Qaloon `QaloonData_v10`) — https://github.com/thetruetruth/quran-data-kfgqpc
 - Page/juz map per riwayah — https://github.com/quran-center/quran-meta
-- Qaloon reciter index (الحصري) — https://www.mp3quran.net/ar/husr-qalon
-- Qaloon per-page (604, Madinah) audio sets — الحصري https://archive.org/details/alhosari__qaloon--604-part-full-quran-604-page--safahat-mp3-96kb ; مجدي سالم (نداء الإسلام، طبعة المدينة) https://archive.org/details/3613614_yahoo_001_201603
+- Qaloon page audio (chosen): مجدي سالم, per-page 604, طبعة المدينة، نداء الإسلام — https://archive.org/details/3613614_yahoo_001_201603 (alternate: الحصري — https://archive.org/details/alhosari__qaloon--604-part-full-quran-604-page--safahat-mp3-96kb , index https://www.mp3quran.net/ar/husr-qalon)
+- Qaloon page images: KFGQPC Madinah Qaloon HD PDF — https://archive.org/details/Qaloon-HD
 - Page images (SVG, multi-qiraat) — https://github.com/quranpedia/quran-svg  | vector — https://pdf.quran.ws/
 - Per-page Warsh-Asbahani audio (محمد عبدالكريم, 604) — https://archive.org/details/2435724525242002_yahoo_001
 - KSU Electronic Mushaf (Warsh second oracle) — https://quran.ksu.edu.sa/

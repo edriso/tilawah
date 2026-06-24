@@ -64,9 +64,9 @@ describe('reciter-by-riwayah', () => {
     }
   });
 
-  it('Qaloon offers محمود خليل الحصري (its complete per-page set)', () => {
-    expect(recitersForRiwayah('qaloon')).toContain('husary-qaloon');
-    expect(RECITERS['husary-qaloon'].riwayah).toBe('qaloon');
+  it('Qaloon offers مجدي سالم (its complete per-page set)', () => {
+    expect(recitersForRiwayah('qaloon')).toContain('majdi-salem');
+    expect(RECITERS['majdi-salem'].riwayah).toBe('qaloon');
   });
 });
 
