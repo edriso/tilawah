@@ -72,8 +72,10 @@ export function wirdSizeSummaryAr(pages: number): string {
 
 /**
  * A count of days in correct Arabic number-noun agreement: "يوم واحد" (1),
- * "يومان" (2), "N أيام" (3-10), "N يومًا" (11+). Used by the gentle "you have
- * not read for N days" nudge.
+ * "يومين" (2), "N أيام" (3-10), "N يومًا" (11+). Used only by the "you have not
+ * read for N days" nudge, where it follows the preposition "منذ" — so the dual
+ * is returned in its genitive form "يومين" ("منذ يومين"), not the citation
+ * (nominative) "يومان".
  */
 export function daysCountAr(days: number): string {
   if (days === 1) return 'يوم واحد';
@@ -283,8 +285,12 @@ export const COPY = {
       `أو اكتبه مع الأمر مباشرة، مثل ${ltr('/wird 5')}`,
     ].join('\n'),
   wirdInvalid: `الرجاء كتابة رقم صحيح من ١ إلى ٢٠، مثل ${ltr('/wird 5')}`,
+  // Phrased as a nominal sentence ("وردك الآن صفحتان") so the dual is the marfūʿ
+  // khabar — grammatically correct. (After the preposition "على" it would need
+  // the genitive "صفحتين"; the nominal phrasing keeps wirdSizeSummaryAr's
+  // nominative form right in every place it is used.)
   wirdUpdated: (pages: number) =>
-    `تم ضبط الورد على ${wirdSizeSummaryAr(pages)} في اليوم ✅\nبهذه السرعة تختم القرآن في نحو ${toArabicDigits(khatmaDays(pages))} يومًا بإذن الله.`,
+    `وردك الآن ${wirdSizeSummaryAr(pages)} كل يوم ✅\nبهذه السرعة تختم القرآن في نحو ${toArabicDigits(khatmaDays(pages))} يومًا بإذن الله.`,
 
   // ── Delivery format (text or image) ───────────────────────────────
   formatPrompt: (current: 'text' | 'image', imageAvailable: boolean) => {
@@ -438,7 +444,7 @@ export const COPY = {
   // mushaf, so a Warsh/other page can hold slightly different ayat at its edges.
   // The links still land the reader on the right ayat; this is honest framing.
   tafsirRiwayahNote:
-    'تنبيه: روابط التفسير تتبع ترتيب المصحف القياسي (حفص)، وقد تختلف حدود الصفحة قليلاً عن مصحف روايتك.',
+    'تنبيه: روابط التفسير تتبع ترتيب المصحف القياسي (حفص)، وقد تختلف حدود الصفحة قليلًا عن مصحف روايتك.',
 
   // ── Admin / channel ───────────────────────────────────────────────
   adminOnly: 'هذا الأمر للمشرف فقط.',
@@ -454,7 +460,7 @@ export const COPY = {
 
   adminWirdUsage: `اكتب عدد صفحات القناة في اليوم (١ إلى ٢٠)، مثل ${ltr('/admin_wird 1')}`,
   adminWirdInvalid: 'العدد غير صحيح. اكتب رقمًا صحيحًا من ١ إلى ٢٠.',
-  adminWirdDone: (pages: number) => `تم ضبط ورد القناة على ${wirdSizeSummaryAr(pages)} في اليوم ✅`,
+  adminWirdDone: (pages: number) => `ورد القناة الآن ${wirdSizeSummaryAr(pages)} كل يوم ✅`,
 
   adminTimeUsage: `اكتب وقت نشر القناة بنظام ٢٤ ساعة، مثل ${ltr('/admin_time 06:00')}`,
   adminTzUsage: `اكتب المنطقة الزمنية للقناة، مثل ${ltr('/admin_tz Africa/Cairo')}`,
