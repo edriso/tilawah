@@ -48,29 +48,25 @@ describe('reciter-by-riwayah', () => {
     expect(reciterForRiwayah('garbage', 'hafs')).toBe(defaultReciterForRiwayah('hafs'));
   });
 
-  // Invariant: a riwayah MAY ship with no reciter yet (text + image only; the
-  // audio resolver skips audio for it). But when it HAS reciters, every one must
-  // belong to it AND its default must be one of them — never a wrong-riwayah
-  // (e.g. Hafs) voice. This is the real guard behind defaultReciterForRiwayah:
-  // it must never silently hand a reader a voice from another mushaf.
-  it('a riwayah with reciters lists only its own, with an in-riwayah default', () => {
+  // Invariant: every riwayah in the registry has at least one reciter, all of its
+  // reciters belong to it, and its default is one of them — never a wrong-riwayah
+  // (e.g. Hafs) voice. This is the guard behind defaultReciterForRiwayah: a
+  // riwayah added without its reciter would otherwise silently hand readers a
+  // Hafs voice for a non-Hafs mushaf. Here it fails the build instead.
+  it('every riwayah has at least one in-riwayah reciter, with an in-riwayah default', () => {
     for (const riwayah of RIWAYAH_KEYS) {
       const reciters = recitersForRiwayah(riwayah);
+      expect(reciters.length).toBeGreaterThan(0);
       for (const key of reciters) expect(RECITERS[key].riwayah).toBe(riwayah);
-      if (reciters.length > 0) {
-        const def = defaultReciterForRiwayah(riwayah);
-        expect(RECITERS[def].riwayah).toBe(riwayah);
-        expect(reciters).toContain(def);
-      }
+      const def = defaultReciterForRiwayah(riwayah);
+      expect(RECITERS[def].riwayah).toBe(riwayah);
+      expect(reciters).toContain(def);
     }
   });
 
-  it('Qaloon ships without a reciter yet (text + image only)', () => {
-    // The current state: no verified per-page Qaloon recitation is in hand, so
-    // Qaloon has no reciter and the audio resolver skips audio for it. When a
-    // verified set is added (a reciter row tagged `qaloon`), this flips and the
-    // guarantee above begins covering it — a deliberate reminder, not a forever.
-    expect(recitersForRiwayah('qaloon')).toEqual([]);
+  it('Qaloon offers محمود خليل الحصري (its complete per-page set)', () => {
+    expect(recitersForRiwayah('qaloon')).toContain('husary-qaloon');
+    expect(RECITERS['husary-qaloon'].riwayah).toBe('qaloon');
   });
 });
 

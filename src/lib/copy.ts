@@ -99,6 +99,8 @@ const RECITER_NAME_AR: Record<string, string> = {
   sudais: 'عبد الرحمن السديس',
   minshawi: 'محمد صديق المنشاوي',
   abdulkarim: 'محمد عبد الكريم',
+  // The same person as `husary`, reciting Qaloon (a distinct audio set).
+  'husary-qaloon': 'محمود خليل الحصري',
 };
 
 export function reciterNameAr(key: string): string {

@@ -8,8 +8,17 @@ import { hasPagePlaceholder } from './mushaf-image';
 import { DEFAULT_RIWAYAH, type RiwayahKey } from './riwayah';
 
 /** The reciter keys the bot offers. Stored as a short string on the subscriber
- *  (no Prisma enum), matching the rest of the schema. */
-export type ReciterKey = 'abdulbasit' | 'husary' | 'alafasy' | 'sudais' | 'minshawi' | 'abdulkarim';
+ *  (no Prisma enum), matching the rest of the schema. A reciter is tied to ONE
+ *  riwayah; the same person reciting two riwayat is two keys (e.g. `husary` for
+ *  Hafs and `husary-qaloon` for Qaloon), since the audio sets differ. */
+export type ReciterKey =
+  | 'abdulbasit'
+  | 'husary'
+  | 'alafasy'
+  | 'sudais'
+  | 'minshawi'
+  | 'abdulkarim'
+  | 'husary-qaloon';
 
 export interface ReciterInfo {
   /** The reciter's per-page audio folder (everyayah naming for Hafs; the
@@ -35,6 +44,11 @@ export const RECITERS: Record<ReciterKey, ReciterInfo> = {
   // serves it from the riwayah-namespaced PAGE_AUDIO_BASE_URL once the operator
   // hosts it (see docs/RIWAYAT.md). Offered only when Warsh is enabled.
   abdulkarim: { folder: 'AbdulKareem', riwayah: 'warsh-asbahani' },
+  // Qaloon عن نافع: محمود خليل الحصري (إمام المقرئين, the same voice as Hafs
+  // `husary`), the complete 604-page Madinah Qaloon set. Self-hosted under
+  // page-audio/qaloon/Husary_Qaloon/; verified at Stage E like Warsh. Offered
+  // only when Qaloon is enabled (its data seeded + page images hosted).
+  'husary-qaloon': { folder: 'Husary_Qaloon', riwayah: 'qaloon' },
 };
 
 /** The reciter keys in display order (default first). */
@@ -60,12 +74,12 @@ export function recitersForRiwayah(riwayah: RiwayahKey): ReciterKey[] {
 }
 
 /** The default reciter for a riwayah: the global default for Hafs, otherwise the
- *  first reciter listed for that riwayah. A riwayah may have NO reciter yet
- *  (text + image only, e.g. Qaloon today); then this returns the global default
- *  as a harmless placeholder — the audio resolver (pageAudioSourceFor) skips
- *  audio for a non-Hafs riwayah with no built set, so that Hafs key is never
- *  actually played. `recitersForRiwayah` is the source of truth for what the
- *  /reciter picker shows (empty for a reciterless riwayah). */
+ *  first reciter listed for that riwayah. Every riwayah in the registry has at
+ *  least one reciter (enforced by reciter.test.ts), so the `?? DEFAULT_RECITER`
+ *  is only a defensive guard against a future reciterless riwayah — the audio
+ *  resolver (pageAudioSourceFor) would skip audio for it anyway, so that Hafs key
+ *  could never actually play. `recitersForRiwayah` is the source of truth for
+ *  what the /reciter picker shows. */
 export function defaultReciterForRiwayah(riwayah: RiwayahKey): ReciterKey {
   if (riwayah === DEFAULT_RIWAYAH) return DEFAULT_RECITER;
   return recitersForRiwayah(riwayah)[0] ?? DEFAULT_RECITER;
