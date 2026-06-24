@@ -895,6 +895,9 @@ bot.callbackQuery(new RegExp(`^${RECITER_PICK_PREFIX}(.+)$`), async (ctx) => {
 // Pick a riwayah: switch the mushaf (text + image), keep the page number, and
 // reset the reciter to one that recites the new riwayah. Validates the choice is
 // currently offered (a stale keyboard cannot select a since-disabled riwayah).
+// Keeping the page number is safe because EVERY offered riwayah is a 604-page
+// Madani mushaf: assertQuranSeeded refuses to boot a riwayah whose max page is
+// not 604, so the reader's current page always exists in the new mushaf.
 bot.callbackQuery(new RegExp(`^${RIWAYAH_PICK_PREFIX}(.+)$`), async (ctx) => {
   const sub = await userFromCallback(ctx);
   if (!sub) {

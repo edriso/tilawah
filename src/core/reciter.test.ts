@@ -10,6 +10,7 @@ import {
   reciterForRiwayah,
   pageAudioSource,
 } from './reciter';
+import { RIWAYAH_KEYS } from './riwayah';
 
 describe('reciter reference', () => {
   it('has the default first and every key mapped to a folder + riwayah', () => {
@@ -45,6 +46,21 @@ describe('reciter-by-riwayah', () => {
     expect(reciterForRiwayah('husary', 'hafs')).toBe('husary');
     // Garbage falls back to the riwayah default.
     expect(reciterForRiwayah('garbage', 'hafs')).toBe(defaultReciterForRiwayah('hafs'));
+  });
+
+  // Invariant: every riwayah the registry knows must have at least one reciter,
+  // and its default reciter must actually recite it. This is the guard behind
+  // defaultReciterForRiwayah's `?? DEFAULT_RECITER` fallback: without it, adding
+  // a riwayah (text + images) but forgetting its reciter would silently hand
+  // readers a Hafs voice for a non-Hafs mushaf. Here it fails the build instead.
+  it('every riwayah has at least one reciter, and its default belongs to it', () => {
+    for (const riwayah of RIWAYAH_KEYS) {
+      const reciters = recitersForRiwayah(riwayah);
+      expect(reciters.length).toBeGreaterThan(0);
+      const def = defaultReciterForRiwayah(riwayah);
+      expect(RECITERS[def].riwayah).toBe(riwayah);
+      expect(reciters).toContain(def);
+    }
   });
 });
 

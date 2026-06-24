@@ -122,6 +122,14 @@ export function hasAyahPlaceholder(template: string): boolean {
  * http(s) URL (Telegram fetches it) or a local path (the bot uploads it),
  * mirroring mushafImageSource. Throws on a bad ref or a template with no
  * placeholder, so a misconfigured value can never form a wrong/empty source.
+ *
+ * Hafs by design: unlike pageAudioSource/mushafImageSource, this takes no
+ * `riwayah` and the template has no {riwayah} placeholder. The tajweed deck is
+ * authored against the Hafs (Kufic) ayah numbering — each lesson NAMES an
+ * example by (surah, ayah) in that numbering and its text is read from the Hafs
+ * rows (getAyahText). So the example and its clip are intentionally Hafs for
+ * every reader, regardless of their wird riwayah. Revisit only if a per-riwayah
+ * lesson deck is ever authored.
  */
 export function tajweedAudioSource(template: string, surah: number, ayah: number): string {
   if (!Number.isInteger(surah) || surah < 1 || surah > 114) {

@@ -60,7 +60,10 @@ export function recitersForRiwayah(riwayah: RiwayahKey): ReciterKey[] {
 }
 
 /** The default reciter for a riwayah: the global default for Hafs, otherwise the
- *  first reciter listed for that riwayah (or the global default if none yet). */
+ *  first reciter listed for that riwayah. Every OFFERED riwayah must have at
+ *  least one reciter (enforced by reciter.test.ts); the `?? DEFAULT_RECITER` is
+ *  only a last-resort guard so a misconfiguration degrades to a (wrong-riwayah)
+ *  voice instead of `undefined` — it should never be hit in practice. */
 export function defaultReciterForRiwayah(riwayah: RiwayahKey): ReciterKey {
   if (riwayah === DEFAULT_RIWAYAH) return DEFAULT_RECITER;
   return recitersForRiwayah(riwayah)[0] ?? DEFAULT_RECITER;
