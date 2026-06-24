@@ -7,7 +7,10 @@ import { logger } from './lib/logger';
  */
 export function startHealthServer(): void {
   const parsed = parseInt(process.env.PORT || '', 10);
-  const port = Number.isInteger(parsed) && parsed >= 0 && parsed < 65536 ? parsed : 8080;
+  // Require a real port (1..65535). PORT=0 would bind a random OS-assigned port,
+  // making the health check unreachable at the expected address, so treat it
+  // (like any invalid value) as "use the default".
+  const port = Number.isInteger(parsed) && parsed > 0 && parsed < 65536 ? parsed : 8080;
 
   const server = createServer((req, res) => {
     if (req.method !== 'GET' || req.url !== '/health') {

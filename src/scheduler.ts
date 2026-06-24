@@ -15,10 +15,13 @@ const tasks: ScheduledTask[] = [];
 //
 // Note: /today is a second, interactive sender that runs OUTSIDE this lock (it
 // claims today's delivery when a user reads their wird early). The unique index
-// still prevents any double record/advance, so the only residual race is a user
-// running /today in the exact sub-second their scheduled send fires, which can
-// duplicate one message. Benign and near-impossible; a fuller fix would need a
-// per-subscriber mutex, not worth it under the single-process model.
+// still prevents any double record/advance (and the position never moves twice),
+// so the only residual race is a user running /today in the exact sub-second
+// their scheduled send fires. Both paths read hasDeliveryFor (a check, not a
+// claim) before sending, so that race can duplicate the VISIBLE payload — the
+// nudge, the lesson, the wird pages, and the recitation — even though only one
+// of them records the day and advances. Benign and near-impossible; a fuller fix
+// would need a per-subscriber mutex, not worth it under the single-process model.
 let deliveryRunning = false;
 
 /**

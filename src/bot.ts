@@ -2,6 +2,7 @@ import { Bot, InlineKeyboard, InputFile, type Context } from 'grammy';
 import { autoRetry } from '@grammyjs/auto-retry';
 import {
   activeDaysList,
+  isValidPage,
   nextPageAfter,
   advanceStartPage,
   nextLessonIndex,
@@ -705,10 +706,18 @@ bot.callbackQuery(new RegExp(`^${AUDIO_NOW}:(\\d+)$`), async (ctx) => {
     await ctx.answerCallbackQuery({ text: COPY.audioOff });
     return;
   }
+  // Callback data is client-supplied, so re-validate the page before it reaches
+  // the page math (pagesForWird throws on an out-of-range page). A crafted or
+  // replayed button is a quiet no-op, like a stale "read ✓" tap.
+  const page = Number(ctx.match![1]);
+  if (!isValidPage(page)) {
+    await ctx.answerCallbackQuery();
+    return;
+  }
   await ctx.answerCallbackQuery();
   // Best-effort: sendWirdAudioNow / sendPageAudio swallow their own send errors.
   // Play the wird the prompt showed (its start page), at the reader's wird size.
-  await sendWirdAudioNow(bot, { ...sub, currentPage: Number(ctx.match![1]) });
+  await sendWirdAudioNow(bot, { ...sub, currentPage: page });
 });
 
 // ─── Format-picker buttons ──────────────────────────────────────────
