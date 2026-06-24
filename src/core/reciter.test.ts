@@ -48,19 +48,29 @@ describe('reciter-by-riwayah', () => {
     expect(reciterForRiwayah('garbage', 'hafs')).toBe(defaultReciterForRiwayah('hafs'));
   });
 
-  // Invariant: every riwayah the registry knows must have at least one reciter,
-  // and its default reciter must actually recite it. This is the guard behind
-  // defaultReciterForRiwayah's `?? DEFAULT_RECITER` fallback: without it, adding
-  // a riwayah (text + images) but forgetting its reciter would silently hand
-  // readers a Hafs voice for a non-Hafs mushaf. Here it fails the build instead.
-  it('every riwayah has at least one reciter, and its default belongs to it', () => {
+  // Invariant: a riwayah MAY ship with no reciter yet (text + image only; the
+  // audio resolver skips audio for it). But when it HAS reciters, every one must
+  // belong to it AND its default must be one of them — never a wrong-riwayah
+  // (e.g. Hafs) voice. This is the real guard behind defaultReciterForRiwayah:
+  // it must never silently hand a reader a voice from another mushaf.
+  it('a riwayah with reciters lists only its own, with an in-riwayah default', () => {
     for (const riwayah of RIWAYAH_KEYS) {
       const reciters = recitersForRiwayah(riwayah);
-      expect(reciters.length).toBeGreaterThan(0);
-      const def = defaultReciterForRiwayah(riwayah);
-      expect(RECITERS[def].riwayah).toBe(riwayah);
-      expect(reciters).toContain(def);
+      for (const key of reciters) expect(RECITERS[key].riwayah).toBe(riwayah);
+      if (reciters.length > 0) {
+        const def = defaultReciterForRiwayah(riwayah);
+        expect(RECITERS[def].riwayah).toBe(riwayah);
+        expect(reciters).toContain(def);
+      }
     }
+  });
+
+  it('Qaloon ships without a reciter yet (text + image only)', () => {
+    // The current state: no verified per-page Qaloon recitation is in hand, so
+    // Qaloon has no reciter and the audio resolver skips audio for it. When a
+    // verified set is added (a reciter row tagged `qaloon`), this flips and the
+    // guarantee above begins covering it — a deliberate reminder, not a forever.
+    expect(recitersForRiwayah('qaloon')).toEqual([]);
   });
 });
 

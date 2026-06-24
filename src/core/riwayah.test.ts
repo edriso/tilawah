@@ -24,19 +24,25 @@ describe('riwayah reference', () => {
   it('encodes the verified counting facts (Kufic 6236 vs Madani 6214)', () => {
     expect(RIWAYAT.hafs).toMatchObject({ ayahCount: 6236, countingSchool: 'kufi' });
     expect(RIWAYAT['warsh-asbahani']).toMatchObject({ ayahCount: 6214, countingSchool: 'madani' });
+    // Qaloon shares the Madani count (6214) with Warsh.
+    expect(RIWAYAT.qaloon).toMatchObject({ ayahCount: 6214, countingSchool: 'madani' });
   });
 
   it('validates and normalizes keys', () => {
     expect(isRiwayah('hafs')).toBe(true);
     expect(isRiwayah('warsh-asbahani')).toBe(true);
+    expect(isRiwayah('qaloon')).toBe(true);
     expect(isRiwayah('nope')).toBe(false);
     expect(isRiwayah(undefined)).toBe(false);
     expect(normalizeRiwayah('warsh-asbahani')).toBe('warsh-asbahani');
+    expect(normalizeRiwayah('qaloon')).toBe('qaloon');
     expect(normalizeRiwayah('garbage')).toBe(DEFAULT_RIWAYAH);
   });
 
   it('labels a riwayah with its route note only when it has one', () => {
     expect(riwayahLabel('hafs')).toBe('حفص عن عاصم');
     expect(riwayahLabel('warsh-asbahani')).toBe('ورش عن نافع (من طريق الأصبهاني)');
+    // Qaloon has no route note, so just the name.
+    expect(riwayahLabel('qaloon')).toBe('قالون عن نافع');
   });
 });

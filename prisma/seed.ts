@@ -1,9 +1,10 @@
 // Seed the database from the frozen Quran data files.
 //
 // Order of operations:
-//   1. pnpm data:fetch        -> downloads + verifies + writes quran-uthmani.json (Hafs)
-//   1b. pnpm data:fetch:warsh -> (optional) writes quran-warsh-asbahani.json (Warsh)
-//   2. pnpm db:deploy         -> creates the tables (migrations)
+//   1. pnpm data:fetch         -> downloads + verifies + writes quran-uthmani.json (Hafs)
+//   1b. pnpm data:fetch:warsh  -> (optional) writes quran-warsh-asbahani.json (Warsh)
+//   1c. pnpm data:fetch:qaloon -> (optional) writes quran-qaloon.json (Qaloon)
+//   2. pnpm db:deploy          -> creates the tables (migrations)
 //   3. pnpm db:seed           -> this script: fills Surah and Ayah (with page/juz)
 //
 // Each riwayah's file is re-checked before anything is written, and the seed is
@@ -62,6 +63,14 @@ const RIWAYAT_TO_SEED: RiwayahSpec[] = [
     riwayah: 'warsh-asbahani',
     file: 'quran-warsh-asbahani.json',
     total: RIWAYAT['warsh-asbahani'].ayahCount, // 6214 (Madani)
+    perSurah: null,
+    required: false,
+    seedSurahs: false,
+  },
+  {
+    riwayah: 'qaloon',
+    file: 'quran-qaloon.json',
+    total: RIWAYAT.qaloon.ayahCount, // 6214 (Madani)
     perSurah: null,
     required: false,
     seedSurahs: false,

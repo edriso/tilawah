@@ -4,16 +4,17 @@
 // counting school + total ayat (its عدّ الآي). No database, no network, so it is
 // trivially testable.
 //
-// Hafs is the default and the only riwayah seeded today; Warsh (and later
-// Qaloon) are added as their own VERIFIED text + page map + page images + page
-// audio land (see docs/RIWAYAT.md). This registry just NAMES a riwayah and its
-// invariant facts; whether one is actually OFFERED to a reader is gated
-// separately on its data being fully seeded (the per-riwayah seed guard),
-// exactly the way a reciter key can exist before its audio set is built.
+// Hafs is the default; Warsh and Qaloon are added as their own VERIFIED text +
+// page map + page images + page audio land (see docs/RIWAYAT.md). This registry
+// just NAMES a riwayah and its invariant facts; whether one is actually OFFERED
+// to a reader is gated separately on its data being fully seeded (the
+// per-riwayah seed guard), exactly the way a reciter key can exist before its
+// audio set is built. A riwayah may have NO reciter yet (text + image only); the
+// audio resolver simply skips audio for it (see reciter.ts / pageAudioSourceFor).
 
 /** The riwayah keys the bot knows. Stored as a short string on the subscriber
  *  and on each Ayah/asset (no Prisma enum), matching the rest of the schema. */
-export type RiwayahKey = 'hafs' | 'warsh-asbahani';
+export type RiwayahKey = 'hafs' | 'warsh-asbahani' | 'qaloon';
 
 export interface Riwayah {
   key: RiwayahKey;
@@ -41,6 +42,10 @@ export const RIWAYAT: Record<RiwayahKey, Riwayah> = {
     ayahCount: 6214,
     countingSchool: 'madani',
   },
+  // Qaloon عن نافع shares the Madani count (6214) with Warsh. No route note: the
+  // KFGQPC Qaloon Madani mushaf (the seeded edition) is the common reference, so
+  // "قالون عن نافع" is the label readers expect.
+  qaloon: { key: 'qaloon', nameAr: 'قالون عن نافع', ayahCount: 6214, countingSchool: 'madani' },
 };
 
 /** The riwayah keys in display order (default first). */
