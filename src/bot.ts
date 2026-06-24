@@ -12,6 +12,7 @@ import {
   isReciter,
   normalizeRiwayah,
   isRiwayah,
+  DEFAULT_RIWAYAH,
   riwayahLabel,
   recitersForRiwayah,
   reciterForRiwayah,
@@ -526,7 +527,14 @@ bot.command('tafsir', async (ctx) => {
     await ctx.reply(COPY.tafsirNoPages);
     return;
   }
-  await ctx.reply(COPY.tafsirIntro, { reply_markup: buildPageTafseerKeyboard(pages) });
+  // quran.com paginates the standard (Hafs) mushaf. For a non-Hafs reader the
+  // page links still land on the right ayat but the page edges may differ, so
+  // add an honest one-line note (see tafsirRiwayahNote).
+  const intro =
+    normalizeRiwayah(sub.riwayah) === DEFAULT_RIWAYAH
+      ? COPY.tafsirIntro
+      : `${COPY.tafsirIntro}\n\n${COPY.tafsirRiwayahNote}`;
+  await ctx.reply(intro, { reply_markup: buildPageTafseerKeyboard(pages) });
 });
 
 // /page: jump to a specific Mushaf page (1..604). With no argument, show the

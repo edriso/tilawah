@@ -4,9 +4,13 @@
 // are reading on quran.com, where every ayah's tafsir (Al-Muyassar, As-Saadi,
 // Ibn Kathir, and more) is one tap away. quran.com is the Quran.Foundation site
 // (the same trusted source the ayah bot links its tafseer to). The link is
-// built from the page number alone, so it is always correct for whatever the
-// reader's wird currently is — `pnpm verify:tafseer` checks the pattern still
-// resolves.
+// built from the page number alone, so it tracks whatever the reader's wird
+// currently is — `pnpm verify:tafseer` checks the pattern still resolves.
+//
+// Caveat: quran.com paginates the STANDARD (Hafs) Madani mushaf. For a non-Hafs
+// reader (e.g. Warsh) a given page can hold slightly different ayat at its
+// edges, so the /tafsir command adds an honest note (COPY.tafsirRiwayahNote)
+// for them. The links still land on the right ayat to tap.
 
 /** The Mushaf-page tafseer page on quran.com (Arabic), for page 1..604. The
  *  reader opens the page and taps any ayah to read its tafsir. */

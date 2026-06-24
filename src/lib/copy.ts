@@ -434,6 +434,11 @@ export const COPY = {
   tafsirIntro:
     'تفسير صفحات وردك 📖\nافتح الصفحة على الموقع، ثم اضغط على أي آية لقراءة تفسيرها (الميسر، السعدي، ابن كثير، وغيرها).',
   tafsirNoPages: 'لم نتمكّن من تحديد صفحات وردك الآن. جرّب /today أولًا.',
+  // Shown only to a non-Hafs reader: quran.com paginates the standard (Hafs)
+  // mushaf, so a Warsh/other page can hold slightly different ayat at its edges.
+  // The links still land the reader on the right ayat; this is honest framing.
+  tafsirRiwayahNote:
+    'تنبيه: روابط التفسير تتبع ترتيب المصحف القياسي (حفص)، وقد تختلف حدود الصفحة قليلاً عن مصحف روايتك.',
 
   // ── Admin / channel ───────────────────────────────────────────────
   adminOnly: 'هذا الأمر للمشرف فقط.',
