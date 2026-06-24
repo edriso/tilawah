@@ -348,6 +348,23 @@ describe('sendTodayView page recitation', () => {
     await sendTodayView(fakeCtx() as never, SUB, TWO_PAGE_VIEW() as never, new Date());
     expect(h.sendWird.mock.calls[0][4]).toMatchObject({ riwayah: 'hafs' });
   });
+
+  // Qaloon rides the exact same path as Warsh, so the original "/today showed
+  // the old riwayah" bug is closed for it too: the live wird (image+cache) AND
+  // the recitation must carry qaloon + its reciter, never the Hafs default.
+  it('passes qaloon + its reciter through /today (no Hafs fallback after a switch)', async () => {
+    h.sendWird.mockResolvedValue({ pagesSent: 2, lastResult: 'ok' });
+    const qaloonSub = {
+      ...(SUB as object),
+      wirdAudioEnabled: true,
+      reciter: 'majdi-salem',
+      riwayah: 'qaloon',
+    } as never;
+    await sendTodayView(fakeCtx() as never, qaloonSub, TWO_PAGE_VIEW() as never, new Date());
+    expect(h.sendWird.mock.calls[0][4]).toMatchObject({ riwayah: 'qaloon' });
+    expect(h.sendPageAudio.mock.calls[0][4]).toBe('qaloon');
+    expect(h.sendPageAudio.mock.calls[0][3]).toBe('majdi-salem');
+  });
 });
 
 // The "read ✓ / next" button: confirm this wird and reveal the next, idempotently.

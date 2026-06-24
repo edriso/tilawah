@@ -243,8 +243,8 @@ data folder; `pageAudioSource(reciter, page, template)` fills the template). The
 template is `config.pageAudioBaseUrl` (`PAGE_AUDIO_BASE_URL`): a local path means
 the bot uploads the file (`InputFile`), an http(s) URL means Telegram fetches it
 (`toMediaInput` in deliver.ts picks). The clip is sent once then re-sent by
-cached `file_id` (`PageAudio`, keyed by page+reciter), so the full set is never
-stored twice. Sending is best-effort and page-by-page (`sendPageAudio` in
+cached `file_id` (`PageAudio`, keyed by riwayah+page+reciter), so the full set is
+never stored twice. Sending is best-effort and page-by-page (`sendPageAudio` in
 deliver.ts): a failed clip is skipped and NEVER blocks the wird; it runs after
 the delivery is recorded, for exactly the pages that went out. A juz wird sends
 one audio per page.
@@ -304,8 +304,8 @@ so a setting change is honoured on the very next send with no extra wiring:
   for the new page(s), because it sends exactly `content.slice(0, pagesSent)`
   from the new position, never a stale page.
 - Switch voice with `/reciter <key>`: the clip uses the new reciter's URL, and
-  the `file_id` cache is keyed by `(page, reciter)`, so a changed voice is a
-  cache MISS and fetches the new reciter (it never serves the old voice's
+  the `file_id` cache is keyed by `(riwayah, page, reciter)`, so a changed voice
+  is a cache MISS and fetches the new reciter (it never serves the old voice's
   cached clip). Picking a reciter also turns the audio back on (`setReciter`
   sets `wirdAudioEnabled = true`), so a reader who did `/reciter off` and later
   picks a voice starts hearing it again.
@@ -317,6 +317,47 @@ mirroring the ayah bot. Tapping it plays ONE page's recitation in the new voice
 resolves it, `sendPageAudio` sends it) — never the whole multi-page wird. It is
 a SILENT peek: it records no delivery and never advances the position, so it can
 be tapped freely and never collides with the daily send.
+
+## Riwayat (which mushaf): Hafs, Warsh, Qaloon
+
+A reader can follow the wird in a transmission (riwayah) other than Hafs. A
+riwayah is a BUNDLE that must agree: its own verified text (per-riwayah `Ayah`
+rows), its own page images, and its own per-page recitation. It is the PARENT
+choice; the reciter is filtered by it; the mushaf (text + image) follows it.
+Default is Hafs, and nothing changes for an existing reader or the channel until
+they opt in with `/riwayah` (the channel never gets a riwayah picker).
+
+LIVE today (all from KFGQPC / verified sources, all 604-page Madani layout, so
+the page number carries across cleanly):
+
+- `hafs` (default, Kufic count 6236) — every Hafs reciter.
+- `warsh-asbahani` (ورش عن نافع من طريق الأصبهاني, Madani 6214) — reciter
+  `abdulkarim` (محمد عبد الكريم).
+- `qaloon` (قالون عن نافع, Madani 6214) — reciter `majdi-salem` (مجدي سالم).
+
+How it is wired (the rule: which rows/assets for this page gains a riwayah
+filter; the scheduler, read-gated advance, idempotency, and channel are
+UNCHANGED):
+
+- `src/core/riwayah.ts` is the registry (`RIWAYAT`, `DEFAULT_RIWAYAH`,
+  `normalizeRiwayah`). `recitersForRiwayah` / `reciterForRiwayah` in
+  `reciter.ts` keep a reader's reciter valid for their riwayah (switching
+  riwayah resets the reciter to that riwayah's; a Hafs voice is never offered
+  for a Warsh/Qaloon mushaf, enforced by `reciter.test.ts`).
+- The subscriber's `riwayah` MUST be threaded into EVERY page-content / image /
+  audio / juz call: `getWird`, `getJuzForPage`, `sendWird` (image source +
+  `mushaf_page_images` cache), and `sendPageAudio` (`page_audio` cache, keyed by
+  `(riwayah, page, reciter)`). This is load-bearing: an early bug dropped the
+  riwayah on `/today` and `/page` so an image reader who switched still saw the
+  Hafs page. Regression tests in `bot.test.ts` lock `sendTodayView` +
+  `repositionToPage` for both Warsh and Qaloon.
+- `offeredRiwayat()` (deliver.ts) only offers a riwayah whose text is seeded AND
+  whose image template namespaces by `{riwayah}`; a non-Hafs page with no built
+  audio set simply skips audio (no everyayah fallback — that is Hafs-only).
+- Assets are self-hosted per riwayah under `{riwayah}` subfolders
+  (`MUSHAF_IMAGE_BASE_URL` / `PAGE_AUDIO_BASE_URL` carry an optional `{riwayah}`
+  placeholder). The full design + the build/verify/host runbook live in
+  `docs/RIWAYAT.md`. Golden rule #1 applies to every riwayah's text and assets.
 
 ## Page tafseer (/tafsir)
 
@@ -368,7 +409,9 @@ Quran data is not fully seeded.
 
 ```bash
 pnpm install
-pnpm data:fetch     # download + verify the Quran text, pages, and juz (once; also committed)
+pnpm data:fetch        # download + verify the Hafs Quran text, pages, and juz (once; also committed)
+pnpm data:fetch:warsh  # (optional) verify + write the Warsh (Asbahani) text dataset
+pnpm data:fetch:qaloon # (optional) verify + write the Qaloon text dataset
 pnpm data:mushaf    # (optional) download + verify the 604 page images to self-host them
 pnpm data:tajweed   # (optional) download + verify the tajweed example clips to self-host them
 pnpm db:deploy      # apply migrations (create tables)
