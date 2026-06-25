@@ -261,23 +261,38 @@ is also embedded in the file; the thumbnail is then belt-and-suspenders.) Replac
 
 **The source matters (a verified set, not everyayah's PageMp3s).** The DEFAULT
 template is everyayah's pre-split `PageMp3s` (`PAGE_AUDIO_TEMPLATE`), fine for a
-dev box but NOT ayah-accurate: those files were auto-split (Mp3Splt), several are
-defective (confirmed: Abdul Basit's `Page011` drops 2:76, so the audio did not
-match the page text), and all carry junk ID3 tags with no cover art (so a phone's
-player showed garbage + a random cached image). For production we BUILD a verified
+dev box but NOT ayah-accurate. Two confirmed defect classes:
+- **Dropped ayah** (byte content): Abdul Basit's `Page011` drops 2:76, so the
+  audio did not match the page text.
+- **Truncated header** (Xing/Info frame count): the everyayah **Alafasy**
+  (`Alafasy_128kbps`) PageMp3s carry a stale Xing/Info header that declares only
+  the FIRST ayah's length while the file holds the whole page. The bytes are all
+  there (so a size check passes) and `ffprobe` scans frames (so it looks fine),
+  but Telegram and most phone players TRUST that header and stop after the first
+  ayah — the reported "page 383 plays only 27:64" bug, and it affected nearly
+  every multi-ayah Alafasy page. The other reciters' PageMp3s have no Xing header
+  (players byte-estimate → full playback), which is why only Alafasy broke.
+And all carry junk ID3 tags with no cover art (so a phone's player showed garbage
++ a random cached image). For production we BUILD a verified
 self-hosted set with `pnpm data:page-audio`: for each reciter and page it
 downloads the TRUSTED per-ayah clips (`perAyahAudioUrl`, everyayah's ayah-accurate
 files, the same source the tajweed audio uses) for EXACTLY the ayat our Madani
 layout puts on that page (`buildPageAyat` in `scripts/lib/page-audio-build.ts`,
 the same data the wird text uses), concatenates them with ffmpeg, and stamps clean
-ID3 tags plus a constant cover image. So the clip always matches the page the
-reader sees, for every reciter, and the player shows a proper title and cover. The
-set lives in `/opt/bots/data/tilawah/page-audio/<folder>/Page<NNN>.mp3`, mounted
-read-only, with `PAGE_AUDIO_BASE_URL=/app/assets/page-audio/{folder}/Page{page3}.mp3`.
+ID3 tags plus a constant cover image (ffmpeg's mp3 muxer writes a CORRECT Xing
+header on output, so a built clip never has the Alafasy truncation). So the clip
+always matches the page the reader sees, for every reciter, and the player shows a
+proper title and cover. The set lives in
+`/opt/bots/data/tilawah/page-audio/<folder>/Page<NNN>.mp3`, mounted read-only,
+with `PAGE_AUDIO_BASE_URL=/app/assets/page-audio/{folder}/Page{page3}.mp3`.
 `pnpm verify:audio` is the trusted-resource guardrail: it checks the per-ayah
 source is reachable, that a built set (`--dir`) is complete (604 pages per
-reciter), and (`--scan-defects`) reproduces the everyayah PageMp3 size-vs-per-ayah
-diagnostic. See DEVELOPMENT.md for the build/deploy runbook.
+reciter), and — both for a built set (`--dir --deep`) and for everyayah
+(`--scan-defects`) — that each clip's bytes match the per-ayah sum AND its
+Xing/Info header matches the file's real length (so both the dropped-ayah and the
+truncated-header defects are caught; the MP3-header math lives in
+`scripts/lib/page-audio-build.ts`, unit-tested). See DEVELOPMENT.md for the
+build/deploy runbook.
 
 The recitation is **silent** (`disable_notification`), a quiet companion to the
 wird that just notified, so a multi-page wird does not buzz once per page. This

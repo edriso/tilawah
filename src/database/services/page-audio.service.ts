@@ -37,3 +37,36 @@ export function cachePageAudioId(
     create: { riwayah, page, reciter, fileId },
   });
 }
+
+/** Build the Prisma `where` for the cache filters (ANDed; empty = match all).
+ *  Shared by the clear and count helpers so they always agree on the scope. */
+function pageAudioWhere(filter: { reciters?: string[]; riwayah?: RiwayahKey; page?: number }) {
+  const where: { reciter?: { in: string[] }; riwayah?: string; page?: number } = {};
+  if (filter.reciters?.length) where.reciter = { in: filter.reciters };
+  if (filter.riwayah !== undefined) where.riwayah = filter.riwayah;
+  if (filter.page !== undefined) where.page = filter.page;
+  return where;
+}
+
+/**
+ * Drop cached page-audio file_ids so the NEXT send re-uploads from the current
+ * source. Use this after swapping the source for a reciter (e.g. hosting a
+ * verified self-hosted set in place of the everyayah fallback): the cached
+ * file_id points at Telegram's stored copy of the OLD clip and would be
+ * re-served forever otherwise. Filters are ANDed; omit them to clear the whole
+ * cache. Returns how many rows were removed. See scripts/clear-page-audio.ts.
+ */
+export async function clearCachedPageAudio(
+  filter: { reciters?: string[]; riwayah?: RiwayahKey; page?: number } = {},
+): Promise<number> {
+  const { count } = await prisma.pageAudio.deleteMany({ where: pageAudioWhere(filter) });
+  return count;
+}
+
+/** Count cached rows matching the same filter WITHOUT deleting — the dry-run
+ *  preview for the clear script, so an operator sees the blast radius first. */
+export function countCachedPageAudio(
+  filter: { reciters?: string[]; riwayah?: RiwayahKey; page?: number } = {},
+): Promise<number> {
+  return prisma.pageAudio.count({ where: pageAudioWhere(filter) });
+}
