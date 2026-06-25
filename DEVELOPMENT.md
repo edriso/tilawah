@@ -234,6 +234,45 @@ first ayah even though every byte is present (everyayah's Alafasy set — invisi
 to a size check and to ffprobe, since players trust the header). The same header
 check runs over a built set with `pnpm verify:audio --dir <dir> --deep`.
 
+## 8b. The Mushaf page images (self-hosted, verified, per riwayah)
+
+The image-format wird sends a picture of the actual Madani Mushaf page. Each
+riwayah's 604 images live in their OWN subfolder, both locally
+(`assets/mushaf/hafs/`, `.../qaloon/`, ...) and on the server
+(`/opt/bots/data/tilawah/mushaf/<riwayah>/`), mounted read-only at
+`/app/assets/mushaf`. The env template names the riwayah:
+`MUSHAF_IMAGE_BASE_URL=/app/assets/mushaf/{riwayah}/{page3}.jpg`.
+
+Prepare a set two ways with `pnpm data:mushaf`: download from a URL, or import an
+already-prepared local render with `--from-dir`. The shipped HAFS set is the
+official KFGQPC مصحف المدينة (Hafs, 1440H) rendered from the verified PDF — the
+same recipe as Qaloon/Warsh (`pdfimages -j`/`pdftoppm`, accounting for the
+front-matter page offset so PDF page 4 = Mushaf page 1), then imported and
+fingerprinted:
+
+```bash
+# Render the verified KFGQPC PDF to 001.jpg..604.jpg (pdfimages -j is lossless;
+# the Mushaf starts at PDF page 4, offset 3, so PDF 4..607 = Mushaf 1..604), then:
+pnpm data:mushaf --from-dir <render-dir> --out assets/mushaf/hafs --source "KFGQPC … PDF"
+pnpm data:mushaf --check --out assets/mushaf/hafs          # re-verify any time
+# Eyeball a few: the page number printed on the page must match the file number.
+
+# Ship them to where the server keeps big runtime files (outside the repo):
+rsync -av assets/mushaf/hafs/ root@<SERVER_IP>:/opt/bots/data/tilawah/mushaf/hafs/
+# Confirm they are visible inside the container:
+docker compose exec tilawah ls /app/assets/mushaf/hafs | head
+
+# Drop the page-IMAGE file_id cache so the NEW images actually go out. The bot
+# caches each (riwayah, page) Telegram file_id and re-sends THAT, so without
+# clearing it the OLD image keeps going out (the image twin of clear:page-audio).
+docker compose exec tilawah pnpm clear:mushaf-images --riwayah hafs            # preview
+docker compose exec tilawah pnpm clear:mushaf-images --riwayah hafs --yes      # do it
+```
+
+Each riwayah's `manifest.json` IS tracked in git (the images are not), so the
+set can be re-verified offline. The manifest only pins the bytes; it does NOT
+prove the pages are correct — that is the eyeball step.
+
 ## 9. Golden rules you must not break
 
 1. Never type Quran text by hand. It only comes from the fetch script, which

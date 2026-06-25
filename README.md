@@ -71,11 +71,14 @@ well known anchors), and frozen to a committed file. The app never edits the
 Quran tables after seeding, and it refuses to start if the data is incomplete.
 See `NOTICE` for the source and license.
 
-For the image format, the 604 page images are likewise a verified asset: a
-configured source, or a self-hosted copy downloaded and integrity-checked with
-`pnpm data:mushaf` (it writes a tracked SHA-256 manifest, re-verified with
-`pnpm data:mushaf --check`). The images themselves are not committed; see
-`docs/DEPLOY.md`.
+For the image format, the 604 page images are likewise a verified asset,
+self-hosted per riwayah under its own subfolder (`assets/mushaf/hafs/`,
+`assets/mushaf/qaloon/`, ...). Each set is prepared and integrity-checked with
+`pnpm data:mushaf` — downloaded from a URL, or imported from a local render with
+`--from-dir` (the shipped Hafs set is the official KFGQPC مصحف المدينة 1440H
+rendered from the verified PDF). It writes a tracked per-riwayah SHA-256
+manifest, re-verified with `pnpm data:mushaf --check --out assets/mushaf/<riwayah>`.
+The images themselves are not committed; see `docs/DEPLOY.md`.
 
 ## Quick start
 

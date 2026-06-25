@@ -289,6 +289,23 @@ change plus hosting the assets (no engine change).
 - محمد إرشاد مربعي, Internet Archive (Asbahani) — https://archive.org/details/rabiea247524572457247247aa2043_gmail_040
 - أحمد ديبان, complete Warsh is **الأزرق** — https://www.mp3quran.net/ar/ahmd-dyb-n-4
 
+## Hafs (default) — page images provenance
+
+The default Hafs page images are the official KFGQPC **مصحف المدينة (Hafs, الوسط,
+1440H, HQ)**, rendered from the verified PDF (`MushafMadinaHafsWasat1440HQ.pdf`).
+The Mushaf starts at PDF page 4 (offset 3, like the Qaloon PDF), so PDF pages
+4..607 = Mushaf pages 1..604; the embedded JPEGs are extracted losslessly with
+`pdfimages -j` and renamed `001.jpg`..`604.jpg`. They are imported and
+fingerprinted into the per-riwayah layout with
+`pnpm data:mushaf --from-dir <render> --out assets/mushaf/hafs`, which writes the
+tracked `assets/mushaf/hafs/manifest.json` (re-verify with
+`pnpm data:mushaf --check --out assets/mushaf/hafs`). This replaced an earlier
+third-party colored-tajweed download; the official KFGQPC master is the verified
+source (golden rule #1). After replacing the set on the server, the page-image
+file_id cache is cleared (`pnpm clear:mushaf-images --riwayah hafs --yes`) so the
+new images actually go out. Hafs is now self-hosted under its own `mushaf/hafs/`
+subfolder exactly like Qaloon and Warsh.
+
 ## Qaloon (قالون عن نافع) — LIVE
 
 Shipped and turned ON on the server: text seeded (6214), 604 page images and the
