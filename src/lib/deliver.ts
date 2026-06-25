@@ -880,40 +880,38 @@ export async function previewWird(sub: {
 
 /**
  * The single page a reciter preview ("try it on today's page") should sample:
- * today's first DELIVERED page if there is one (so it matches what they last
- * received), else the subscriber's current page. Just ONE page, never the whole
- * wird, so a multi-page reader is not flooded with clips. A pure read — no
- * delivery, no advance — so the preview button can be tapped freely. Returns []
- * when no page resolves.
+ * the FIRST page of the reader's live wird. That is always
+ * `getWird(currentPage, ...)` — every path that shows a wird (the scheduled
+ * send, /today, a /page jump, a /next reveal) leaves the reader looking at
+ * exactly that, and `currentPage` is kept in step, so it is what is in front of
+ * them right now (e.g. after `/page 383` it is 383, not the page delivered
+ * earlier today). Just ONE page, never the whole wird, so a multi-page reader is
+ * not flooded with clips. The reader's riwayah is threaded so the sample plays
+ * the chosen mushaf's page. A pure read — no delivery, no advance — so the
+ * preview button can be tapped freely. Returns [] when no page resolves.
  */
-export async function sampleAudioPagesFor(
-  sub: { id: number; timezone: string; currentPage: number },
-  now: Date = new Date(),
-): Promise<PageContent[]> {
-  const local = getLocalContext(sub.timezone, now);
-  const delivered = await getDeliveryFor(sub.id, local.date);
-  const startPage = delivered ? delivered.startPage : sub.currentPage;
-  return getWird(startPage, 1);
+export async function sampleAudioPagesFor(sub: {
+  currentPage: number;
+  riwayah?: string;
+}): Promise<PageContent[]> {
+  return getWird(sub.currentPage, 1, normalizeRiwayah(sub.riwayah));
 }
 
 /**
- * The page numbers of the reader's wird, for the /tafsir link(s): today's
- * DELIVERED pages if there is a delivery (so the links match what they read
- * today), else the current position's wird (`currentPage` for `wirdSize`
- * pages). Goes through getWird so the numbers are the REAL pages (clamped at
- * the end of the Mushaf), and so a changed wird size or page is always
- * reflected. A pure read — no delivery, no advance. Returns [] when none.
+ * The page numbers of the reader's wird, for the /tafsir link(s): the reader's
+ * live wird — `currentPage` for `wirdSize` pages, in their riwayah. Like the
+ * reciter preview and the on-demand "listen" button, it follows what the reader
+ * currently has in front of them, so it stays correct after a /page jump
+ * (position change) or /wird (size change). Goes through getWird so the numbers
+ * are the REAL pages (clamped at the end of the Mushaf). A pure read — no
+ * delivery, no advance. Returns [] when none.
  */
-export async function wirdPageNumbersFor(
-  sub: { id: number; timezone: string; currentPage: number; wirdSize: number },
-  now: Date = new Date(),
-): Promise<number[]> {
-  const local = getLocalContext(sub.timezone, now);
-  const delivered = await getDeliveryFor(sub.id, local.date);
-  const [startPage, count] = delivered
-    ? [delivered.startPage, delivered.pageCount]
-    : [sub.currentPage, sub.wirdSize];
-  const pages = await getWird(startPage, count);
+export async function wirdPageNumbersFor(sub: {
+  currentPage: number;
+  wirdSize: number;
+  riwayah?: string;
+}): Promise<number[]> {
+  const pages = await getWird(sub.currentPage, sub.wirdSize, normalizeRiwayah(sub.riwayah));
   return pages.map((p) => p.pageNumber);
 }
 

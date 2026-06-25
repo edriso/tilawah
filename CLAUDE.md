@@ -313,10 +313,13 @@ so a setting change is honoured on the very next send with no extra wiring:
 To let a reader hear a new voice at once, the reciter confirmation (the picker
 pick and `/reciter <key>`) carries a "جرّب على صفحة اليوم" preview button,
 mirroring the ayah bot. Tapping it plays ONE page's recitation in the new voice
-— today's DELIVERED page if there is one, else the current page (`sampleAudioPagesFor`
-resolves it, `sendPageAudio` sends it) — never the whole multi-page wird. It is
-a SILENT peek: it records no delivery and never advances the position, so it can
-be tapped freely and never collides with the daily send.
+— the FIRST page of the reader's live wird, i.e. their current page in their
+riwayah (`sampleAudioPagesFor` resolves it, `sendPageAudio` sends it) — never the
+whole multi-page wird. "Live wird" means it follows what the reader has in front
+of them now: after a `/page 383` jump it samples 383, not the page delivered
+earlier today (the same rule the on-demand "🎧 listen" button follows). It is a
+SILENT peek: it records no delivery and never advances the position, so it can be
+tapped freely and never collides with the daily send.
 
 ## Riwayat (which mushaf): Hafs, Warsh, Qaloon
 
@@ -370,11 +373,12 @@ links its tafseer to.
 
 It is on-demand and link-only: no stored text, no schema, no per-delivery
 clutter, so there is nothing to enable or disable (running the command is the
-opt-in). The pages follow the reader's CURRENT wird — `wirdPageNumbersFor`
-returns today's DELIVERED pages if today is delivered, else the current
-position for the current wird size, through `getWird` so the page numbers are
-real (clamped at the end of the Mushaf). So the links stay correct after
-`/wird N` (size change) or `/page N` (position change). The keyboard
+opt-in). The pages follow the reader's LIVE wird — `wirdPageNumbersFor`
+returns their current position for the current wird size, in their riwayah,
+through `getWird` so the page numbers are real (clamped at the end of the
+Mushaf). It looks at the live position (not the delivery audit log), exactly
+like the reciter preview and the "🎧 listen" button, so the links stay correct
+after `/wird N` (size change) or `/page N` (position change). The keyboard
 (`src/lib/tafseer-keyboard.ts`) lays the pages out a few per row so even a
 full-juz (20-page) wird stays compact.
 

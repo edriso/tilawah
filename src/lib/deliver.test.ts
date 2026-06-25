@@ -374,79 +374,67 @@ describe('sendWirdAudioNow (on-demand recitation for the current wird)', () => {
 
 describe('sampleAudioPagesFor (the reciter "try it on today\'s page" preview)', () => {
   beforeEach(() => {
-    h.getDeliveryFor.mockResolvedValue(null);
     h.getWird.mockResolvedValue(CONTENT);
   });
 
-  it("samples today's first DELIVERED page (one page) when there is a delivery", async () => {
-    h.getDeliveryFor.mockResolvedValue({ startPage: 10, pageCount: 3 });
-    const pages = await sampleAudioPagesFor({ id: 1, timezone: 'UTC', currentPage: 5 }, NOW);
-    expect(h.getWird).toHaveBeenCalledWith(10, 1); // delivered start, ONE page
+  it("samples the FIRST page of the reader's live wird (their current page)", async () => {
+    const pages = await sampleAudioPagesFor({ currentPage: 5 });
+    expect(h.getWird).toHaveBeenCalledWith(5, 1, 'hafs'); // current page, ONE page
     expect(pages).toEqual(CONTENT);
   });
 
-  it('samples the current page (one page) when today is not delivered', async () => {
-    const pages = await sampleAudioPagesFor({ id: 1, timezone: 'UTC', currentPage: 5 }, NOW);
-    expect(h.getWird).toHaveBeenCalledWith(5, 1);
-    expect(pages).toEqual(CONTENT);
+  it('follows the current page after a /page jump, never a stale delivered page', async () => {
+    // The reported bug: was on 449, did /page 383 on an already-delivered day —
+    // the preview must play 383 (what they now see), not 449 (the audit log).
+    await sampleAudioPagesFor({ currentPage: 383 });
+    expect(h.getWird).toHaveBeenCalledWith(383, 1, 'hafs');
+  });
+
+  it("threads the reader's riwayah so the sample plays the chosen mushaf", async () => {
+    await sampleAudioPagesFor({ currentPage: 5, riwayah: 'qaloon' });
+    expect(h.getWird).toHaveBeenCalledWith(5, 1, 'qaloon');
   });
 
   it('returns [] when no page resolves', async () => {
     h.getWird.mockResolvedValue([]);
-    expect(await sampleAudioPagesFor({ id: 1, timezone: 'UTC', currentPage: 1 }, NOW)).toEqual([]);
+    expect(await sampleAudioPagesFor({ currentPage: 1 })).toEqual([]);
   });
 });
 
 describe('wirdPageNumbersFor (the /tafsir page links)', () => {
   beforeEach(() => {
-    h.getDeliveryFor.mockResolvedValue(null);
     h.getWird.mockResolvedValue(TWO_PAGES); // pages 1 and 2
   });
 
-  it("uses today's DELIVERED range when there is a delivery", async () => {
-    h.getDeliveryFor.mockResolvedValue({ startPage: 10, pageCount: 2 });
-    const pages = await wirdPageNumbersFor(
-      { id: 1, timezone: 'UTC', currentPage: 5, wirdSize: 2 },
-      NOW,
-    );
-    expect(h.getWird).toHaveBeenCalledWith(10, 2); // delivered start + count
+  it("uses the reader's live wird (current position + current size)", async () => {
+    const pages = await wirdPageNumbersFor({ currentPage: 5, wirdSize: 2 });
+    expect(h.getWird).toHaveBeenCalledWith(5, 2, 'hafs');
     expect(pages).toEqual([1, 2]); // the page numbers getWird returned
   });
 
-  it("ignores a wird-size / page change made AFTER today's delivery (uses the delivered range)", async () => {
-    // Delivered 1 page from page 10 this morning; the reader has since done
-    // /wird 10 and /page 50. /tafsir must still cover what they got TODAY (the
-    // delivered page), not the new, not-yet-delivered wird.
-    h.getDeliveryFor.mockResolvedValue({ startPage: 10, pageCount: 1 });
-    h.getWird.mockResolvedValue(CONTENT); // one page
-    await wirdPageNumbersFor({ id: 1, timezone: 'UTC', currentPage: 50, wirdSize: 10 }, NOW);
-    expect(h.getWird).toHaveBeenCalledWith(10, 1); // delivered range, NOT 50 / 10
+  it('follows a /page jump and a /wird size change (not a stale delivered range)', async () => {
+    // Was delivered earlier today, then did /wird 10 and /page 50. /tafsir must
+    // cover the wird in front of them now (50, for 10 pages), not the morning's.
+    h.getWird.mockResolvedValue(CONTENT);
+    await wirdPageNumbersFor({ currentPage: 50, wirdSize: 10 });
+    expect(h.getWird).toHaveBeenCalledWith(50, 10, 'hafs');
   });
 
-  it('uses the current position + current wird size when not delivered', async () => {
-    const pages = await wirdPageNumbersFor(
-      { id: 1, timezone: 'UTC', currentPage: 5, wirdSize: 2 },
-      NOW,
-    );
-    expect(h.getWird).toHaveBeenCalledWith(5, 2);
-    expect(pages).toEqual([1, 2]);
+  it("threads the reader's riwayah", async () => {
+    await wirdPageNumbersFor({ currentPage: 5, wirdSize: 2, riwayah: 'warsh-asbahani' });
+    expect(h.getWird).toHaveBeenCalledWith(5, 2, 'warsh-asbahani');
   });
 
-  it('reflects a changed wird size (not delivered yet)', async () => {
+  it('reflects a changed wird size', async () => {
     h.getWird.mockResolvedValue(manyPages(7));
-    const pages = await wirdPageNumbersFor(
-      { id: 1, timezone: 'UTC', currentPage: 1, wirdSize: 7 },
-      NOW,
-    );
-    expect(h.getWird).toHaveBeenCalledWith(1, 7);
+    const pages = await wirdPageNumbersFor({ currentPage: 1, wirdSize: 7 });
+    expect(h.getWird).toHaveBeenCalledWith(1, 7, 'hafs');
     expect(pages).toEqual([1, 2, 3, 4, 5, 6, 7]);
   });
 
   it('returns [] when no pages resolve', async () => {
     h.getWird.mockResolvedValue([]);
-    expect(
-      await wirdPageNumbersFor({ id: 1, timezone: 'UTC', currentPage: 1, wirdSize: 1 }, NOW),
-    ).toEqual([]);
+    expect(await wirdPageNumbersFor({ currentPage: 1, wirdSize: 1 })).toEqual([]);
   });
 });
 

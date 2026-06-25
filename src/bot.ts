@@ -517,12 +517,12 @@ bot.command('riwayah', async (ctx) => {
 // /tafsir: a link to read today's wird pages' tafseer on quran.com (one button
 // per page). On-demand and link-only: a page holds many ayat, so we store no
 // tafseer text — we point the reader at the page where every ayah's tafsir is a
-// tap away. The pages follow the reader's current wird (delivered range if
-// today is delivered, else the current position for the current wird size).
+// tap away. The pages follow the reader's live wird (their current position for
+// the current wird size), so they stay correct after a /page or /wird change.
 bot.command('tafsir', async (ctx) => {
   const sub = await userSubscriber(ctx);
   if (!sub) return;
-  const pages = await wirdPageNumbersFor(sub, new Date());
+  const pages = await wirdPageNumbersFor(sub);
   if (pages.length === 0) {
     await ctx.reply(COPY.tafsirNoPages);
     return;
@@ -930,7 +930,7 @@ bot.callbackQuery(RECITER_SAMPLE, async (ctx) => {
     await ctx.answerCallbackQuery({ text: COPY.sampleReciterOff });
     return;
   }
-  const pages = await sampleAudioPagesFor(sub, new Date());
+  const pages = await sampleAudioPagesFor(sub);
   if (pages.length === 0) {
     await ctx.answerCallbackQuery({ text: COPY.sampleNoPage });
     return;
