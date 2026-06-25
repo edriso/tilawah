@@ -51,11 +51,13 @@ services:
       shared-db:
         condition: service_healthy
     # Self-hosted Mushaf images (optional; only when MUSHAF_IMAGE_BASE_URL is a
-    # LOCAL path like "/app/assets/mushaf/{page3}.jpg"). The recommended way is a
-    # BIND MOUNT of a host folder you fill yourself, kept in the server's shared
-    # data tree OUTSIDE this code checkout, so a git pull/reset can never touch
-    # it: /opt/bots/data/tilawah/mushaf. On your laptop run `pnpm data:mushaf`
-    # (download + verify), eyeball a few pages, then upload the exact files:
+    # LOCAL path like "/app/assets/mushaf/{riwayah}/{page3}.jpg"). Each riwayah's
+    # 604 pages live in their own subfolder (mushaf/hafs, mushaf/qaloon, ...). The
+    # recommended way is a BIND MOUNT of a host folder you fill yourself, kept in
+    # the server's shared data tree OUTSIDE this code checkout, so a git
+    # pull/reset can never touch it: /opt/bots/data/tilawah/mushaf. On your laptop
+    # run `pnpm data:mushaf` (import/download + verify), eyeball a few pages, then
+    # upload the exact files (the whole tree, subfolders included):
     #   rsync -av assets/mushaf/ root@<server>:/opt/bots/data/tilawah/mushaf/
     # The bot mounts that folder READ-ONLY and uploads each page to Telegram once
     # (then sends by cached file_id), so the server never fetches from anyone.

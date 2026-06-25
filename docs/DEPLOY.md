@@ -79,8 +79,10 @@ you set one, the bot quietly falls back to sending text to everyone:
    King Fahd Complex layout. Like the text, the images are the holy Quran, so
    they must come from a trusted source.
 2. Set `MUSHAF_IMAGE_BASE_URL` to the page URL template, using `{page}` for the
-   raw number or `{page3}` for it zero-padded to three digits, e.g.
-   `https://your-host.example/mushaf/{page3}.png`.
+   raw number or `{page3}` for it zero-padded to three digits, plus the optional
+   `{riwayah}` to namespace per transmission (it resolves to `hafs` by default
+   and is required to offer Warsh/Qaloon), e.g.
+   `https://your-host.example/mushaf/{riwayah}/{page3}.png`.
 3. Test it before turning it on for readers:
 
    ```bash
@@ -100,22 +102,26 @@ from), and `/format` offers text only.
 ### Self-hosting the page images (recommended for trust)
 
 Pointing `MUSHAF_IMAGE_BASE_URL` at a stranger's host means you depend on it
-staying up and unchanged. To own a verified copy instead:
+staying up and unchanged. To own a verified copy instead, each riwayah's 604
+pages live in their OWN subfolder (`assets/mushaf/hafs/`, `.../qaloon/`, ...):
 
 ```bash
-pnpm data:mushaf            # download all 604 pages + write a SHA-256 manifest
-pnpm data:mushaf --check    # re-verify the on-disk set against the manifest (offline)
+# Hafs (default): the shipped set is the official KFGQPC مصحف المدينة (1440H)
+# rendered from the verified PDF, imported + fingerprinted into hafs/:
+pnpm data:mushaf --from-dir <render-dir> --out assets/mushaf/hafs --source "KFGQPC … PDF"
+pnpm data:mushaf --check --out assets/mushaf/hafs   # re-verify the set against its manifest
 ```
 
-This writes the pages to `assets/mushaf/` and a `manifest.json` of fingerprints.
-The images are git-ignored (too large to commit), but the manifest IS tracked,
-so `--check` later flags ANY upstream change (a swapped or tampered page).
-Override the source or destination with flags, e.g.
-`pnpm data:mushaf --source "https://.../{page}.jpg" --out assets/mushaf`.
+This writes the pages to `assets/mushaf/<riwayah>/` plus a `manifest.json` of
+fingerprints. The images are git-ignored (too large to commit), but each
+subfolder's manifest IS tracked, so `--check` later flags ANY change (a swapped
+or tampered page). You can also download from a URL instead of `--from-dir`:
+`pnpm data:mushaf --source "https://.../{page}.jpg" --out assets/mushaf/hafs`.
 
 The manifest pins the bytes you reviewed; it does not prove the pages are
-correct, so eyeball a few the first time. (After changing the source, clear the
-cache so new images are fetched: `TRUNCATE TABLE mushaf_page_images;`.)
+correct, so eyeball a few the first time. After REPLACING a riwayah's images,
+clear its file_id cache so the new images are fetched (the bot ships a safe
+helper, dry-run unless `--yes`): `pnpm clear:mushaf-images --riwayah hafs --yes`.
 
 Three ways to serve the verified set:
 
@@ -147,32 +153,35 @@ bind mount shown in `compose.example.yml`:
       - ./data/tilawah/mushaf:/app/assets/mushaf:ro
 ```
 
-Set `MUSHAF_IMAGE_BASE_URL="/app/assets/mushaf/{page3}.jpg"` (a path, not a URL)
-in the bot's `.env`, then `docker compose up -d tilawah`. The folder is outside
-git, so **deploys never touch it**, and the `file_id` cache (in the database)
-means each page uploads to Telegram only once, so **deploys never re-upload**
-either. Refresh later by re-running `rsync`. Confirm the container sees the
-pages: `docker compose exec tilawah ls assets/mushaf | head` (an EMPTY result
-means the source folder was empty when you started the bot: fill it, then re-up).
+Set `MUSHAF_IMAGE_BASE_URL="/app/assets/mushaf/{riwayah}/{page3}.jpg"` (a path,
+not a URL; `{riwayah}` resolves to `hafs` by default) in the bot's `.env`, then
+`docker compose up -d tilawah`. The folder is outside git, so **deploys never
+touch it**, and the `file_id` cache (in the database) means each page uploads to
+Telegram only once, so **deploys never re-upload** either. Refresh later by
+re-running `rsync`. Confirm the container sees the pages:
+`docker compose exec tilawah ls assets/mushaf/hafs | head` (an EMPTY result means
+the source folder was empty when you started the bot: fill it, then re-up).
 
 **B. Let the server download instead.** If you would rather not upload ~90 MB,
 download straight into the data folder on the server with a throwaway container,
 then bind-mount it the same as A:
 
 ```bash
-mkdir -p /opt/bots/data/tilawah/mushaf
+mkdir -p /opt/bots/data/tilawah/mushaf/hafs
 cd /opt/bots
 docker compose run --rm -v /opt/bots/data/tilawah/mushaf:/out \
-  tilawah sh -c "pnpm data:mushaf --out /out"
+  tilawah sh -c "pnpm data:mushaf --out /out/hafs"
 ```
 
 The server downloads from the source, not your laptop, but the result is the
 same folder the `:ro` bind mount serves. Verify it before going live (next
-point): run `pnpm data:mushaf --check --out /out` and eyeball a few pages.
+point): run `pnpm data:mushaf --check --out /out/hafs` and eyeball a few pages.
+(This download path serves a URL set; the shipped Hafs set is built locally from
+the KFGQPC PDF with `--from-dir`, so for Hafs prefer option A.)
 
 **C. Your own static host (URL).** If you already serve static files (a Netlify
 site, a Caddy `file_server`), upload `assets/mushaf/` there and set
-`MUSHAF_IMAGE_BASE_URL="https://your-host/mushaf/{page3}.jpg"`. No bot change.
+`MUSHAF_IMAGE_BASE_URL="https://your-host/mushaf/{riwayah}/{page3}.jpg"`. No bot change.
 
 **Page recitation audio (the same shape).** The per-page recitation is a second
 self-hosted asset built exactly like the images: make the verified set, keep it
@@ -191,11 +200,13 @@ from bad, it just sends what it is given. So treat verification as a required
 gate, not an optional nicety. Both asset sets are regenerable by command, which
 also lets you re-verify them offline at any time:
 
-1. **Page images** (`pnpm data:mushaf`). Download from a TRUSTED source only (the
-   default is the colored Tajweed Hafs Madani set, 604 pages, standard 15-line
-   King Fahd layout). Then:
-   - `pnpm data:mushaf --check` re-checks every page against the tracked
-     `manifest.json` (SHA-256), flagging any swapped or tampered file.
+1. **Page images** (`pnpm data:mushaf`). Use a TRUSTED source only. The shipped
+   Hafs set is the official KFGQPC مصحف المدينة (Hafs, 1440H) rendered from the
+   verified PDF and imported with `--from-dir` (604 pages, standard 15-line King
+   Fahd layout); a URL download is also supported. Then:
+   - `pnpm data:mushaf --check --out assets/mushaf/<riwayah>` re-checks every page
+     against that riwayah's tracked `manifest.json` (SHA-256), flagging any
+     swapped or tampered file.
    - The manifest pins the bytes you reviewed; it does not prove they are
      correct, so **open and eyeball several pages by eye** the first time.
    - `pnpm test:image <yourTelegramId> 50` sends a real page to you in Telegram,
