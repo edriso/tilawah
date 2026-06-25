@@ -191,10 +191,14 @@ cd /opt/bots && docker compose up -d tilawah
 docker compose exec tilawah printenv PAGE_AUDIO_BASE_URL                                     # prints the template
 docker compose exec tilawah ls /app/assets/page-audio/Abdul_Basit_Murattal_192kbps | head   # files are visible
 
-# 5) Drop the page-audio file_id cache. The bot caches each (page, reciter)
-#    Telegram file_id and re-sends THAT, so without clearing it the old everyayah
-#    clips (no cover, and the defective pages) keep going out. Clearing it makes
-#    the next delivery re-upload from the new files.
+# 5) Drop the page-audio file_id cache. The bot caches each (riwayah, page,
+#    reciter) Telegram file_id and re-sends THAT, so without clearing it the old
+#    everyayah clips (no cover, and the defective pages) keep going out. Clearing
+#    it makes the next delivery re-upload from the new files. The bot ships a
+#    safe helper (dry-run unless --yes; scope by --reciter/--riwayah/--page):
+docker compose exec tilawah pnpm clear:page-audio --reciter alafasy            # preview
+docker compose exec tilawah pnpm clear:page-audio --reciter alafasy --yes      # do it
+#    ...or go straight to SQL (clears everything):
 docker compose exec shared-db mariadb -utilawah -p tilawah -e "DELETE FROM page_audio;"
 ```
 
@@ -223,7 +227,12 @@ pass no `--cover`, the audio is still correct, just without art.
 
 If everyayah ever changes a reciter's per-ayah files, rebuild and re-verify.
 `pnpm verify:audio` (no flags) checks the per-ayah source is still reachable, and
-`pnpm verify:audio --scan-defects` reproduces how we found the broken page.
+`pnpm verify:audio --scan-defects` reproduces how we found the broken pages. It
+catches TWO everyayah defect classes: a dropped ayah (byte size off, e.g. Abdul
+Basit's Page011) AND a truncated Xing/Info header that makes a clip stop after the
+first ayah even though every byte is present (everyayah's Alafasy set — invisible
+to a size check and to ffprobe, since players trust the header). The same header
+check runs over a built set with `pnpm verify:audio --dir <dir> --deep`.
 
 ## 9. Golden rules you must not break
 

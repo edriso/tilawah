@@ -433,6 +433,9 @@ pnpm data:fetch:warsh  # (optional) verify + write the Warsh (Asbahani) text dat
 pnpm data:fetch:qaloon # (optional) verify + write the Qaloon text dataset
 pnpm data:mushaf    # (optional) download + verify the 604 page images to self-host them
 pnpm data:tajweed   # (optional) download + verify the tajweed example clips to self-host them
+pnpm data:page-audio # (optional) build the verified self-hosted per-page recitation set
+pnpm verify:audio   # check the audio source / a built set (--scan-defects, --dir --deep)
+pnpm clear:page-audio # drop cached page-audio file_ids after swapping a source (dry-run unless --yes)
 pnpm db:deploy      # apply migrations (create tables)
 pnpm db:seed        # fill the Quran tables
 pnpm dev            # run the bot with reload
@@ -500,8 +503,13 @@ Commit the new folder under `prisma/migrations/`. Production applies it with
   `src/lib/reciter-keyboard.ts`. The "try it on today's page" preview button is
   `sampleAudioPagesFor` in deliver.ts + the `RECITER_SAMPLE` handler in bot.ts.
   The verified self-hosted set is built by `scripts/build-page-audio.ts`
-  (`pnpm data:page-audio`), its page math by `scripts/lib/page-audio-build.ts`
-  (`buildPageAyat`), and checked by `scripts/verify-audio.ts` (`pnpm verify:audio`).
+  (`pnpm data:page-audio`), its page math + the MP3 Xing/frame helpers by
+  `scripts/lib/page-audio-build.ts` (`buildPageAyat`, `readXingHeader`,
+  `measureMp3`), and checked by `scripts/verify-audio.ts` (`pnpm verify:audio` —
+  flags both the dropped-ayah and the truncated-header defect). After swapping a
+  reciter's source, drop the stale file_id cache with `pnpm clear:page-audio`
+  (`scripts/clear-page-audio.ts` -> `clearCachedPageAudio` in the service), or the
+  bot keeps re-sending Telegram's copy of the OLD clip.
 - Page tafseer link (`/tafsir`): the URL builder `pageTafseerUrl` in
   `src/core/tafseer.ts`, the page resolver `wirdPageNumbersFor` in deliver.ts,
   the keyboard in `src/lib/tafseer-keyboard.ts`, the command in bot.ts.
