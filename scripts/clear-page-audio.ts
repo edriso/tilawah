@@ -11,7 +11,7 @@
 //
 // Run with:  pnpm clear:page-audio [flags]
 //   --reciter <keys>   comma list (e.g. alafasy,husary). Omit = every reciter.
-//   --riwayah <key>    hafs | warsh-asbahani | qaloon. Omit = every riwayah.
+//   --riwayah <key>    hafs | warsh-azraq | warsh-asbahani | qaloon. Omit = all.
 //   --page <n>         a single Mushaf page (1..604). Omit = every page.
 //   --yes              actually delete. WITHOUT it, this only PREVIEWS the count.
 //
@@ -50,7 +50,9 @@ function parseFilter(): { reciters?: string[]; riwayah?: RiwayahKey; page?: numb
   const riwayahArg = getArg('--riwayah');
   if (riwayahArg) {
     if (!isRiwayah(riwayahArg)) {
-      throw new Error(`Unknown riwayah "${riwayahArg}". Known: hafs, warsh-asbahani, qaloon`);
+      throw new Error(
+        `Unknown riwayah "${riwayahArg}". Known: hafs, warsh-azraq, warsh-asbahani, qaloon`,
+      );
     }
     filter.riwayah = riwayahArg;
   }

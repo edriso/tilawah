@@ -2,7 +2,7 @@
 //
 // Order of operations:
 //   1. pnpm data:fetch         -> downloads + verifies + writes quran-uthmani.json (Hafs)
-//   1b. pnpm data:fetch:warsh  -> (optional) writes quran-warsh-asbahani.json (Warsh)
+//   1b. pnpm data:fetch:warsh  -> (optional) writes quran-warsh.json (Warsh; seeds both turuq)
 //   1c. pnpm data:fetch:qaloon -> (optional) writes quran-qaloon.json (Qaloon)
 //   2. pnpm db:deploy          -> creates the tables (migrations)
 //   3. pnpm db:seed           -> this script: fills Surah and Ayah (with page/juz)
@@ -59,9 +59,20 @@ const RIWAYAT_TO_SEED: RiwayahSpec[] = [
     required: true,
     seedSurahs: true,
   },
+  // Both Warsh turuq share ONE verified text + the same 604-page Madani layout
+  // (identical rasm + ayah-per-page), so the SAME file seeds both keys. They
+  // differ only in page images (tariq dabt) and page audio (tariq reciter).
+  {
+    riwayah: 'warsh-azraq',
+    file: 'quran-warsh.json',
+    total: RIWAYAT['warsh-azraq'].ayahCount, // 6214 (Madani)
+    perSurah: null,
+    required: false,
+    seedSurahs: false,
+  },
   {
     riwayah: 'warsh-asbahani',
-    file: 'quran-warsh-asbahani.json',
+    file: 'quran-warsh.json',
     total: RIWAYAT['warsh-asbahani'].ayahCount, // 6214 (Madani)
     perSurah: null,
     required: false,

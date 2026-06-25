@@ -33,7 +33,9 @@ loadEnv();
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = join(HERE, '..', 'prisma', 'data');
-const OUT_JSON = join(DATA_DIR, 'quran-warsh-asbahani.json');
+// One verified Warsh text file, shared by both turuq (الأزرق + الأصبهاني): same
+// rasm + 604-page Madani layout; they differ only in page images + audio.
+const OUT_JSON = join(DATA_DIR, 'quran-warsh.json');
 
 // KFGQPC Warsh Uthmanic data (verbatim mirror). Override with WARSH_SOURCE_URL,
 // which may be an http(s) URL or a local file path (used by tests/CI).
@@ -42,7 +44,7 @@ const DEFAULT_SOURCE =
 
 async function main(): Promise<void> {
   await buildRiwayahData({
-    riwayah: 'warsh-asbahani',
+    riwayah: 'warsh-azraq',
     source: process.env.WARSH_SOURCE_URL?.trim() || DEFAULT_SOURCE,
     // quran-meta uses branded number types; the builder takes plain numbers.
     oracle: WarshMeta as unknown as RiwayahMetaModule,

@@ -14,7 +14,7 @@
 
 /** The riwayah keys the bot knows. Stored as a short string on the subscriber
  *  and on each Ayah/asset (no Prisma enum), matching the rest of the schema. */
-export type RiwayahKey = 'hafs' | 'warsh-asbahani' | 'qaloon';
+export type RiwayahKey = 'hafs' | 'warsh-azraq' | 'warsh-asbahani' | 'qaloon';
 
 export interface Riwayah {
   key: RiwayahKey;
@@ -33,8 +33,23 @@ export interface Riwayah {
 }
 
 // Insertion order = display order in the picker (default first).
+//
+// Warsh عن نافع has TWO turuq (routes) here. They share ONE verified text + the
+// same 604-page Madani layout (identical rasm + ayah-per-page), so the seed
+// seeds the same Warsh data file under BOTH keys (see prisma/seed.ts). They
+// differ only in the page IMAGE (each tariq's printed dabt — مد البدل, التقليل)
+// and the page AUDIO (each tariq's reciter). الأزرق is the common Maghreb route
+// (KFGQPC's standard مصحف المدينة Warsh); الأصبهاني is the rarer Eastern route
+// (its own 604-page Asbahani mushaf images + an Asbahani reciter).
 export const RIWAYAT: Record<RiwayahKey, Riwayah> = {
   hafs: { key: 'hafs', nameAr: 'حفص عن عاصم', ayahCount: 6236, countingSchool: 'kufi' },
+  'warsh-azraq': {
+    key: 'warsh-azraq',
+    nameAr: 'ورش عن نافع',
+    routeAr: 'من طريق الأزرق',
+    ayahCount: 6214,
+    countingSchool: 'madani',
+  },
   'warsh-asbahani': {
     key: 'warsh-asbahani',
     nameAr: 'ورش عن نافع',

@@ -68,6 +68,18 @@ describe('reciter-by-riwayah', () => {
     expect(recitersForRiwayah('qaloon')).toContain('majdi-salem');
     expect(RECITERS['majdi-salem'].riwayah).toBe('qaloon');
   });
+
+  it('the two Warsh turuq each have their own reciter, never crossed', () => {
+    // Azraq route: عمر القزابري. Asbahani route: محمد عبد الكريم. A reciter is tied
+    // to ONE tariq, so a Warsh voice is never offered for the wrong route.
+    expect(recitersForRiwayah('warsh-azraq')).toEqual(['qazabri']);
+    expect(recitersForRiwayah('warsh-asbahani')).toEqual(['abdulkarim']);
+    expect(RECITERS.qazabri.riwayah).toBe('warsh-azraq');
+    expect(RECITERS.abdulkarim.riwayah).toBe('warsh-asbahani');
+    // Switching between the turuq resets the reciter to that tariq's own.
+    expect(reciterForRiwayah('qazabri', 'warsh-asbahani')).toBe('abdulkarim');
+    expect(reciterForRiwayah('abdulkarim', 'warsh-azraq')).toBe('qazabri');
+  });
 });
 
 describe('pageAudioSource', () => {

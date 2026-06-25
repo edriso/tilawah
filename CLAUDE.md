@@ -349,9 +349,23 @@ LIVE today (all from KFGQPC / verified sources, all 604-page Madani layout, so
 the page number carries across cleanly):
 
 - `hafs` (default, Kufic count 6236) — every Hafs reciter.
+- `warsh-azraq` (ورش عن نافع من طريق الأزرق, Madani 6214) — reciter `qazabri`
+  (عمر القزابري). The common Maghreb route; the standard KFGQPC مصحف المدينة Warsh.
 - `warsh-asbahani` (ورش عن نافع من طريق الأصبهاني, Madani 6214) — reciter
-  `abdulkarim` (محمد عبد الكريم).
+  `abdulkarim` (محمد عبد الكريم). The Eastern route; its own Asbahani mushaf
+  images (Dar Al-Maarifah 604 edition).
 - `qaloon` (قالون عن نافع, Madani 6214) — reciter `majdi-salem` (مجدي سالم).
+
+The two Warsh **turuq** (الأزرق / الأصبهاني) share ONE verified text + the same
+604-page Madani layout (identical rasm + ayah-per-page), so the seed seeds the
+SAME `quran-warsh.json` under BOTH keys (see `prisma/seed.ts`); they differ only
+in the page IMAGE (each tariq's printed dabt — مد البدل, التقليل) and the page
+AUDIO (each tariq's reciter). The shared text's dabt follows the KFGQPC standard
+(Maghrebi/Azraq); for the precise Asbahani dabt the Asbahani page IMAGE is
+authoritative (non-Hafs is image-first by default). NOTE: أحمد ديبان was the
+community ask for Azraq, but his only 604 page-splits are حدر/electronically-
+sped-up uploads that fail the golden-rule bar; عمر القزابري is a verified murattal
+Azraq voice (604-page set, page-size↔text-length r≈0.75, like Qaloon's vetting).
 
 How it is wired (the rule: which rows/assets for this page gains a riwayah
 filter; the scheduler, read-gated advance, idempotency, and channel are

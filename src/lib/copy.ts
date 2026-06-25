@@ -98,6 +98,9 @@ const RECITER_NAME_AR: Record<string, string> = {
   alafasy: 'مشاري العفاسي',
   sudais: 'عبد الرحمن السديس',
   minshawi: 'محمد صديق المنشاوي',
+  // Warsh من طريق الأزرق reciter (complete 604-page Madinah murattal set).
+  qazabri: 'عمر القزابري',
+  // Warsh من طريق الأصبهاني reciter (complete 604-page Madinah set).
   abdulkarim: 'محمد عبد الكريم',
   // Qaloon reciter (complete 604-page Madinah set).
   'majdi-salem': 'مجدي سالم',

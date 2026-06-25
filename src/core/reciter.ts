@@ -17,6 +17,7 @@ export type ReciterKey =
   | 'alafasy'
   | 'sudais'
   | 'minshawi'
+  | 'qazabri'
   | 'abdulkarim'
   | 'majdi-salem';
 
@@ -39,10 +40,15 @@ export const RECITERS: Record<ReciterKey, ReciterInfo> = {
   alafasy: { folder: 'Alafasy_128kbps', riwayah: 'hafs' },
   sudais: { folder: 'Abdurrahmaan_As-Sudais_192kbps', riwayah: 'hafs' },
   minshawi: { folder: 'Minshawy_Murattal_128kbps', riwayah: 'hafs' },
-  // Warsh عن نافع من طريق الأصبهاني: Muhammad Abdul-Kareem, the complete 604-page
-  // Madinah set. Self-hosted only (not on everyayah); the page-audio resolver
-  // serves it from the riwayah-namespaced PAGE_AUDIO_BASE_URL once the operator
-  // hosts it (see docs/RIWAYAT.md). Offered only when Warsh is enabled.
+  // Warsh عن نافع من طريق الأزرق (the common Maghreb route): عمر القزابري, a complete
+  // 604-page Madinah murattal set. Self-hosted under page-audio/warsh-azraq/. (أحمد
+  // ديبان was requested but his only 604 splits are حدر/electronically-sped-up
+  // community uploads, which fail our verification bar; القزابري is a verified
+  // murattal Azraq voice — see docs/RIWAYAT.md.)
+  qazabri: { folder: 'Omar_Al_Qazabri', riwayah: 'warsh-azraq' },
+  // Warsh عن نافع من طريق الأصبهاني (the Eastern route): Muhammad Abdul-Kareem, the
+  // complete 604-page Madinah set. Self-hosted under page-audio/warsh-asbahani/;
+  // paired with the Asbahani mushaf images (Dar Al-Maarifah, 604 layout).
   abdulkarim: { folder: 'AbdulKareem', riwayah: 'warsh-asbahani' },
   // Qaloon عن نافع: مجدي سالم, the complete 604-page set split on the Madinah
   // (King Fahd) layout — the layout our Qaloon page map + images use, chosen for
