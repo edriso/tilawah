@@ -26,14 +26,18 @@ docs/schema.sql
 .DS_Store
 Thumbs.db
 
-# Self-hosted Mushaf page images (download with `pnpm data:mushaf`). The image
-# files are too large to commit, but the manifest of SHA-256 fingerprints IS
-# tracked so the set can be re-verified offline (`pnpm data:mushaf --check`).
+# Self-hosted Mushaf page images (prepared with `pnpm data:mushaf`). The image
+# files are too large to commit, but each riwayah's manifest of SHA-256
+# fingerprints IS tracked so the set can be re-verified offline
+# (`pnpm data:mushaf --check --out assets/mushaf/<riwayah>`).
 assets/mushaf/*.jpg
 assets/mushaf/*.png
-# Per-riwayah image sets (e.g. assets/mushaf/warsh-asbahani/*.jpg) are just as
-# large, so ignore every subfolder's images too. The top-level manifest stays tracked.
-assets/mushaf/*/
+# Every riwayah lives in its own subfolder (assets/mushaf/hafs, .../qaloon, ...).
+# Ignore their large images too, but KEEP each subfolder's manifest.json tracked.
+# (We ignore the subfolder CONTENTS, not the folder itself, so the negation can
+# re-include the manifest — git cannot re-include a file under an ignored dir.)
+assets/mushaf/*/*
+!assets/mushaf/*/manifest.json
 # The tajweed example clips (assets/tajweed/*.mp3, ~8 MB) ARE committed on
 # purpose, so they bake into the image and ship with the code. Not ignored.
 

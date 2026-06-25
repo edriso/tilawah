@@ -28,6 +28,7 @@
     "data:tajweed": "tsx scripts/fetch-tajweed-audio.ts",
     "data:page-audio": "tsx scripts/build-page-audio.ts",
     "clear:page-audio": "tsx scripts/clear-page-audio.ts",
+    "clear:mushaf-images": "tsx scripts/clear-mushaf-images.ts",
     "verify:audio": "tsx scripts/verify-audio.ts",
     "test:image": "tsx scripts/test-mushaf-image.ts",
     "test": "vitest run",

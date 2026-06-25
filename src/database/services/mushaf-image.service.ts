@@ -43,3 +43,37 @@ export function cachePageImageId(
     create: { riwayah, page, fileId },
   });
 }
+
+/** Build the Prisma `where` for the cache filters (ANDed; empty = match all).
+ *  Shared by the clear and count helpers so they always agree on the scope.
+ *  Mirrors page-audio.service's pageAudioWhere. */
+function mushafImageWhere(filter: { riwayah?: RiwayahKey; page?: number }) {
+  const where: { riwayah?: string; page?: number } = {};
+  if (filter.riwayah !== undefined) where.riwayah = filter.riwayah;
+  if (filter.page !== undefined) where.page = filter.page;
+  return where;
+}
+
+/**
+ * Drop cached page-image file_ids so the NEXT send re-uploads from the CURRENT
+ * source. Use this after replacing a riwayah's page images (e.g. swapping the
+ * Hafs set for a verified KFGQPC PDF render): the cached file_id points at
+ * Telegram's stored copy of the OLD image and would be re-served forever
+ * otherwise. Filters are ANDed; omit them to clear the whole cache. Returns how
+ * many rows were removed. The audio twin is clearCachedPageAudio. See
+ * scripts/clear-mushaf-images.ts.
+ */
+export async function clearCachedPageImages(
+  filter: { riwayah?: RiwayahKey; page?: number } = {},
+): Promise<number> {
+  const { count } = await prisma.mushafPageImage.deleteMany({ where: mushafImageWhere(filter) });
+  return count;
+}
+
+/** Count cached rows matching the same filter WITHOUT deleting — the dry-run
+ *  preview for the clear script, so an operator sees the blast radius first. */
+export function countCachedPageImages(
+  filter: { riwayah?: RiwayahKey; page?: number } = {},
+): Promise<number> {
+  return prisma.mushafPageImage.count({ where: mushafImageWhere(filter) });
+}

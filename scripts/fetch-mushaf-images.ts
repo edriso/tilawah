@@ -1,24 +1,38 @@
-// Download the Madani Mushaf page images ONCE, integrity-check every page, and
-// write them plus a manifest of SHA-256 fingerprints to disk. This lets you
-// SELF-HOST a verified copy instead of depending on a third-party host at
-// runtime: review the pages once, then serve them yourself (your own static
-// host, or upload-from-disk) and the bot never fetches from a stranger again.
+// Get the Madani Mushaf page images ONCE, integrity-check every page, and write
+// them plus a manifest of SHA-256 fingerprints to disk. This lets you SELF-HOST
+// a verified copy instead of depending on a third-party host at runtime: review
+// the pages once, then serve them yourself (your own static host, or
+// upload-from-disk) and the bot never fetches from a stranger again.
 //
-// Run with:  pnpm data:mushaf  [--source <urlTemplate>] [--out <dir>] [--pages <n>]
-//   --source  URL template with {page} or {page3} to download FROM. Defaults to
-//             MUSHAF_IMAGE_BASE_URL in .env when it is an http URL, else the
-//             colored Tajweed Hafs set on QuranHub.
-//   --out     where to write the images. Default: assets/mushaf
-//   --pages   for a quick test, fetch only pages 1..N. Default: 604
+// Two ways to GET the pages:
+//   1. Download from a URL template (the original flow), or
+//   2. Import an already-prepared local set with --from-dir (the way the
+//      non-Hafs riwayat and the KFGQPC Madinah Hafs set are produced: render a
+//      verified KFGQPC PDF to 001.jpg..604.jpg, then import + fingerprint here).
 //
-// Re-verify an already-downloaded set offline (no network), against the
-// manifest, with:  pnpm data:mushaf --check
+// Run with:
+//   pnpm data:mushaf [--source <urlTemplate>] [--out <dir>] [--pages <n>]
+//   pnpm data:mushaf --from-dir <dir> --out assets/mushaf/<riwayah> [--source <label>]
 //
-// What "verified" means here: the manifest pins the exact bytes you downloaded,
-// so a later run flags ANY upstream change (tampering, a swapped edition). It
-// does NOT prove the pages are religiously correct — eyeball a few yourself the
-// first time. The bot's authoritative text stays the verified Tanzil Hafs in
-// the database; these images are only what the reader sees.
+//   --source    With a URL: the template (with {page}/{page3}) to download FROM;
+//               defaults to MUSHAF_IMAGE_BASE_URL when it is an http URL, else
+//               the colored Tajweed Hafs set on QuranHub. With --from-dir: a free
+//               text label recorded in the manifest (e.g. the source PDF name).
+//   --from-dir  Import 001..604 from a local folder instead of downloading. The
+//               files are validated (real image, sane size) and copied to --out.
+//   --out       Where to write the images. Default: assets/mushaf. Each riwayah
+//               lives in its own subfolder, e.g. assets/mushaf/hafs.
+//   --pages     For a quick test, only pages 1..N. Default: 604.
+//
+// Re-verify an already-prepared set offline (no network), against its manifest:
+//   pnpm data:mushaf --check --out assets/mushaf/<riwayah>
+//
+// What "verified" means here: the manifest pins the exact bytes you wrote, so a
+// later run flags ANY change (tampering, a swapped edition, a truncated copy).
+// It does NOT prove the pages are religiously correct — eyeball a few yourself
+// the first time (for a PDF import, confirm the Mushaf page number printed on
+// the page matches the file number). The bot's authoritative text stays the
+// verified Tanzil text in the database; these images are only what the reader sees.
 
 import { createHash } from 'node:crypto';
 import { writeFileSync, readFileSync, existsSync, mkdirSync } from 'node:fs';
@@ -32,7 +46,11 @@ loadEnv();
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(HERE, '..');
 
-// The colored Tajweed Hafs Madani set (604 pages), used as the default source.
+// A download fallback only (used when neither --source nor an http
+// MUSHAF_IMAGE_BASE_URL is set): the colored Tajweed Hafs Madani set, 604 pages.
+// The SHIPPED Hafs set is NOT this — it is the official KFGQPC مصحف المدينة Hafs
+// 1440 set rendered from the verified PDF and imported with --from-dir (the same
+// way the Qaloon/Warsh sets are produced; see docs/RIWAYAT.md).
 const DEFAULT_SOURCE =
   'https://raw.githubusercontent.com/QuranHub/quran-pages-images/main/easyquran.com/hafs-tajweed/{page}.jpg';
 
@@ -154,6 +172,77 @@ function checkLocal(outDir: string, ext: string): void {
   console.log(`✓ All ${manifest.pageCount} pages match the manifest.`);
 }
 
+/** Find page N's file in a local import folder. We accept 001.jpg / 001.png (and
+ *  the un-padded 1.jpg as a courtesy), returning the first that exists. */
+function findLocalPage(dir: string, page: number): string | null {
+  for (const name of [`${pad(page)}.jpg`, `${pad(page)}.png`, `${page}.jpg`, `${page}.png`]) {
+    const file = join(dir, name);
+    if (existsSync(file)) return file;
+  }
+  return null;
+}
+
+// ── --from-dir: import an already-prepared local set (e.g. rendered from a
+// verified KFGQPC PDF), validate every page, copy it to outDir, write manifest ─
+function importLocal(fromDir: string, outDir: string, lastPage: number, label: string): void {
+  const src = resolve(ROOT, fromDir);
+  if (!existsSync(src)) {
+    console.error(`--from-dir not found: ${src}`);
+    process.exit(1);
+  }
+  console.log(`Importing ${lastPage} pages from:\n  ${src}\ninto ${outDir}\n`);
+  mkdirSync(outDir, { recursive: true });
+  const prev = readManifest(join(outDir, 'manifest.json'));
+
+  const manifest: Manifest = { source: label, pageCount: lastPage, pages: {} };
+  const problems: string[] = [];
+  const changed: number[] = [];
+
+  for (let page = 1; page <= lastPage; page++) {
+    const file = findLocalPage(src, page);
+    if (!file) {
+      problems.push(`page ${page}: no 001.jpg/png style file in ${src}`);
+      continue;
+    }
+    const buf = readFileSync(file);
+    if (!looksLikeImage(buf)) {
+      problems.push(`page ${page}: not a JPEG/PNG (${file})`);
+      continue;
+    }
+    if (buf.length < MIN_BYTES) {
+      problems.push(`page ${page}: too small (${buf.length} bytes)`);
+      continue;
+    }
+    // The bot uploads a local file (10 MB Telegram limit), so we do not apply the
+    // 5 MB photo-by-URL cap here; a verified Mushaf page is well under either.
+    const key = pad(page);
+    const hash = sha256(buf);
+    writeFileSync(join(outDir, `${key}${extname(file) || '.jpg'}`), buf);
+    manifest.pages[key] = { sha256: hash, bytes: buf.length };
+    if (prev?.pages[key] && prev.pages[key]!.sha256 !== hash) changed.push(page);
+    if (page % 100 === 0 || page === lastPage) console.log(`  ${page}/${lastPage}`);
+  }
+
+  if (problems.length) {
+    console.error(`\n✗ ${problems.length} problem(s):`);
+    for (const p of problems) console.error(`  - ${p}`);
+    process.exit(1);
+  }
+
+  writeFileSync(join(outDir, 'manifest.json'), JSON.stringify(manifest, null, 2) + '\n');
+  const totalMb = (
+    Object.values(manifest.pages).reduce((s, e) => s + e.bytes, 0) /
+    (1024 * 1024)
+  ).toFixed(1);
+  console.log(`\n✓ Imported ${lastPage} pages (${totalMb} MB) + manifest.json to ${outDir}`);
+  if (prev && changed.length) {
+    console.log(
+      `⚠ ${changed.length} page(s) changed vs the previous manifest: ${changed.join(', ')}`,
+    );
+  }
+  console.log(`\nRe-verify any time with: pnpm data:mushaf --check --out ${outDir}`);
+}
+
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
   const check = args.includes('--check');
@@ -162,13 +251,22 @@ async function main(): Promise<void> {
     return i >= 0 ? args[i + 1] : undefined;
   };
 
-  const envUrl = process.env.MUSHAF_IMAGE_BASE_URL?.trim();
-  const source =
-    flag('--source') || (envUrl && /^https?:\/\//i.test(envUrl) ? envUrl : DEFAULT_SOURCE);
+  const fromDir = flag('--from-dir');
   // resolve() handles both a relative dir (against the repo root) and an
   // absolute one (e.g. the in-container /app/assets/mushaf volume mount).
   const outDir = resolve(ROOT, flag('--out') || 'assets/mushaf');
   const lastPage = flag('--pages') ? Number(flag('--pages')) : PAGE_COUNT;
+
+  // Import mode: the pages already exist locally (no download, no URL template).
+  if (fromDir) {
+    const label = flag('--source') || `local import: ${fromDir}`;
+    importLocal(fromDir, outDir, lastPage, label);
+    return;
+  }
+
+  const envUrl = process.env.MUSHAF_IMAGE_BASE_URL?.trim();
+  const source =
+    flag('--source') || (envUrl && /^https?:\/\//i.test(envUrl) ? envUrl : DEFAULT_SOURCE);
   const ext = extname(source) || '.jpg';
 
   if (!/\{page3?\}/.test(source)) {

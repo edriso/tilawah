@@ -445,11 +445,12 @@ pnpm install
 pnpm data:fetch        # download + verify the Hafs Quran text, pages, and juz (once; also committed)
 pnpm data:fetch:warsh  # (optional) verify + write the Warsh (Asbahani) text dataset
 pnpm data:fetch:qaloon # (optional) verify + write the Qaloon text dataset
-pnpm data:mushaf    # (optional) download + verify the 604 page images to self-host them
+pnpm data:mushaf    # (optional) get + verify the 604 page images to self-host (download a URL, or import a local render with --from-dir; writes a per-riwayah manifest)
 pnpm data:tajweed   # (optional) download + verify the tajweed example clips to self-host them
 pnpm data:page-audio # (optional) build the verified self-hosted per-page recitation set
 pnpm verify:audio   # check the audio source / a built set (--scan-defects, --dir --deep)
 pnpm clear:page-audio # drop cached page-audio file_ids after swapping a source (dry-run unless --yes)
+pnpm clear:mushaf-images # drop cached page-IMAGE file_ids after swapping images (dry-run unless --yes)
 pnpm db:deploy      # apply migrations (create tables)
 pnpm db:seed        # fill the Quran tables
 pnpm dev            # run the bot with reload
@@ -567,4 +568,13 @@ Commit the new folder under `prisma/migrations/`. Production applies it with
   `/admin_format`. Image needs `MUSHAF_IMAGE_BASE_URL` set (an http URL or a
   local path the bot uploads); without a source the bot falls back to text at
   send time. Like the text, image pages must come from a verified Madani Mushaf
-  source.
+  source. Every riwayah's images are self-hosted under its OWN subfolder
+  (`{riwayah}` in the template: `/app/assets/mushaf/{riwayah}/{page3}.jpg`), so
+  Hafs lives at `mushaf/hafs/` too. The shipped Hafs set is the official KFGQPC
+  مصحف المدينة (Hafs, 1440H) rendered from the verified PDF and fingerprinted with
+  `pnpm data:mushaf --from-dir … --out assets/mushaf/hafs` (same recipe as
+  Qaloon/Warsh; see `docs/RIWAYAT.md`). After REPLACING a riwayah's images, drop
+  the stale file_id cache with `pnpm clear:mushaf-images --riwayah <key>`
+  (`scripts/clear-mushaf-images.ts` -> `clearCachedPageImages` in
+  `mushaf-image.service.ts`), or the bot keeps re-sending Telegram's copy of the
+  OLD image — the image twin of the `clear:page-audio` lesson.
