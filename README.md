@@ -117,7 +117,9 @@ post time, `/admin_tz Area/City` timezone, `/admin_pause` pause or resume,
 `/admin_tajweed on|off` the channel's daily tajweed lesson, `/admin_reciter
 <off|key>` the channel's recitation voice, `/admin_review` get
 the whole tajweed deck as a document to review or forward to a scholar,
-`/admin_status` channel status, `/admin_send` send the batch now.
+`/admin_status` channel status, `/admin_stats` subscriber counts (users,
+status, and the breakdown by riwayah), `/admin_send` send the batch now, and
+`/admin_help` to list every admin command.
 
 ## Development
 
