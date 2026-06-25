@@ -274,10 +274,13 @@ per page):
   per-ayah or per-page (Madinah-aligned) split from a trusted source. We will not
   self-segment a surah file into 604 pages (that fails the verification standard).
   ADD WHEN: a verified per-page (or per-ayah) Asbahani set for him appears.
-- **أحمد ديبان — WRONG ROUTE.** His complete Quran on the authoritative reciter
-  index (mp3quran.net/ar/ahmd-dyb-n-4) is Warsh **من طريق الأزرق**, not الأصبهاني.
-  No complete Asbahani set for him was found. (His page-split archive uploads are
-  حدر / unconfirmed-rasm and not usable.) Not addable for her request as stated.
+- **أحمد ديبان — Azraq, not Asbahani.** His complete Quran (mp3quran.net/ar/ahmd-dyb-n-4)
+  is Warsh **من طريق الأزرق**, so he was not addable for her *Asbahani* request. NOTE
+  (later): once الأزرق became its OWN riwayah (`warsh-azraq`), Deeban was the natural
+  Azraq pick — but his only 604 page-splits are حدر/electronically-sped-up community
+  uploads (his murattal is by-surah, which we will not self-segment), so they fail
+  the bar. عمر القزابري was used as the verified murattal Azraq voice instead. See
+  "Warsh عن نافع — الأزرق + الأصبهاني — LIVE" below.
 
 Net: only محمد عبد الكريم meets the bar today. The blocker for the other two is
 the SEGMENTATION/route, not our engine — the moment a verified Asbahani set with
@@ -305,6 +308,46 @@ source (golden rule #1). After replacing the set on the server, the page-image
 file_id cache is cleared (`pnpm clear:mushaf-images --riwayah hafs --yes`) so the
 new images actually go out. Hafs is now self-hosted under its own `mushaf/hafs/`
 subfolder exactly like Qaloon and Warsh.
+
+## Warsh عن نافع — الأزرق + الأصبهاني (the two turuq) — LIVE
+
+What shipped first as a single "warsh-asbahani" was actually an **Azraq** mushaf
+(KFGQPC's standard مصحف المدينة Warsh is written وفق اصطلاحات الضبط المغربية =
+طريق الأزرق; text `warshData_v10` + the standard 604 Warsh images) paired with an
+**Asbahani** reciter (محمد عبد الكريم) — i.e. mislabeled. It is now split into its
+two real turuq, each a correct bundle:
+
+- **`warsh-azraq`** (ورش عن نافع من طريق الأزرق): the common Maghreb route. Text +
+  images are the existing Azraq set, now correctly labeled. Reciter **عمر القزابري**
+  (`qazabri`) — a complete 604-page Madinah **murattal** set (archive.org
+  `3omar-alqazabry-by-reeding-of-warsh-604-page-quran-mp3-128kb`), vetted like
+  Qaloon: page-size↔on-page-text r≈0.75, 604/604 valid, no Xing truncation.
+- **`warsh-asbahani`** (ورش عن نافع من طريق الأصبهاني): the Eastern route. Its OWN
+  mushaf images — **Dar Al-Maarifah مصحف التجويد ورش الأصبهاني**, a 604-page
+  KFGQPC-Madinah-layout tajweed edition (PDF pages 5..608, offset 4) — plus
+  محمد عبد الكريم (`abdulkarim`), who is genuinely Asbahani, now on the correct mushaf.
+
+**Shared text.** The two turuq share ONE verified text + the same 604-page Madani
+layout (identical rasm + ayah-per-page), so the seed seeds `quran-warsh.json`
+under BOTH keys (`prisma/seed.ts`); they differ only in page images (tariq dabt)
+and page audio (tariq reciter). The shared text's dabt follows the KFGQPC standard
+(Maghrebi/Azraq); for the precise Asbahani dabt the Asbahani page IMAGE is
+authoritative (non-Hafs is image-first by default).
+
+**Reciter note (أحمد ديبان).** Deeban was the community ask for Azraq and IS Azraq,
+but his only 604-page splits are حدر / electronically-sped-up community uploads
+that fail our golden-rule bar (his murattal is by-surah, which we will not
+self-segment). عمر القزابري is the verified murattal Azraq voice instead. Add
+Deeban as a second Azraq reciter the moment a verified murattal page-set appears
+(a one-line `reciter.ts` + `copy.ts` change + hosting).
+
+**Migration done (server).** Azraq images moved to `mushaf/warsh-azraq/`; the
+Asbahani images replaced `mushaf/warsh-asbahani/`; the warsh-asbahani image cache
+was cleared (`clear:mushaf-images`) so it re-renders Asbahani; القزابري audio
+hosted at `page-audio/warsh-azraq/Omar_Al_Qazabri/`; محمد عبد الكريم audio stays at
+`page-audio/warsh-asbahani/AbdulKareem/`. The lone warsh-asbahani subscriber kept
+their key (now the correct Asbahani bundle). Each riwayah's images carry a tracked
+`mushaf/<riwayah>/manifest.json` (re-verify with `pnpm data:mushaf --check`).
 
 ## Qaloon (قالون عن نافع) — LIVE
 

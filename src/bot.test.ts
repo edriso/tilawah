@@ -365,6 +365,37 @@ describe('sendTodayView page recitation', () => {
     expect(h.sendPageAudio.mock.calls[0][4]).toBe('qaloon');
     expect(h.sendPageAudio.mock.calls[0][3]).toBe('majdi-salem');
   });
+
+  // The two Warsh turuq are distinct bundles: each must carry its OWN key + its
+  // OWN reciter through the live wird, so an Azraq reader never gets the Asbahani
+  // mushaf/voice and vice versa (the whole point of the split).
+  it('passes warsh-azraq + القزابري through /today (its own bundle, not Asbahani)', async () => {
+    h.sendWird.mockResolvedValue({ pagesSent: 2, lastResult: 'ok' });
+    const azraqSub = {
+      ...(SUB as object),
+      wirdAudioEnabled: true,
+      reciter: 'qazabri',
+      riwayah: 'warsh-azraq',
+    } as never;
+    await sendTodayView(fakeCtx() as never, azraqSub, TWO_PAGE_VIEW() as never, new Date());
+    expect(h.sendWird.mock.calls[0][4]).toMatchObject({ riwayah: 'warsh-azraq' });
+    expect(h.sendPageAudio.mock.calls[0][4]).toBe('warsh-azraq');
+    expect(h.sendPageAudio.mock.calls[0][3]).toBe('qazabri');
+  });
+
+  it('passes warsh-asbahani + عبد الكريم through /page reposition', async () => {
+    const asbSub = {
+      ...(SUB as object),
+      wirdAudioEnabled: true,
+      reciter: 'abdulkarim',
+      riwayah: 'warsh-asbahani',
+    } as never;
+    await repositionToPage(fakeCtx() as never, asbSub, 50);
+    expect(h.getJuzForPage).toHaveBeenCalledWith(50, 'warsh-asbahani');
+    expect(h.sendWird.mock.calls[0][4]).toMatchObject({ riwayah: 'warsh-asbahani' });
+    expect(h.sendPageAudio.mock.calls[0][4]).toBe('warsh-asbahani');
+    expect(h.sendPageAudio.mock.calls[0][3]).toBe('abdulkarim');
+  });
 });
 
 // The "read ✓ / next" button: confirm this wird and reveal the next, idempotently.
