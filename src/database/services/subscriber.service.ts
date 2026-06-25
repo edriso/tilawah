@@ -196,3 +196,68 @@ export function setRiwayah(subscriberId: number, riwayah: string, reciter: strin
 export function markBlocked(subscriberId: number) {
   return prisma.subscriber.update({ where: { id: subscriberId }, data: { blockedAt: new Date() } });
 }
+
+export interface SubscriberStats {
+  channels: number;
+  users: number;
+  active: number; // not paused and not blocked
+  paused: number;
+  blocked: number;
+  started: number; // have received at least one wird
+  imageFmt: number;
+  textFmt: number;
+  audioOn: number;
+  tajweedOn: number;
+  riwayah: Record<string, number>; // user count per riwayah key
+  deliveries: number; // total delivery_logs rows
+}
+
+/**
+ * Aggregate counts for the admin /admin_stats command: the channel row plus the
+ * user population broken down by status, riwayah, format, audio, and tajweed.
+ * Read-only; a handful of parallel COUNTs plus one groupBy, so it stays cheap.
+ */
+export async function getSubscriberStats(): Promise<SubscriberStats> {
+  const userWhere = { kind: KIND_USER } as const;
+  const [
+    channels,
+    users,
+    active,
+    paused,
+    blocked,
+    started,
+    imageFmt,
+    audioOn,
+    tajweedOn,
+    byRiwayah,
+    deliveries,
+  ] = await Promise.all([
+    prisma.subscriber.count({ where: { kind: KIND_CHANNEL } }),
+    prisma.subscriber.count({ where: userWhere }),
+    prisma.subscriber.count({ where: { ...userWhere, pausedAt: null, blockedAt: null } }),
+    prisma.subscriber.count({ where: { ...userWhere, pausedAt: { not: null } } }),
+    prisma.subscriber.count({ where: { ...userWhere, blockedAt: { not: null } } }),
+    prisma.subscriber.count({ where: { ...userWhere, startedAt: { not: null } } }),
+    prisma.subscriber.count({ where: { ...userWhere, wirdFormat: 'image' } }),
+    prisma.subscriber.count({ where: { ...userWhere, wirdAudioEnabled: true } }),
+    prisma.subscriber.count({ where: { ...userWhere, tajweedEnabled: true } }),
+    prisma.subscriber.groupBy({ by: ['riwayah'], where: userWhere, _count: { _all: true } }),
+    prisma.deliveryLog.count(),
+  ]);
+  const riwayah: Record<string, number> = {};
+  for (const g of byRiwayah) riwayah[g.riwayah] = g._count._all;
+  return {
+    channels,
+    users,
+    active,
+    paused,
+    blocked,
+    started,
+    imageFmt,
+    textFmt: users - imageFmt,
+    audioOn,
+    tajweedOn,
+    riwayah,
+    deliveries,
+  };
+}

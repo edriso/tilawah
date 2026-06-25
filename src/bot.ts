@@ -21,6 +21,7 @@ import {
 import {
   ensureUser,
   getChannelSubscriber,
+  getSubscriberStats,
   getJuzForPage,
   setWirdSize,
   setWirdFormat,
@@ -1279,6 +1280,67 @@ bot.command('admin_review', async (ctx) => {
   await ctx.replyWithDocument(
     new InputFile(Buffer.from(doc, 'utf8'), 'tajweed-lessons-review.txt'),
     { caption: COPY.adminReviewCaption(TAJWEED_LESSON_COUNT) },
+  );
+});
+
+// /admin_stats: subscriber counts — how many users, their status, and the
+// breakdown by riwayah/format/audio. Read-only. The numbers an operator wants at
+// a glance ("how many subscribers?").
+bot.command('admin_stats', async (ctx) => {
+  if (!isAdmin(ctx)) {
+    if (ctx.chat?.type === 'private') await ctx.reply(COPY.adminOnly);
+    return;
+  }
+  const s = await getSubscriberStats();
+  const riwayahLine =
+    Object.entries(s.riwayah)
+      .sort((a, b) => b[1] - a[1])
+      .map(([k, n]) => `${k} ${n}`)
+      .join(', ') || '(none)';
+  await ctx.reply(
+    [
+      'Subscribers',
+      '-----------',
+      `Users: ${s.users}  (active ${s.active}, paused ${s.paused}, blocked ${s.blocked})`,
+      `Started (got a wird): ${s.started}   |   Channel: ${s.channels}`,
+      `Format: image ${s.imageFmt}, text ${s.textFmt}`,
+      `Audio on: ${s.audioOn}   |   Tajweed on: ${s.tajweedOn}`,
+      `Riwayah: ${riwayahLine}`,
+      `Deliveries logged: ${s.deliveries}`,
+    ].join('\n'),
+  );
+});
+
+// /admin_help: list the admin-only commands (they are deliberately not in the
+// public command menu). A quick reference for the operator.
+bot.command('admin_help', async (ctx) => {
+  if (!isAdmin(ctx)) {
+    if (ctx.chat?.type === 'private') await ctx.reply(COPY.adminOnly);
+    return;
+  }
+  await ctx.reply(
+    [
+      'Admin commands',
+      '--------------',
+      'Channel:',
+      '  /admin_status            settings + current position',
+      '  /admin_setpage <N>       set last page read (resumes at N+1)',
+      '  /admin_restart           start a new khatma at page 1',
+      '  /admin_wird <1..20>      pages per day',
+      '  /admin_format <text|image>',
+      '  /admin_reciter <off|key> page-recitation voice',
+      '  /admin_tajweed <on|off>  daily tajweed lesson',
+      '  /admin_time <HH:MM>      daily post time',
+      '  /admin_tz <Area/City>    timezone',
+      '  /admin_pause             pause/resume the channel',
+      'Operations:',
+      '  /admin_stats             subscriber counts',
+      '  /admin_preview <page> [n]  render a page to your DM',
+      '  /admin_send              run the delivery batch now',
+      '  /admin_health            uptime',
+      '  /admin_review            tajweed deck as a document',
+      '  /admin_help              this list',
+    ].join('\n'),
   );
 });
 
