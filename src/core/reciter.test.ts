@@ -64,6 +64,17 @@ describe('reciter-by-riwayah', () => {
     }
   });
 
+  it('Hafs offers the added voices (ayyoub, ali-jaber, aziz-alili, al-banna)', () => {
+    // Each has a verified, complete per-ayah set on everyayah (6236 ayat), so the
+    // self-hosted page set is built from it. They are Hafs, so they ride the Hafs
+    // riwayah and are offered to every Hafs reader alongside the originals.
+    const hafs = recitersForRiwayah('hafs');
+    for (const key of ['ayyoub', 'ali-jaber', 'aziz-alili', 'al-banna'] as const) {
+      expect(hafs).toContain(key);
+      expect(RECITERS[key].riwayah).toBe('hafs');
+    }
+  });
+
   it('Qaloon offers مجدي سالم (its complete per-page set)', () => {
     expect(recitersForRiwayah('qaloon')).toContain('majdi-salem');
     expect(RECITERS['majdi-salem'].riwayah).toBe('qaloon');

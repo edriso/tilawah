@@ -85,7 +85,8 @@ in a private chat with the bot. They act on the channel.
   Mushaf page (the default) or plain text. Image needs `MUSHAF_IMAGE_BASE_URL`
   set (see `docs/DEPLOY.md`); without it the channel quietly posts text.
 - `/admin_reciter <off|key>` set the voice for the page recitation, or turn it
-  off. Keys: `abdulbasit` (default), `husary`, `alafasy`, `sudais`, `minshawi`.
+  off. Keys: `abdulbasit` (default), `husary`, `alafasy`, `sudais`, `minshawi`,
+  `ayyoub`, `ali-jaber`, `aziz-alili`, `al-banna`.
 - `/admin_tajweed on|off` turn the short tajweed lesson (posted before the page)
   on or off for the channel.
 - `/admin_review` send yourself the whole tajweed lesson deck as one document,

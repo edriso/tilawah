@@ -17,6 +17,10 @@ export type ReciterKey =
   | 'alafasy'
   | 'sudais'
   | 'minshawi'
+  | 'ayyoub'
+  | 'ali-jaber'
+  | 'aziz-alili'
+  | 'al-banna'
   | 'qazabri'
   | 'abdulkarim'
   | 'majdi-salem';
@@ -40,6 +44,21 @@ export const RECITERS: Record<ReciterKey, ReciterInfo> = {
   alafasy: { folder: 'Alafasy_128kbps', riwayah: 'hafs' },
   sudais: { folder: 'Abdurrahmaan_As-Sudais_192kbps', riwayah: 'hafs' },
   minshawi: { folder: 'Minshawy_Murattal_128kbps', riwayah: 'hafs' },
+  // محمد أيوب (إمام المسجد النبوي سابقًا), a complete murattal Hafs set on everyayah.
+  ayyoub: { folder: 'Muhammad_Ayyoub_128kbps', riwayah: 'hafs' },
+  // علي جابر (إمام الحرم سابقًا), a complete murattal Hafs set on everyayah. Only a
+  // 64kbps per-ayah set exists there; still a clean, ayah-accurate source.
+  'ali-jaber': { folder: 'Ali_Jaber_64kbps', riwayah: 'hafs' },
+  // عزيز عليلي (Aziz Alili), a complete murattal Hafs set on everyayah. The folder
+  // is lowercase, unlike the others — match it exactly.
+  'aziz-alili': { folder: 'aziz_alili_128kbps', riwayah: 'hafs' },
+  // محمود علي البنا (the classic Egyptian reciter), a complete murattal Hafs set on
+  // everyayah. NOTE: everyayah only carries him at 32kbps (lower fidelity than the
+  // others), which is the only per-ayah set available; kept by an explicit choice.
+  'al-banna': { folder: 'mahmoud_ali_al_banna_32kbps', riwayah: 'hafs' },
+  // NOT added: ماهر المعيقلي (everyayah MaherAlMuaiqly128kbps). His per-ayah set is
+  // complete and ayah-accurate, but the recording has audible echo/reverb, so he
+  // was dropped after review. Re-add only if a clean (echo-free) source appears.
   // Warsh عن نافع من طريق الأزرق (the common Maghreb route): عمر القزابري, a complete
   // 604-page Madinah murattal set. Self-hosted under page-audio/warsh-azraq/. (أحمد
   // ديبان was requested but his only 604 splits are حدر/electronically-sped-up

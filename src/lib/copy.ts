@@ -98,6 +98,10 @@ const RECITER_NAME_AR: Record<string, string> = {
   alafasy: 'مشاري العفاسي',
   sudais: 'عبد الرحمن السديس',
   minshawi: 'محمد صديق المنشاوي',
+  ayyoub: 'محمد أيوب',
+  'ali-jaber': 'علي جابر',
+  'aziz-alili': 'عزيز عليلي',
+  'al-banna': 'محمود علي البنا',
   // Warsh من طريق الأزرق reciter (complete 604-page Madinah murattal set).
   qazabri: 'عمر القزابري',
   // Warsh من طريق الأصبهاني reciter (complete 604-page Madinah set).
@@ -517,7 +521,7 @@ export const COPY = {
         ? `تلاوة القناة الآن بصوت ${reciterNameAr(reciter)} 🎧`
         : 'تلاوة القناة متوقفة الآن ⏸️',
       `اكتب ${ltr('/admin_reciter off')} للإيقاف، أو اسم المفتاح:`,
-      `${ltr('abdulbasit / husary / alafasy / sudais / minshawi')}`,
+      `${ltr('abdulbasit / husary / alafasy / sudais / minshawi / ayyoub / ali-jaber / aziz-alili / al-banna')}`,
     ].join('\n'),
   adminReciterDone: (enabled: boolean, reciter: string) =>
     enabled
