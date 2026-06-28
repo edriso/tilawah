@@ -8,6 +8,7 @@ export * from './schedule';
 export * from './wird';
 export * from './arabic';
 export * from './basmala';
+export * from './hijri';
 export * from './format';
 export * from './mushaf-image';
 export * from './tajweed';

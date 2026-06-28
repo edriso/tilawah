@@ -221,6 +221,28 @@ describe('buildTodayView (read-gated: shows the live wird, never advances)', () 
     expect(view.record).not.toHaveProperty('nextPage');
   });
 
+  it('stamps the day Hijri date on the FIRST (recorded) showing of the day', async () => {
+    const view = await buildTodayView(todaySub(), NOW);
+    expect(view.record).not.toBeNull(); // a fresh, recordable day
+    expect(view.lead).not.toBe(COPY.wirdLead);
+    expect(view.lead).toContain('هـ'); // the Hijri-era marker only the dated lead carries
+  });
+
+  it('omits the date on a re-show of an already-delivered day (plain lead)', async () => {
+    h.getDeliveryFor.mockResolvedValue({ startPage: 5, pageCount: 1 });
+    const view = await buildTodayView(todaySub(), NOW);
+    expect(view.record).toBeNull();
+    expect(view.lead).toBe(COPY.wirdLead);
+  });
+
+  it('omits the date on a paused or off-day peek (no record, plain lead)', async () => {
+    const paused = await buildTodayView(todaySub({ pausedAt: new Date() }), NOW);
+    expect(paused.lead).toBe(COPY.wirdLead);
+    // activeDays = 2 is Tuesday only, so Monday (NOW) is an off day.
+    const offDay = await buildTodayView(todaySub({ activeDays: 2 }), NOW);
+    expect(offDay.lead).toBe(COPY.wirdLead);
+  });
+
   it('re-shows the LIVE wird at the current page and does NOT record again', async () => {
     h.getDeliveryFor.mockResolvedValue({ startPage: 5, pageCount: 1 });
     const view = await buildTodayView(todaySub(), NOW);
@@ -506,6 +528,21 @@ describe('deliverDueSubscribers', () => {
     const arg = h.commitDelivery.mock.calls[0][0];
     expect(arg).toMatchObject({ startPage: 5, pageCount: 1 });
     expect(arg.nextPage).toBeUndefined(); // the wird repeats until a confirmed read
+  });
+
+  it('leads the day wird with that day Hijri date (the first showing of the day)', async () => {
+    h.listDeliverableSubscribers.mockResolvedValue([sub()]);
+    await deliverDueSubscribers(fakeBot, NOW);
+    const messages = h.sendMessages.mock.calls[0][2] as string[];
+    expect(messages[0]).toContain('هـ'); // the Hijri-era marker
+  });
+
+  it('a CHANNEL keeps its plain lead (no date)', async () => {
+    h.listDeliverableSubscribers.mockResolvedValue([sub({ kind: 'channel' })]);
+    await deliverDueSubscribers(fakeBot, NOW);
+    const messages = h.sendMessages.mock.calls[0][2] as string[];
+    expect(messages[0]).toContain(COPY.channelLead);
+    expect(messages[0]).not.toContain('هـ');
   });
 
   it('a CHANNEL advances on send (nextPage set), the broadcast pace', async () => {

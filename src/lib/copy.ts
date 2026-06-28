@@ -361,6 +361,15 @@ export const COPY = {
   // The lead line prefixed to a user's daily wird (and the /today preview).
   wirdLead: '🌿 وردك اليوم',
 
+  // The lead for the FIRST showing of a given day's wird: the normal lead with
+  // that day's Hijri date under it, so a reader sees the date once a day, atop
+  // the first wird that counts for the day (the scheduled push, or the /today
+  // that records the day before it). A re-show of the same day uses the plain
+  // wirdLead above, so the date is not repeated. The date comes from
+  // core/hijriDate in the reader's OWN timezone, and is already Arabic-Indic
+  // digits + an Arabic month name, so it needs no ltr() wrap.
+  wirdLeadWithDate: (hijri: string): string => `🌿 وردك اليوم\n📅 ${hijri}`,
+
   // ── Daily tajweed lesson ──────────────────────────────────────────
   // Header above the lesson preview in /tajweed (no-arg).
   tajweedStatus: (enabled: boolean) =>

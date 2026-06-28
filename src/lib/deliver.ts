@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import {
   dueLocalDate,
   advanceStartPage,
+  hijriDate,
   formatWird,
   pageBanner,
   getLocalContext,
@@ -766,12 +767,21 @@ export async function deliverDueSubscribers(
       const lesson = await tajweedLessonView(sub);
       const lessonSent = lesson ? (await sendLesson(bot, sub.chatId, lesson)) === 'ok' : false;
 
+      // The lead titles the first page. A USER reaching here is on the FIRST
+      // showing of today's wird: the day's delivery does not exist yet, or
+      // hasDeliveryFor above would have skipped this subscriber. So stamp the
+      // day's Hijri date, in their OWN timezone, once a day atop the wird; a
+      // later /today re-show of the same day omits it. The channel posts once a
+      // day too, but keeps its plain lead (no date).
+      const lead =
+        sub.kind === KIND_CHANNEL
+          ? COPY.channelLead
+          : COPY.wirdLeadWithDate(hijriDate(sub.timezone, now));
       // Send the wird one page at a time (text or image per the subscriber's
       // chosen format). Tracking how many pages actually went out lets a partial
       // failure advance by exactly that many: the rest roll into the next run
       // from the new position, so we never skip a page and never re-send (and so
       // duplicate) a page that already arrived.
-      const lead = sub.kind === KIND_CHANNEL ? COPY.channelLead : COPY.wirdLead;
       const { pagesSent, lastResult: result } = await sendWird(bot, sub.chatId, content, basmala, {
         lead,
         format: normalizeWirdFormat(sub.wirdFormat),
@@ -987,10 +997,15 @@ export async function buildTodayView(sub: TodaySubscriber, now: Date): Promise<T
   const record = recordable
     ? { scheduledFor, startPage: sub.currentPage, pageCount: content.length }
     : null;
+  // When this view RECORDS the day (record set), it is the first showing of
+  // today's wird, so stamp the day's Hijri date (the reader's own timezone) atop
+  // it — the same date the scheduler would have shown. A re-show, off day, or
+  // paused peek (record null) uses the plain lead, so the date is shown at most
+  // once a day, whichever path shows the day's first wird.
   return {
     pages: content,
     basmala,
-    lead: COPY.wirdLead,
+    lead: record ? COPY.wirdLeadWithDate(hijriDate(sub.timezone, now)) : COPY.wirdLead,
     record,
     alreadyDelivered: delivered !== null,
   };

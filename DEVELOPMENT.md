@@ -100,6 +100,9 @@ active, not blocked subscriber:
 1. Is it their time today, in their own timezone and active days? If not, skip.
 2. Already delivered today? If yes, skip.
 3. Build the wird (their pages) and, for a user who is behind, a gentle nudge.
+   The first wird shown each day is titled with that day's Hijri date, in the
+   reader's own timezone (`hijriDate` in `src/core/hijri.ts`); a re-show that day
+   drops the date.
 4. Send the daily tajweed lesson (best effort), then the wird, page by page.
 5. Record the day. The channel advances here; a user does not.
 6. Send the page recitation (silent). For a user, send the "read ✓" button.

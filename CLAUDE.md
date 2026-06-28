@@ -112,6 +112,25 @@ scheduler skips it) — again without advancing. The same
 `unique(subscriber, scheduledFor)` lock keeps it to one wird per local day
 across every entry point.
 
+### The day's Hijri date on the first wird (once a day)
+
+The FIRST showing of a user's wird each local day leads with that day's Hijri
+date (Umm al-Qura, Arabic), so a reader sees the date once a day atop the wird.
+"First showing" means the one that RECORDS the day's delivery — whichever path
+gets there first: the scheduled push, or a `/today` (or `/page`) that records
+the day before the scheduler does. A re-show of the same day, and a paused or
+off-day peek (nothing recorded), use the plain `🌿 وردك اليوم` lead, so the date
+is never repeated within a day. The date is computed in the reader's OWN
+timezone (`hijriDate(timezone, now)` in `src/core/hijri.ts`), so a reader east of
+the date line can be a Hijri day ahead of one to the west — the same instant, two
+days, exactly like the Gregorian day from `getLocalContext`. The dated lead
+string is `COPY.wirdLeadWithDate(hijri)`; the scheduler picks it in
+`deliverDueSubscribers` (a USER reaching the send is always the day's first
+showing — `hasDeliveryFor` skipped it otherwise), and `buildTodayView` picks it
+whenever it returns a non-null `record`. The CHANNEL keeps its plain
+`channelLead` (no date). Pure and tested: `src/core/hijri.test.ts` (timezone
+sensitivity) and the lead cases in `src/lib/deliver.test.ts`.
+
 ## Reading confirmation, repeat-until-read, and /next
 
 A USER's `currentPage` moves only on a confirmed read, so the wird is never
@@ -508,6 +527,9 @@ Commit the new folder under `prisma/migrations/`. Production applies it with
   `telegram-bot-kit` package; the matching `src/core/*` and `src/lib/{send,logger}.ts`
   files are re-export shims.
 - Page and wird math: `src/core/wird.ts`
+- The day's Hijri date (Umm al-Qura, in the reader's timezone): `hijriDate` in
+  `src/core/hijri.ts`; the dated lead `COPY.wirdLeadWithDate` in `src/lib/copy.ts`;
+  picked by `deliverDueSubscribers` and `buildTodayView` in `src/lib/deliver.ts`.
 - Message building (one message per page): `src/core/format.ts`
 - Page recitation: reciters + the per-page and per-ayah source builders in
   `src/core/reciter.ts` (`pageAudioSource`, `perAyahAudioUrl`); the source
